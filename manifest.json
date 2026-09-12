@@ -1,0 +1,11 @@
+{
+  "name": "个人工作台",
+  "short_name": "工作台",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f5f7fb",
+  "theme_color": "#f5f7fb",
+  "lang": "zh-CN",
+  "description": "个人工作、财务、生活与备考工作台"
+}

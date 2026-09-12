@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#f5f7fb">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="个人工作台">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>个人工作台 V0.3</title>
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="lock" class="lock">
+  <div class="lock-inner">
+    <div class="face">◉</div>
+    <h1>个人工作台</h1>
+    <p>工作 · 财务 · 生活 · 备考</p>
+    <button id="passkeyBtn" class="btn primary">使用 Face ID / Passkey</button>
+    <button id="localUnlockBtn" class="btn secondary">本地测试进入</button>
+    <small id="authHint">首次 HTTPS 部署后，可在本机注册 Passkey。</small>
+  </div>
+</div>
+
+<div id="app" class="app hidden">
+  <header class="header">
+    <div>
+      <div id="today" class="date"></div>
+      <h1 id="pageTitle">我的今天</h1>
+      <p class="muted" id="pageSubtitle">先记录，再整理</p>
+    </div>
+    <button id="privacy" class="round">👁</button>
+  </header>
+
+  <section id="view-home" class="view active">
+    <div class="quick-grid">
+      <button class="quick blue" data-action="note">🎤<b>随口记</b><small>先记下来</small></button>
+      <button class="quick" id="cameraBtn">📷<b>拍照</b><small>票据/资料</small></button>
+      <button class="quick" id="uploadBtn">📎<b>上传文件</b><small>PDF/Word/Excel</small></button>
+      <input type="file" id="cameraInput" accept="image/*" capture="environment" hidden>
+      <input type="file" id="fileInput" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,image/*" hidden>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>今日重点</h2><span id="todayCount" class="chip">0 件</span></div>
+      <div id="todayTasks"></div>
+    </div>
+
+    <div class="module-grid">
+      <button class="module" data-tab="work">💼<b>工作</b><small id="workCount">0 件待处理</small></button>
+      <button class="module" data-tab="finance">💰<b>财务</b><small><span class="money" id="reimburseAmount">¥0</span> 待报销</small></button>
+      <button class="module" data-tab="life">🏠<b>生活</b><small id="lifeCount">0 件提醒</small></button>
+      <button class="module" data-tab="study">📚<b>备考</b><small id="studyCount">今日未记录</small></button>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>未来雷达</h2><button class="link" data-tab="radar">查看</button></div>
+      <div class="radar">
+        <div><b>7天内</b><strong id="r7">0</strong><small>件</small></div>
+        <div><b>30天内</b><strong id="r30">0</strong><small>件</small></div>
+        <div><b>90天+</b><strong id="r90">0</strong><small>件</small></div>
+      </div>
+    </div>
+
+    <button class="card inbox-card" data-tab="inbox">
+      <div><h2>📥 收件箱</h2><p class="muted">暂未分类的信息和资料</p></div>
+      <span id="inboxCount" class="badge">0</span>
+    </button>
+  </section>
+
+  <section id="view-work" class="view"><div class="toolbar"><button class="btn primary" data-action="addWork">＋ 新增工作事项</button></div><div class="card"><h2>工作事项</h2><div id="workList"></div></div></section>
+
+  <section id="view-finance" class="view">
+    <div class="stats">
+      <div><small>个人支出</small><b id="personalSpend">¥0</b></div>
+      <div><small>公司垫付</small><b id="companySpend">¥0</b></div>
+      <div><small>待报销</small><b id="pendingReimburse">¥0</b></div>
+      <div><small>已到账</small><b id="receivedReimburse">¥0</b></div>
+    </div>
+    <div class="toolbar"><button class="btn primary" data-action="addExpense">＋ 记一笔支出</button></div>
+    <div class="card"><h2>报销与支出</h2><div id="expenseList"></div></div>
+  </section>
+
+  <section id="view-life" class="view"><div class="toolbar"><button class="btn primary" data-action="addLife">＋ 新增生活事项</button></div><div class="card"><h2>生活事项</h2><div id="lifeList"></div></div></section>
+  <section id="view-study" class="view"><div class="toolbar"><button class="btn primary" data-action="addStudy">＋ 记录今日学习</button></div><div class="card"><h2>备考同步</h2><p class="muted">这里只同步每日完成情况。</p><div id="studyList"></div></div></section>
+  <section id="view-radar" class="view"><div class="toolbar"><button class="btn primary" data-action="addRadar">＋ 新增未来事项</button></div><div class="card"><h2>未来雷达</h2><div id="radarList"></div></div></section>
+  <section id="view-inbox" class="view"><div class="toolbar"><button class="btn primary" data-action="addInbox">＋ 新增收件箱记录</button></div><div class="card"><h2>收件箱</h2><div id="inboxList"></div></div></section>
+
+  <section id="view-files" class="view">
+    <div class="toolbar row"><button class="btn primary" id="filesUploadBtn">＋ 上传资料</button><button class="btn" id="refreshFilesBtn">刷新</button></div>
+    <div class="card"><h2>本机资料库</h2><p class="muted">V0.3 起，文件本体保存在当前设备浏览器的 IndexedDB 中。</p><div id="filesList"></div></div>
+  </section>
+
+  <section id="view-settings" class="view">
+    <div class="card">
+      <h2>安全与备份</h2>
+      <button class="settings-btn" id="registerPasskeyBtn">🔐 注册 / 重设 Face ID Passkey</button>
+      <button class="settings-btn" id="exportBtn">⬇️ 导出数据备份</button>
+      <button class="settings-btn" id="importBtn">⬆️ 导入数据备份</button>
+      <input id="importInput" type="file" accept=".json" hidden>
+      <button class="settings-btn danger" id="lockNowBtn">🔒 立即锁定</button>
+    </div>
+    <div class="card">
+      <h2>资料库</h2>
+      <button class="settings-btn" data-tab="files">📁 查看本机资料库</button>
+    </div>
+  </section>
+
+  <nav class="tabbar">
+    <button data-tab="home" class="active">⌂<small>首页</small></button>
+    <button data-tab="work">💼<small>工作</small></button>
+    <button data-action="note" class="plus">＋</button>
+    <button data-tab="finance">💰<small>财务</small></button>
+    <button data-tab="settings">⚙️<small>设置</small></button>
+  </nav>
+</div>
+
+<div id="sheet" class="sheet hidden">
+  <div class="sheet-card">
+    <div class="handle"></div><h2 id="sheetTitle">新增记录</h2><div id="formArea"></div>
+    <div class="actions"><button id="cancelSheet" class="btn">取消</button><button id="saveSheet" class="btn primary">保存</button></div>
+    <div id="sheetMsg" class="hint"></div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
