@@ -154,26 +154,33 @@ function detectProject(text){
 function smartParse(text){
   const out=[], today=dateISO(new Date()), amount=extractAmount(text), date=parseRelativeDate(text), project=detectProject(text);
   const hasMoney=amount || /(打车|吃饭|加油|住宿|买了|支付|花了|垫付|报销|发票)/.test(text);
-  const workish=/(医院|主任|厂家|设备|维保|耗材|光纤|报价|合同|招标|项目|采购|科室)/.test(text);
-  const opportunity=/(可能|预计|听说|以后|年底|下个月|11月|10月|采购|需求|商机|预算|摸底)/.test(text);
+  const workish=/(医院|北医三院|主任|医生|科室|厂家|设备|维保|维修|耗材|光纤|铥激光|钬激光|报价|合同|招标|项目|采购|入院|使用量|用量|上量|需求)/.test(text);
+  const opportunity=/(可能|预计|听说|以后|后续|月底|年底|下个月|\d{1,2}月|增加|上量|用量|使用量|采购|需求|商机|预算|摸底|跟进|联系)/.test(text);
   const study=/(353|卫生综合|英语|政治|学习|背诵|刷题|错题)/.test(text);
-  const life=/(孩子|家长会|家里|家庭|姐姐|吃饭|朋友|聚会|缴费|生日|学校)/.test(text);
+  const life=/(孩子|家长会|家里|家庭|姐姐|吃饭|朋友|聚会|缴费|生日|学校|热水器|空调|冰箱|洗衣机|家电|师傅|上门|维修|物业|水电|燃气)/.test(text);
 
   if(hasMoney){
     let type=/(公司报销|公司垫付|报销)/.test(text)?"公司垫付":"个人消费";
     let invoice=/有票|已有发票/.test(text)?"已有发票":(/没票|没有发票|缺票/.test(text)?"缺发票":"无须发票");
-    out.push({kind:"expense",label:"财务记录",confidence:0.9,title:text.slice(0,26),amount:amount,type,project,invoice,status:type==="公司垫付"?"待报销":"",raw:text});
+    let expenseTitle=text;
+    const splitAt=expenseTitle.search(/(?:主任|医生|科室|另外|同时|并且|还说|又说).*(?:可能|预计|增加|上量|需求|采购)/);
+    if(splitAt>0) expenseTitle=expenseTitle.slice(0,splitAt);
+    expenseTitle=expenseTitle.replace(/^(今天|昨天|刚刚)/,"").trim();
+    out.push({kind:"expense",label:"财务记录",confidence:0.94,title:expenseTitle.slice(0,34),amount:amount,type,project,invoice,status:type==="公司垫付"?"待报销":"",raw:text});
   }
   if(study){
     out.push({kind:"study",label:"学习记录",confidence:0.92,title:text.replace(/今天|学习/g,"").slice(0,28)||"今日学习",minutes:extractMinutes(text),date:date||today,raw:text});
   }
   if(opportunity && workish){
-    out.push({kind:"radar",label:"未来商机",confidence:0.9,title:text.slice(0,34),date:date||"",horizon:"30天内",note:"来自智能随口记",raw:text});
+    let radarTitle=text;
+    const lead=radarTitle.match(/(?:主任|医生|科室|厂家)?[^，。；]*(?:可能|预计|后续|增加|上量|需求|采购)[^，。；]*/);
+    if(lead) radarTitle=lead[0];
+    out.push({kind:"radar",label:"未来商机",confidence:0.94,title:radarTitle.slice(0,40),date:date||"",horizon:"30天内",note:(project?project+" · ":"")+"来自智能随口记",raw:text});
   } else if(workish){
     out.push({kind:"work",label:"工作事项",confidence:0.88,title:text.slice(0,34),project,next:"",date:date||today,status:"待处理",raw:text});
   }
-  if(life && !workish && !study){
-    out.push({kind:"life",label:"生活事项",confidence:0.86,title:text.slice(0,34),category:/孩子|学校|家长会/.test(text)?"孩子":"家庭",date:date||today,raw:text});
+  if(life && !study && !(workish && /(医院|主任|科室|项目|设备|耗材|光纤)/.test(text))){
+    out.push({kind:"life",label:"生活事项",confidence:0.86,title:text.slice(0,34),category:/孩子|学校|家长会/.test(text)?"孩子":(/热水器|空调|冰箱|洗衣机|家电|师傅|物业|水电|燃气|维修/.test(text)?"家庭":"家庭"),date:date||today,raw:text});
   }
   if(out.length===0){
     out.push({kind:"inbox",label:"收件箱",confidence:0.65,title:text.slice(0,40),note:"系统暂时无法准确分类",raw:text});
@@ -242,7 +249,7 @@ async function handleFiles(list){if(!list.length)return;await saveFiles(list);al
 $("#cameraBtn").onclick=()=>$("#cameraInput").click();$("#uploadBtn").onclick=()=>$("#fileInput").click();$("#filesUploadBtn").onclick=()=>$("#fileInput").click();$("#refreshFilesBtn").onclick=renderFiles;
 $("#cameraInput").onchange=e=>handleFiles(e.target.files);$("#fileInput").onchange=e=>handleFiles(e.target.files);
 
-$("#exportBtn").onclick=()=>{const blob=new Blob([JSON.stringify({version:"0.4",exportedAt:new Date().toISOString(),data},null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`个人工作台备份_${new Date().toISOString().slice(0,10)}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);};
+$("#exportBtn").onclick=()=>{const blob=new Blob([JSON.stringify({version:"0.4.1",exportedAt:new Date().toISOString(),data},null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`个人工作台备份_${new Date().toISOString().slice(0,10)}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);};
 $("#importBtn").onclick=()=>$("#importInput").click();
 $("#importInput").onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const obj=JSON.parse(await f.text());if(!obj.data)throw new Error("格式不正确");data=obj.data;persist();alert("数据已导入。");}catch(err){alert("导入失败："+err.message);}};
 
