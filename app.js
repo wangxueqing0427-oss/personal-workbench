@@ -123,21 +123,48 @@ $("#saveSheet").onclick=()=>{
 function dateISO(d){ return d.toISOString().slice(0,10); }
 function parseRelativeDate(text){
   const now=new Date();
+  const endOfMonth=(y,m)=>new Date(y,m,0);
   if(/今天/.test(text)) return dateISO(now);
   if(/明天/.test(text)){const d=new Date(now);d.setDate(d.getDate()+1);return dateISO(d);}
   if(/后天/.test(text)){const d=new Date(now);d.setDate(d.getDate()+2);return dateISO(d);}
+
+  // 优先处理明确的“月底/末”表达，避免被前面的月份规则误判
+  const endMatch=text.match(/(\d{1,2})月(?:底|末)/);
+  if(endMatch){
+    let y=now.getFullYear(), mo=Number(endMatch[1]);
+    let d=endOfMonth(y,mo);
+    if(d < now) d=endOfMonth(y+1,mo);
+    return dateISO(d);
+  }
+
+  if(/月底|月末/.test(text)){
+    return dateISO(endOfMonth(now.getFullYear(), now.getMonth()+1));
+  }
+
   const m=text.match(/(\d{1,2})月(\d{1,2})[日号]?/);
   if(m){
     let y=now.getFullYear(), mo=Number(m[1]), da=Number(m[2]);
     const d=new Date(y,mo-1,da);
-    if(d<new Date(now.getFullYear(),now.getMonth(),now.getDate()-7)) d.setFullYear(y+1);
+    if(d<new Date(now.getFullYear(),now.getMonth(),now.getDate())) d.setFullYear(y+1);
     return dateISO(d);
   }
-  const m2=text.match(/(\d{1,2})月底/);
-  if(m2){const mo=Number(m2[1]);let y=now.getFullYear();let d=new Date(y,mo,0);if(d<now)d.setFullYear(y+1);return dateISO(d);}
-  if(/下周五/.test(text)){let d=new Date(now);let diff=(5-d.getDay()+7)%7; if(diff===0)diff=7; d.setDate(d.getDate()+diff);return dateISO(d);}
+
+  if(/年底|年末/.test(text)){
+    const d=new Date(now.getFullYear(),11,20);
+    if(d<now) d.setFullYear(now.getFullYear()+1);
+    return dateISO(d);
+  }
+
+  if(/下周五/.test(text)){
+    let d=new Date(now); let diff=(5-d.getDay()+7)%7; if(diff===0)diff=7;
+    d.setDate(d.getDate()+diff); return dateISO(d);
+  }
+
   if(/下周/.test(text)){let d=new Date(now);d.setDate(d.getDate()+7);return dateISO(d);}
-  if(/下个月/.test(text)){let d=new Date(now);d.setMonth(d.getMonth()+1);return dateISO(d);}
+
+  if(/下个月|下月/.test(text)){
+    let d=new Date(now); d.setMonth(d.getMonth()+1); d.setDate(15); return dateISO(d);
+  }
   return "";
 }
 function extractAmount(text){
