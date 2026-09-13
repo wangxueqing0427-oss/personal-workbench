@@ -102,7 +102,7 @@ function openForm(kind){
   if(kind==="expense"){title="记一笔支出";html=field("用途","title")+field("金额","amount","number")+field("类型","type","select",["个人消费","公司垫付"])+field("项目/医院","project")+field("发票状态","invoice","select",["无须发票","缺发票","已有发票","待贴票"])+field("报销状态","status","select",["待报销","已提交","已到账"]);}
   if(kind==="life"){title="新增生活事项";html=field("事项","title")+field("分类","category","select",["家庭","孩子","个人事务","社交","出行"])+field("日期","date","date");}
   if(kind==="study"){title="记录今日学习";html=field("学习内容","title")+field("分钟","minutes","number")+`<input type="hidden" name="date" value="${today}">`;}
-  if(kind==="radar"){title="新增未来事项";html=field("事项/商机","title")+field("跟进日期","date","date")+field("阶段","horizon","select",["7天内","30天内","90天以上"])+field("备注","note","textarea");}
+  if(kind==="radar"){title="新增未来事项";html=field("事项/商机","title")+field("跟进日期","date","date")+field("阶段","horizon","select",["7天内","30天内","90天内","90天+"])+field("备注","note","textarea");}
   if(kind==="inbox"){title="新增收件箱";html=field("记录","title")+field("补充说明","note","textarea");}
   $("#sheetTitle").textContent=title;$("#formArea").innerHTML=html;
 }
@@ -178,6 +178,18 @@ function detectProject(text){
   const names=["海淀医院","石景山医院","北医三院","秦皇岛","三环肿瘤","四季青医院","玉泉医院","世纪坛医院"];
   return names.find(n=>text.includes(n))||"";
 }
+
+function calcHorizon(dateStr){
+  if(!dateStr) return "30天内";
+  const now=new Date(); now.setHours(0,0,0,0);
+  const d=new Date(dateStr+"T00:00:00");
+  const days=Math.ceil((d-now)/(1000*60*60*24));
+  if(days<=7) return "7天内";
+  if(days<=30) return "30天内";
+  if(days<=90) return "90天内";
+  return "90天+";
+}
+
 function smartParse(text){
   const out=[], today=dateISO(new Date()), amount=extractAmount(text), date=parseRelativeDate(text), project=detectProject(text);
   const hasMoney=amount || /(打车|吃饭|加油|住宿|买了|支付|花了|垫付|报销|发票)/.test(text);
@@ -202,7 +214,7 @@ function smartParse(text){
     let radarTitle=text;
     const lead=radarTitle.match(/(?:主任|医生|科室|厂家)?[^，。；]*(?:可能|预计|后续|增加|上量|需求|采购)[^，。；]*/);
     if(lead) radarTitle=lead[0];
-    out.push({kind:"radar",label:"未来商机",confidence:0.94,title:radarTitle.slice(0,40),date:date||"",horizon:"30天内",note:(project?project+" · ":"")+"来自智能随口记",raw:text});
+    out.push({kind:"radar",label:"未来商机",confidence:0.94,title:radarTitle.slice(0,40),date:date||"",followDate:date||"",expectedDate:"",horizon:calcHorizon(date||today),note:(project?project+" · ":"")+"来自智能随口记",raw:text});
   } else if(workish){
     out.push({kind:"work",label:"工作事项",confidence:0.88,title:text.slice(0,34),project,next:"",date:date||today,status:"待处理",raw:text});
   }
@@ -228,7 +240,7 @@ function renderConfirm(){
     if(x.kind==="work") fields=confirmField("事项","title",x.title)+confirmField("医院/项目","project",x.project)+confirmField("下一步","next",x.next)+confirmField("日期","date",x.date,"date")+confirmField("状态","status",x.status,"select",["待处理","跟进中","已完成"]);
     if(x.kind==="life") fields=confirmField("事项","title",x.title)+confirmField("分类","category",x.category,"select",["家庭","孩子","个人事务","社交","出行"])+confirmField("日期","date",x.date,"date");
     if(x.kind==="study") fields=confirmField("学习内容","title",x.title)+confirmField("分钟","minutes",x.minutes,"number")+confirmField("日期","date",x.date,"date");
-    if(x.kind==="radar") fields=confirmField("事项/商机","title",x.title)+confirmField("跟进日期","date",x.date,"date")+confirmField("阶段","horizon",x.horizon,"select",["7天内","30天内","90天以上"])+confirmField("备注","note",x.note,"textarea");
+    if(x.kind==="radar") fields=confirmField("事项/商机","title",x.title)+confirmField("跟进日期","date",x.date,"date")+confirmField("阶段","horizon",x.horizon,"select",["7天内","30天内","90天内","90天+"])+confirmField("备注","note",x.note,"textarea");
     if(x.kind==="inbox") fields=confirmField("记录","title",x.title)+confirmField("补充说明","note",x.note,"textarea");
     return `<div class="confirm-card" data-index="${i}"><span class="smart-type">${x.label}</span><h3>识别结果 ${i+1}</h3>${fields}<div class="confidence">识别置信度：${Math.round(x.confidence*100)}% · 可直接修改</div></div>`;
   }).join("");
