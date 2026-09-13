@@ -180,7 +180,7 @@ function detectProject(text){
 }
 
 function calcHorizon(dateStr){
-  if(!dateStr) return "30天内";
+  if(!dateStr) return "90天内";
   const now=new Date(); now.setHours(0,0,0,0);
   const d=new Date(dateStr+"T00:00:00");
   const days=Math.ceil((d-now)/(1000*60*60*24));
@@ -190,7 +190,14 @@ function calcHorizon(dateStr){
   return "90天+";
 }
 
+function splitSmartItems(text){
+  return text.split(/\\n|\\d+[\\.、)]\\s*/).map(s=>s.trim()).filter(Boolean);
+}
 function smartParse(text){
+  const parts=splitSmartItems(text);
+  if(parts.length>1){
+    return parts.flatMap(p=>smartParse(p));
+  }
   const out=[], today=dateISO(new Date()), amount=extractAmount(text), date=parseRelativeDate(text), project=detectProject(text);
   const hasMoney=amount || /(打车|吃饭|加油|住宿|买了|支付|花了|垫付|报销|发票)/.test(text);
   const workish=/(医院|北医三院|主任|医生|科室|厂家|设备|维保|维修|耗材|光纤|铥激光|钬激光|报价|合同|招标|项目|采购|入院|使用量|用量|上量|需求)/.test(text);
@@ -240,7 +247,7 @@ function renderConfirm(){
     if(x.kind==="work") fields=confirmField("事项","title",x.title)+confirmField("医院/项目","project",x.project)+confirmField("下一步","next",x.next)+confirmField("日期","date",x.date,"date")+confirmField("状态","status",x.status,"select",["待处理","跟进中","已完成"]);
     if(x.kind==="life") fields=confirmField("事项","title",x.title)+confirmField("分类","category",x.category,"select",["家庭","孩子","个人事务","社交","出行"])+confirmField("日期","date",x.date,"date");
     if(x.kind==="study") fields=confirmField("学习内容","title",x.title)+confirmField("分钟","minutes",x.minutes,"number")+confirmField("日期","date",x.date,"date");
-    if(x.kind==="radar") fields=confirmField("事项/商机","title",x.title)+confirmField("跟进日期","date",x.date,"date")+confirmField("阶段","horizon",x.horizon,"select",["7天内","30天内","90天内","90天+"])+confirmField("备注","note",x.note,"textarea");
+    if(x.kind==="radar") fields=confirmField("事项/商机","title",x.title)+confirmField("预计发生时间","expectedDate",x.expectedDate||x.date,"date")+confirmField("下次跟进日期","date",x.date,"date")+confirmField("阶段","horizon",x.horizon,"select",["7天内","30天内","90天内","90天+"])+confirmField("备注","note",x.note,"textarea");
     if(x.kind==="inbox") fields=confirmField("记录","title",x.title)+confirmField("补充说明","note",x.note,"textarea");
     return `<div class="confirm-card" data-index="${i}"><span class="smart-type">${x.label}</span><h3>识别结果 ${i+1}</h3>${fields}<div class="confidence">识别置信度：${Math.round(x.confidence*100)}% · 可直接修改</div></div>`;
   }).join("");
