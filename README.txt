@@ -1,11 +1,19 @@
-个人工作台 V0.5.2 AI响应超时修正版
+个人工作台 V0.5.3 AI行动闭环版
 
-修复：
-- 302.AI / GPT 响应时间可能超过30秒，前端原先会主动中止请求并显示 Fetch is aborted。
-- AI 请求等待上限从30秒调整为120秒。
-- 超时后显示更明确的中文提示。
-- Service Worker 缓存升级为 v052，避免手机继续加载旧 app.js。
-- AI加载提示改为“首次回答可能需要30–90秒”。
+本次升级：
+- AI回答不再直接显示 **、### 等原始 Markdown 符号，改为手机友好的格式。
+- AI回答顶部默认提取“最重要的3件事”，详细分析折叠显示。
+- 每条AI建议新增三个执行按钮：加入今日任务 / 设为本周跟进 / 加入未来雷达。
+- 点击按钮后会真实写入现有本地数据，并立刻出现在首页、工作中心或未来雷达。
+- 继续兼容现有随口记、财务、生活、健康、备考、Passkey、备份和AI设置。
+- Service Worker 缓存升级到 v053，避免手机继续加载旧脚本。
 
-说明：Cloudflare Worker 和 302.AI 配置无需重新修改。
-部署：覆盖 GitHub Pages 根目录文件。
+AI后端：
+- 现有 Cloudflare + 302.AI 配置可继续使用，无需重新填写API Key。
+- cloudflare-worker/worker.js 已同步为 302.AI + gpt-5.5，供以后重建后端时使用；当前线上Worker无需重复修改。
+
+部署：
+1. 覆盖 GitHub Pages 根目录的 index.html、app.js、style.css、manifest.json、sw.js、README.txt。
+2. 等 GitHub Pages 部署完成。
+3. 手机打开：https://wangxueqing0427-oss.github.io/personal-workbench/?v=053
+4. 进入 AI个人助理测试。

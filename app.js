@@ -345,7 +345,7 @@ async function handleFiles(list){if(!list.length)return;await saveFiles(list);al
 $("#cameraBtn").onclick=()=>$("#cameraInput").click();$("#uploadBtn").onclick=()=>$("#fileInput").click();$("#filesUploadBtn").onclick=()=>$("#fileInput").click();$("#refreshFilesBtn").onclick=renderFiles;
 $("#cameraInput").onchange=e=>handleFiles(e.target.files);$("#fileInput").onchange=e=>handleFiles(e.target.files);
 
-$("#exportBtn").onclick=()=>{const blob=new Blob([JSON.stringify({version:"0.5.0-ai-assistant",exportedAt:new Date().toISOString(),data},null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`个人工作台备份_${new Date().toISOString().slice(0,10)}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);};
+$("#exportBtn").onclick=()=>{const blob=new Blob([JSON.stringify({version:"0.5.3-ai-action-loop",exportedAt:new Date().toISOString(),data},null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`个人工作台备份_${new Date().toISOString().slice(0,10)}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);};
 $("#importBtn").onclick=()=>$("#importInput").click();
 $("#importInput").onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const obj=JSON.parse(await f.text());if(!obj.data)throw new Error("格式不正确");data=obj.data;persist();alert("数据已导入。");}catch(err){alert("导入失败："+err.message);}};
 
@@ -407,6 +407,92 @@ async function enrichRecordsWithAi(refs){
 function showAdvice(text){if(!text)return;$("#adviceArea").textContent=text;$("#adviceSheet").classList.remove("hidden");}
 $("#closeAdviceSheet").onclick=()=>$("#adviceSheet").classList.add("hidden");
 
+// ---------- V0.5.3 AI行动闭环 ----------
+let aiLastActions=[];
+function cleanMarkdownText(s){
+  return String(s||"").replace(/\*\*/g,"").replace(/__+/g,"").replace(/^#{1,6}\s*/gm,"").replace(/^>\s?/gm,"").trim();
+}
+function markdownToSafeHtml(md){
+  let x=esc(String(md||"")).replace(/\r/g,"");
+  x=x.replace(/^######\s+(.+)$/gm,"<h6>$1</h6>")
+     .replace(/^#####\s+(.+)$/gm,"<h5>$1</h5>")
+     .replace(/^####\s+(.+)$/gm,"<h4>$1</h4>")
+     .replace(/^###\s+(.+)$/gm,"<h3>$1</h3>")
+     .replace(/^##\s+(.+)$/gm,"<h3>$1</h3>")
+     .replace(/^#\s+(.+)$/gm,"<h3>$1</h3>")
+     .replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>")
+     .replace(/^&gt;\s?(.+)$/gm,"<blockquote>$1</blockquote>")
+     .replace(/^\s*[-*]\s+(.+)$/gm,"<div class=\"md-bullet\">• $1</div>")
+     .replace(/^\s*(\d+)[\.、)]\s+(.+)$/gm,"<div class=\"md-number\"><b>$1.</b> $2</div>")
+     .replace(/\n{2,}/g,"<br><br>")
+     .replace(/\n/g,"<br>");
+  return x;
+}
+function extractTopActions(answer){
+  const raw=String(answer||"").replace(/\r/g,"");
+  const lines=raw.split("\n");
+  const sections=[]; let cur=null;
+  for(const line0 of lines){
+    const line=line0.trim();
+    const m=line.match(/^(?:#{1,6}\s*)?(\d+)[\.、)]\s*(.+)$/);
+    if(m){ if(cur)sections.push(cur); cur={title:cleanMarkdownText(m[2]),body:[]}; continue; }
+    if(cur)cur.body.push(line0);
+  }
+  if(cur)sections.push(cur);
+  let out=sections.filter(x=>x.title).slice(0,3).map(x=>({
+    title:x.title.slice(0,42),
+    details:cleanMarkdownText(x.body.join("\n")).slice(0,260),
+    fullText:cleanMarkdownText(x.title+"\n"+x.body.join("\n"))
+  }));
+  if(out.length<3){
+    const bullets=[];
+    for(const l of lines){
+      const m=l.trim().match(/^(?:[-*•]|\d+[\.、)])\s*(.+)$/);
+      if(m){const t=cleanMarkdownText(m[1]); if(t.length>=6)bullets.push(t);}
+    }
+    for(const t of bullets){
+      if(out.length>=3)break;
+      if(!out.some(x=>x.title===t.slice(0,42)))out.push({title:t.slice(0,42),details:"",fullText:t});
+    }
+  }
+  if(!out.length){
+    const paras=raw.split(/\n\s*\n/).map(cleanMarkdownText).filter(x=>x.length>=8);
+    out=paras.slice(0,3).map(t=>({title:t.slice(0,42),details:t.length>42?t.slice(42,260):"",fullText:t}));
+  }
+  return out.slice(0,3);
+}
+function addDaysISO(n){const d=new Date();d.setHours(12,0,0,0);d.setDate(d.getDate()+n);return dateISO(d);}
+function endOfThisWeekISO(){const d=new Date();d.setHours(12,0,0,0);const day=d.getDay();const diff=day===0?0:7-day;d.setDate(d.getDate()+diff);return dateISO(d);}
+function dateFromActionText(t,fallbackDays=7){return parseRelativeDate(t)||addDaysISO(fallbackDays);}
+function renderAiAnswer(answer){
+  aiLastActions=extractTopActions(answer);
+  const cards=aiLastActions.map((a,i)=>`<div class="ai-action-card" data-ai-index="${i}">
+    <div class="ai-action-no">${i+1}</div><div class="ai-action-main"><b>${esc(a.title)}</b>${a.details?`<p>${esc(a.details)}</p>`:""}
+    <div class="ai-action-buttons"><button data-ai-action="today" data-i="${i}">加入今日任务</button><button data-ai-action="week" data-i="${i}">设为本周跟进</button><button data-ai-action="radar" data-i="${i}">加入未来雷达</button></div></div>
+  </div>`).join("");
+  const top=cards?`<div class="ai-top3-title">最重要的 3 件事</div><div class="ai-action-list">${cards}</div>`:"";
+  const detail=`<details class="ai-detail"><summary>查看详细分析</summary><div class="ai-markdown">${markdownToSafeHtml(answer)}</div></details>`;
+  $("#aiAnswer").innerHTML=top+detail+`<div id="aiActionStatus" class="hint"></div>`;
+  $("#aiAnswer").classList.remove("hidden");
+}
+function createAiAction(kind,index,button){
+  const a=aiLastActions[index]; if(!a)return;
+  const now=Date.now(), today=dateISO(new Date());
+  if(kind==="today"){
+    data.work.unshift({id:now,title:a.title,project:"",next:a.details||a.fullText,date:today,status:"待处理",createdAt:new Date().toISOString(),source:"AI个人助理"});
+  } else if(kind==="week"){
+    const ds=endOfThisWeekISO();
+    data.work.unshift({id:now,title:a.title,project:"",next:a.details||a.fullText,date:ds,status:"跟进中",createdAt:new Date().toISOString(),source:"AI个人助理"});
+  } else if(kind==="radar"){
+    const ds=dateFromActionText(a.fullText,30);
+    data.radar.unshift({id:now,title:a.title,expectedDate:"",followDate:ds,date:ds,horizon:calcHorizon(ds),note:"AI个人助理生成"+(a.details?" · "+a.details:""),createdAt:new Date().toISOString(),source:"AI个人助理"});
+  }
+  persist();
+  if(button){button.disabled=true;button.textContent="已加入 ✓";}
+  const st=$("#aiActionStatus"); if(st)st.textContent=kind==="today"?"已加入今日重点。":kind==="week"?"已设为本周跟进。":"已加入未来雷达。";
+}
+$("#aiAnswer").onclick=e=>{const b=e.target.closest("[data-ai-action]");if(!b)return;createAiAction(b.dataset.aiAction,Number(b.dataset.i),b);};
+
 function daysDiff(ds){if(!ds)return 9999;const a=new Date();a.setHours(0,0,0,0);const b=new Date(ds+"T00:00:00");return Math.ceil((b-a)/864e5);}
 function monthKey(ds){return String(ds||"").slice(0,7);}
 function buildAssistantContext(question){
@@ -448,8 +534,8 @@ $("#askAiBtn").onclick=async()=>{
     let answer;
     if(aiCfg.endpoint){const j=await aiFetch("/api/assistant",buildAssistantContext(q));answer=j.answer||"AI 没有返回内容。";}
     else answer=localAssistantAnswer(q);
-    $("#aiAnswer").textContent=answer;$("#aiAnswer").classList.remove("hidden");
-  }catch(e){$("#aiAnswer").textContent="AI连接失败，先用本机规则给你建议：\n\n"+localAssistantAnswer(q)+"\n\n错误："+e.message;$("#aiAnswer").classList.remove("hidden");}
+    renderAiAnswer(answer);
+  }catch(e){renderAiAnswer("AI连接失败，先用本机规则给你建议：\n\n"+localAssistantAnswer(q)+"\n\n错误："+e.message);}
   finally{$("#aiLoading").classList.add("hidden");}
 };
 $("#openFreeBridgeFromAi").onclick=()=>{$("#aiSheet").classList.add("hidden");openChatGPTBridge("all");};
