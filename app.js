@@ -370,12 +370,15 @@ function renderAiSettings(){
 function apiUrl(path){return cleanEndpoint(aiCfg.endpoint)+path;}
 async function aiFetch(path,payload){
   if(!aiCfg.endpoint) throw new Error("尚未配置 AI 后端");
-  const controller=new AbortController(), timer=setTimeout(()=>controller.abort(),30000);
+  const controller=new AbortController(), timer=setTimeout(()=>controller.abort(),120000);
   try{
     const r=await fetch(apiUrl(path),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload),signal:controller.signal});
     const j=await r.json().catch(()=>({}));
     if(!r.ok) throw new Error(j.error||`请求失败 ${r.status}`);
     return j;
+  } catch(e){
+    if(e && e.name==="AbortError") throw new Error("AI响应超时（已等待120秒），请稍后重试或缩短问题。");
+    throw e;
   } finally {clearTimeout(timer);}
 }
 function getRecordById(kind,id){const arr=kind==="work"?data.work:kind==="radar"?data.radar:[];return arr.find(x=>String(x.id)===String(id));}

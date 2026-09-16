@@ -1,8 +1,11 @@
-个人工作台 V0.5.1 AI连接修正版
+个人工作台 V0.5.2 AI响应超时修正版
 
 修复：
-- iPhone Safari / PWA 可能仍加载旧 app.js，导致“保存 AI 设置”“测试连接”按钮无反应。
-- index.html 对 app.js / style.css 增加版本参数。
-- Service Worker 缓存升级为 v051，并对页面导航优先请求网络。
+- 302.AI / GPT 响应时间可能超过30秒，前端原先会主动中止请求并显示 Fetch is aborted。
+- AI 请求等待上限从30秒调整为120秒。
+- 超时后显示更明确的中文提示。
+- Service Worker 缓存升级为 v052，避免手机继续加载旧 app.js。
+- AI加载提示改为“首次回答可能需要30–90秒”。
 
+说明：Cloudflare Worker 和 302.AI 配置无需重新修改。
 部署：覆盖 GitHub Pages 根目录文件。
