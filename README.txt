@@ -1,7 +1,5 @@
-个人工作台 V0.5.5「AI任务提炼版」
+Personal Workbench V0.5.6 - AI Smart Task Splitting
 
-部署文件：index.html、app.js、style.css、manifest.json、sw.js、worker.js。
-本版保留 personalWorkbench 本地存储结构，兼容 notes、finance、life、health、study、tasks、followups、radar、ai、passkey 和备份数据。
-
-使用：将前端文件覆盖 GitHub Pages 根目录，打开 ?v=055。AI 设置仍填写原 Cloudflare Worker 地址；Worker 继续使用 302.AI 的 gpt-5.5。
-测试建议：输入“主任说下个月增加光纤采购量，10月底联系设备科，提前准备报价”，应得到确认采购量、联系设备科、准备报价等独立任务。
+This version splits records into independent action tasks, with action-first titles, semantic due dates, priority, and recognized hospital, department, contact, and project fields.
+Deploy index.html, app.js, style.css, manifest.json, sw.js, and worker.js to GitHub Pages. Keep the existing Cloudflare Worker address. The Worker continues to call 302.AI with gpt-5.5 and never exposes the API key in the frontend.
+Test with: "主任说下个月增加光纤采购量，10月底联系设备科，提前准备报价". Expected tasks include confirming model and quantity, confirming procurement path, preparing quotation and inventory, and setting a follow-up before procurement.
