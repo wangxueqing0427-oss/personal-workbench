@@ -1,5 +1,5 @@
-const CACHE = "personal-workbench-v054-action-cards";
-const ASSETS = ["./","./index.html","./style.css?v=054","./app.js?v=054","./manifest.json"];
+const CACHE = "personal-workbench-v055-ai-task-extraction";
+const ASSETS = ["./", "./index.html", "./style.css?v=055", "./app.js?v=055", "./manifest.json"];
 self.addEventListener("install", event => { event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS))); self.skipWaiting(); });
 self.addEventListener("activate", event => { event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key.startsWith("personal-workbench-") && key !== CACHE).map(key => caches.delete(key))))); self.clients.claim(); });
-self.addEventListener("fetch", event => { event.respondWith(fetch(event.request).then(response => { const copy=response.clone(); caches.open(CACHE).then(cache=>cache.put(event.request,copy)); return response; }).catch(()=>caches.match(event.request).then(response=>response || caches.match("./index.html")))); });
+self.addEventListener("fetch", event => { event.respondWith(fetch(event.request).then(response => { const copy = response.clone(); caches.open(CACHE).then(cache => cache.put(event.request, copy)); return response; }).catch(() => caches.match(event.request).then(response => response || caches.match("./index.html")))); });

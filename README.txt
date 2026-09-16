@@ -1,14 +1,7 @@
-个人工作台 V0.5.4「行动卡精修版」
+个人工作台 V0.5.5「AI任务提炼版」
 
-发布内容：index.html、app.js、style.css、manifest.json、sw.js。
+部署文件：index.html、app.js、style.css、manifest.json、sw.js、worker.js。
+本版保留 personalWorkbench 本地存储结构，兼容 notes、finance、life、health、study、tasks、followups、radar、ai、passkey 和备份数据。
 
-本版重点：
-1. AI行动卡清理顶部残留编号和多余Markdown符号。
-2. 默认只显示“要做什么 / 为什么现在做 / 建议话术”，详细分析折叠。
-3. 三个动作按钮按主次分层，并在操作后显示成功反馈。
-4. 未来雷达和本周跟进均先确认日期；本周跟进默认给出未来7天内日期且可修改。
-5. 保留同一 localStorage 数据容器、AI Worker设置、备份和认证兼容入口。
-6. Service Worker升级为 personal-workbench-v054-action-cards。
-
-部署：将 ZIP 内文件覆盖 GitHub Pages 根目录。Worker 地址仍填写原来的地址，不需要改 302.AI 或 GPT-5.5 配置。
-验证：打开 ?v=054，进入 AI助理，输入“主任说下个月增加光纤采购量，我现在下一步应该做什么？”，测试三种按钮并在执行/未来雷达中核对落库结果。
+使用：将前端文件覆盖 GitHub Pages 根目录，打开 ?v=055。AI 设置仍填写原 Cloudflare Worker 地址；Worker 继续使用 302.AI 的 gpt-5.5。
+测试建议：输入“主任说下个月增加光纤采购量，10月底联系设备科，提前准备报价”，应得到确认采购量、联系设备科、准备报价等独立任务。
