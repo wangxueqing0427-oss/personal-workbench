@@ -1,11 +1,1 @@
-{
-  "name": "个人工作台",
-  "short_name": "工作台",
-  "start_url": "./index.html",
-  "scope": "./",
-  "display": "standalone",
-  "background_color": "#f5f7fb",
-  "theme_color": "#f5f7fb",
-  "lang": "zh-CN",
-  "description": "个人工作、财务、生活、健康、备考与 AI 个人助理工作台"
-}
+{"name":"个人工作台","short_name":"工作台","start_url":"./?v=054","display":"standalone","background_color":"#f4f7fb","theme_color":"#102a43","lang":"zh-CN","icons":[]}
