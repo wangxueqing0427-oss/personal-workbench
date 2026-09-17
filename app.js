@@ -9,7 +9,7 @@ for(const k of ["tasks","followups","radar","hospitals","opportunities"]){if(!Ar
 let page="home",actions=[],feedback={},modal="",loading=false;
 const label={home:"\u9996\u9875",assistant:"AI\u52a9\u7406",tasks:"\u6267\u884c",radar:"\u672a\u6765\u96f7\u8fbe",customers:"\u5ba2\u6237/\u5546\u673a",settings:"\u8bbe\u7f6e"};
 function save(){localStorage.setItem(KEY,JSON.stringify(state))}
-function render(){document.getElementById("app").innerHTML=`<div class="shell"><header class="top"><h1>\u4e2a\u4eba\u5de5\u4f5c\u53f0</h1><p>V0.6.0 · \u533b\u9662\u5ba2\u6237\u4e0e\u5546\u673a\u4e2d\u67a2\u7248</p></header><main class="content">${pageView()}</main><nav class="nav">${Object.entries(label).map(([id,name])=>`<button class="${page===id?"active":""}" onclick="go('${id}')">${name}</button>`).join("")}</nav></div>${modal}`}
+function render(){document.getElementById("app").innerHTML=`<div class="shell"><header class="top"><h1>\u4e2a\u4eba\u5de5\u4f5c\u53f0</h1><p>V0.6.1 · \u5ba2\u6237\u5546\u673a\u81ea\u52a8\u5173\u8054\u7248</p></header><main class="content">${pageView()}</main><nav class="nav">${Object.entries(label).map(([id,name])=>`<button class="${page===id?"active":""}" onclick="go('${id}')">${name}</button>`).join("")}</nav></div>${modal}`}
 function go(next){page=next;modal="";render()}
 function pageView(){return page==="assistant"?assistantView():page==="tasks"?tasksView():page==="radar"?radarView():page==="customers"?customersView():page==="settings"?settingsView():homeView()}
 function order(a,b){const p={high:0,medium:1,low:2};return(p[a.priority]??1)-(p[b.priority]??1)||String(a.dueDate||"9999").localeCompare(String(b.dueDate||"9999"))}
@@ -40,4 +40,4 @@ function saveOpportunity(id){const o={id:id||`o-${Date.now()}`,type:document.get
 function settingsView(){return `<section class="card"><h2>AI \u8bbe\u7f6e</h2><input id="endpoint" class="field" placeholder="Cloudflare Worker URL" value="${esc(state.ai.endpoint||"")}"><button class="btn block" onclick="saveSettings()">\u4fdd\u5b58</button><button class="btn secondary block" onclick="testAI()">\u6d4b\u8bd5\u8fde\u63a5</button><div id="msg" class="small"></div></section>`}
 function saveSettings(){state.ai.endpoint=document.getElementById("endpoint").value.trim();save();document.getElementById("msg").textContent="\u5df2\u4fdd\u5b58"}
 async function testAI(){saveSettings();try{const r=await fetch(`${state.ai.endpoint.replace(/\/$/,"")}/api/ping`);document.getElementById("msg").textContent=r.ok?"\u8fde\u63a5\u6210\u529f":"\u8fde\u63a5\u5931\u8d25"}catch{document.getElementById("msg").textContent="\u8fde\u63a5\u5931\u8d25"}}
-render();if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js?v=061").catch(()=>{});
+render();if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js?v=061a").catch(()=>{});
