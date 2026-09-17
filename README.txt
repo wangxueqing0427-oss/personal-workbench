@@ -1,4 +1,5 @@
-Personal Workbench V0.6.1 - Customer and Opportunity Auto Association
+Personal Workbench V0.6.2 - AI Business Q&A
 
-AI now matches existing hospitals, departments, contacts, and opportunities from a voice note, updates the matched hospital's last-contact date, attaches the entities to generated tasks, and routes future-dated tasks to Future Radar. Manual customer and opportunity editing remains available.
-Deploy index.html, app.js, style.css, manifest.json, sw.js, and worker.js to GitHub Pages. Keep the existing Cloudflare Worker address and 302.AI GPT-5.5 chain. Existing local task, notes, finance, life, health, study, Face ID, Passkey, and backup data remain compatible.
+AI assistant now supports read-only business questions over the structured local context: hospitals and contacts, opportunities, unfinished tasks, and future radar. Query examples include a hospital's current matters, contacts needing follow-up this month, and opportunities to advance within 30 days. If the Worker is unavailable, local records are summarized without mutation.
+
+Deploy index.html, app.js, style.css, manifest.json, sw.js, and worker.js to GitHub Pages. Keep the configured Cloudflare Worker URL. The Worker continues to use 302.AI and GPT-5.5; the API key stays in Worker secrets. Existing local records and backup fields are preserved.
