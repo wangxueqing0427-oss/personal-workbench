@@ -10,7 +10,7 @@ let page="home",actions=[],feedback={},modal="",loading=false,answerText="";
 const label={home:"\u9996\u9875",assistant:"AI\u52a9\u7406",tasks:"\u6267\u884c",radar:"\u672a\u6765\u96f7\u8fbe",customers:"\u5ba2\u6237/\u5546\u673a",settings:"\u8bbe\u7f6e"};
 function save(){localStorage.setItem(KEY,JSON.stringify(state))}
 function render(){document.getElementById("app").innerHTML=`<div class="shell"><header class="top"><h1>\u4e2a\u4eba\u5de5\u4f5c\u53f0</h1><p>V0.6.1 路 \u5ba2\u6237\u5546\u673a\u81ea\u52a8\u5173\u8054\u7248</p></header><main class="content">${pageView()}</main><nav class="nav">${Object.entries(label).map(([id,name])=>`<button class="${page===id?"active":""}" onclick="go('${id}')">${name}</button>`).join("")}</nav></div>${modal}`}
-function render(){document.getElementById("app").innerHTML=`<div class="shell"><header class="top"><h1>\u4e2a\u4eba\u5de5\u4f5c\u53f0</h1><p>V0.6.5 路 \u8ddf\u8fdb\u590d\u76d8\u4e2d\u5fc3</p></header><main class="content">${pageView()}</main><nav class="nav">${Object.entries(label).map(([id,name])=>`<button class="${page===id?"active":""}" onclick="go('${id}')">${name}</button>`).join("")}</nav></div>${modal}`}
+function render(){document.getElementById("app").innerHTML=`<div class="shell"><header class="top"><h1>\u4e2a\u4eba\u5de5\u4f5c\u53f0</h1><p>V0.6.6 · \u8ddf\u8fdb\u590d\u76d8\u4e2d\u5fc3</p></header><main class="content">${pageView()}</main><nav class="nav">${Object.entries(label).map(([id,name])=>`<button class="${page===id?"active":""}" onclick="go('${id}')">${name}</button>`).join("")}</nav></div>${modal}`}
 function go(next){page=next;modal="";render()}
 function pageView(){return page==="assistant"?assistantView():page==="tasks"?tasksView():page==="radar"?radarView():page==="customers"?customersView():page==="settings"?settingsView():homeView()}
 function order(a,b){const p={high:0,medium:1,low:2};return(p[a.priority]??1)-(p[b.priority]??1)||String(a.dueDate||"9999").localeCompare(String(b.dueDate||"9999"))}
@@ -62,4 +62,5 @@ function followupPlan(){const candidates=todayPlanCandidates();const todayCount=
 function radarView(){const items=state.radar.filter(x=>!x.done).sort(radarOrder);const overdue=items.filter(x=>radarStatus(x)==="overdue");const todayItems=items.filter(x=>radarStatus(x)==="today");const upcoming=items.filter(x=>radarStatus(x)==="upcoming");return followupReview()+followupPlan()+"<section class=\"card\"><h2>智能跟进中心</h2><p class=\"muted\">按日期检查医院、联系人、商机和下一步。已完成事项会自动离开重点。</p><div class=\"followup-stats\"><span class=\"tag red\">已逾期 "+overdue.length+"</span><span class=\"tag gold\">今天 "+todayItems.length+"</span><span class=\"tag\">未来节点 "+upcoming.length+"</span></div>"+radarSection("已逾期",overdue)+radarSection("今天该做",todayItems)+radarSection("未来节点",upcoming)+(items.length?"":"<div class=\"empty\">未来雷达还是空的</div>")+"</section>"}
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js?v=066").catch(()=>{});
 render();
+
 
