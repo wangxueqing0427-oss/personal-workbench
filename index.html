@@ -6,17 +6,33 @@
   <meta name="theme-color" content="#102a43">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="style.css?v=0622">
-  <title>Personal Workbench - V0.6.2.2</title>
+  <link rel="stylesheet" href="style.css?v=0623">
+  <style>
+    .nav{z-index:9999!important;pointer-events:auto!important;touch-action:manipulation!important}
+    .nav button{pointer-events:auto!important;touch-action:manipulation!important;-webkit-tap-highlight-color:transparent}
+    .modal-backdrop{z-index:9000!important;padding-bottom:72px}
+  </style>
+  <title>Personal Workbench - V0.6.2.3</title>
 </head>
-<body><div id="app"></div><script src="app.js?v=0622"></script><script src="hotfix-0621.js?v=0622"></script><script>
-// V0.6.2.2 iOS navigation hard fix: delegated bottom-nav taps.
-document.addEventListener('click', function(e){
-  const b=e.target.closest('.nav button');
-  if(!b) return;
-  const txt=(b.textContent||'').trim();
+<body><div id="app"></div><script src="app.js?v=0623"></script><script src="hotfix-0621.js?v=0623"></script><script>
+(function(){
   const map={'首页':'home','AI助理':'assistant','执行':'tasks','未来雷达':'radar','客户/商机':'customers','设置':'settings'};
-  if(map[txt]){e.preventDefault();e.stopPropagation();go(map[txt]);}
-}, true);
+  let lastNavAt=0;
+  function navFromEvent(e){
+    const b=e.target && e.target.closest ? e.target.closest('.nav button') : null;
+    if(!b) return;
+    const dest=map[(b.textContent||'').trim()];
+    if(!dest) return;
+    const now=Date.now();
+    if(now-lastNavAt<250) return;
+    lastNavAt=now;
+    e.preventDefault(); e.stopPropagation();
+    try{ modal=''; loading=false; }catch(_e){}
+    go(dest);
+  }
+  document.addEventListener('touchend',navFromEvent,true);
+  document.addEventListener('pointerup',navFromEvent,true);
+  document.addEventListener('click',navFromEvent,true);
+})();
 </script></body>
 </html>
