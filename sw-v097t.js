@@ -1,4 +1,4 @@
-const CACHE="personal-workbench-v097t-trend-dashboard";
+const CACHE="personal-workbench-v097t-trend-dashboard-fix1";
 const ASSETS=["v097t.html","app-v067t.js","app-v068t.js","app-v069t.js","app-v070t.js","app-v071t.js","app-v072t.js","app-v073t.js","app-v074t.js","app-v075t.js","app-v076t.js","app-v077t.js","app-v080t.js","app-v081t.js","app-v082t.js","app-v083t.js","app-v084t.js","app-v085t.js","app-v086t.js","app-v087t.js","app-v088t.js","app-v089t.js","app-v090t.js","app-v091t.js","app-v092t.js","app-v093t.js","app-v094t.js","app-v095t.js","app-v096t.js","app-v097t.js","style.css","manifest.json"];
 self.addEventListener("install",function(event){event.waitUntil(caches.open(CACHE).then(function(cache){return Promise.all(ASSETS.map(function(asset){return cache.add(asset).catch(function(){return null})}))}).then(function(){return self.skipWaiting()}))});
 self.addEventListener("activate",function(event){event.waitUntil(caches.keys().then(function(keys){return Promise.all(keys.filter(function(key){return key!==CACHE}).map(function(key){return caches.delete(key)}))}).then(function(){return self.clients.claim()}))});

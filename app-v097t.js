@@ -1,3 +1,17 @@
+function followupReview(){
+  var completed=[].concat(state.tasks||[],state.followups||[],state.radar||[]).filter(function(item){
+    return item.done&&item.completedAt&&item.completedAt>=reviewDate();
+  });
+  var stale=(state.hospitals||[]).filter(function(item){
+    return item.contact&&(!item.lastContact||item.lastContact<=addDays(today(),-30));
+  });
+  var soon=(state.opportunities||[]).filter(function(item){
+    return item.expectedDate&&item.expectedDate>=today()&&item.expectedDate<=addDays(today(),30);
+  });
+  return '<section class="card"><h3>本周跟进复盘</h3><div class="followup-stats"><span class="tag green">本周已完成 '+completed.length+'</span><span class="tag red">待联系 '+stale.length+'</span><span class="tag gold">30 天内商机 '+soon.length+'</span></div>'+ 
+    (stale.length?'<div class="small">建议优先联系：'+stale.map(function(item){return esc(item.name)}).join('、')+'</div>':'<div class="small">暂无超过 30 天未联系的客户</div>')+
+    (soon.length?'<div class="small">临近商机：'+soon.map(function(item){return esc(item.name)}).join('、')+'</div>':'')+'</section>';
+}
 function monthlyTrendReportStore(){
   if(!Array.isArray(state.monthlyTrendReports))state.monthlyTrendReports=[];
   return state.monthlyTrendReports;
