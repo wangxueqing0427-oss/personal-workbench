@@ -4,3 +4,6 @@ function practicalAdviceCard(){const active=state.tasks.filter(item=>!item.done)
 const dailyLearningCardV074=dailyLearningCard;
 dailyLearningCard=function(){return dailyLearningCardV074()+learningReportCard()+practicalAdviceCard()}
 render();
+const renderV075=render;
+render=function(){renderV075();const subtitle=document.querySelector(".top p");if(subtitle)subtitle.textContent="V0.7.5 · AI学习闭环版"}
+render();
