@@ -93,6 +93,20 @@ function proactiveSuggestions(){
       priority:"high"
     });
   }
+  var hasWorkSuggestion=suggestions.some(function(item){return item.domain==="\u5de5\u4f5c"});
+  if(!hasWorkSuggestion){
+    var activeWork=lists.tasks.filter(function(item){return !item.done}).sort(order)[0];
+    suggestions.push({
+      key:"work-focus-"+current,
+      score:74,
+      domain:"\u5de5\u4f5c",
+      title:activeWork?"\u63a8进一个最小工作动作":"\u786e定今天的一个工作结果",
+      what:activeWork?("\u4e3a“"+proactiveRecordName(activeWork,"\u672a完成任\u52a1")+"”安排 30 \u5206钟，完成一个可验收的下一步。"):"\u5199下今天必须产出的一个结果，并完成第一步。",
+      why:activeWork?("\u6267行中心还有 "+lists.tasks.filter(function(item){return !item.done}).length+" \u4ef6未完成任务，先推进一个最小动作。"):"\u5f53前没有明确的工作重点，先定义可验收结果。",
+      page:"tasks",
+      priority:"medium"
+    });
+  }
   var learning=state.learning||{};
   var learnedToday=(learning.history||[]).some(function(item){return item.date===current});
   if(!learnedToday){
