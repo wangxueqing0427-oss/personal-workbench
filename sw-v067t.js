@@ -1,5 +1,5 @@
-﻿const CACHE_NAME = "personal-workbench-v067t-agent-inbox";
-const ASSETS = ["./v067t.html", "./app-v067t.js", "./style.css?v=067", "./manifest.json"];
-self.addEventListener("install", event => event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)).then(() => self.skipWaiting())));
-self.addEventListener("activate", event => event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key.startsWith("personal-workbench-") && key !== CACHE_NAME).map(key => caches.delete(key)))).then(() => self.clients.claim())));
-self.addEventListener("fetch", event => event.respondWith(caches.match(event.request).then(cached => cached || fetch(event.request).then(response => { const copy = response.clone(); caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy)); return response; }))));
+const CACHE="personal-workbench-mobile-bridge-v098";
+const STABLE="./index.html?v=0980922";
+self.addEventListener("install",function(event){event.waitUntil(caches.open(CACHE).then(function(cache){return cache.add(STABLE).catch(function(){return null})}).then(function(){return self.skipWaiting()}))});
+self.addEventListener("activate",function(event){event.waitUntil(caches.keys().then(function(keys){return Promise.all(keys.filter(function(key){return key.indexOf("personal-workbench-")===0&&key!==CACHE}).map(function(key){return caches.delete(key)}))}).then(function(){return self.clients.claim()}))});
+self.addEventListener("fetch",function(event){if(event.request.method!=="GET")return;event.respondWith(fetch(event.request).then(function(response){if(response.ok){var copy=response.clone();caches.open(CACHE).then(function(cache){cache.put(event.request,copy)})}return response}).catch(function(){return caches.match(event.request).then(function(cached){return cached||caches.match(STABLE)})}))});
