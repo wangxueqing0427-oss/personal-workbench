@@ -1,1 +1,1 @@
-{"name":"我的 Agent V1.2.9","short_name":"我的 Agent","id":"./","start_url":"./index.html?v=1290924","scope":"./","display":"standalone","background_color":"#f3f6fa","theme_color":"#102a43","lang":"zh-CN","description":"普通提问直接对话；文字记录直接成为记忆，文件资料在收件箱核对。","icons":[]}
+{"name":"我的 Agent V1.3.0","short_name":"我的 Agent","id":"./","start_url":"./index.html?v=1300924","scope":"./","display":"standalone","background_color":"#f3f6fa","theme_color":"#102a43","lang":"zh-CN","description":"文字资料核对后可存为记忆并用于对话。","icons":[]}
