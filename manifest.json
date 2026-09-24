@@ -1,1 +1,1 @@
-{"name":"我的 Agent V1.2.6","short_name":"我的 Agent","id":"./","start_url":"./index.html?v=1260924","scope":"./","display":"standalone","background_color":"#f3f6fa","theme_color":"#102a43","lang":"zh-CN","description":"按本地日期安排每日行动，并为手动重点选择工作、生活健康、资产或学习领域。","icons":[]}
+{"name":"我的 Agent V1.2.7","short_name":"我的 Agent","id":"./","start_url":"./index.html?v=1270924","scope":"./","display":"standalone","background_color":"#f3f6fa","theme_color":"#102a43","lang":"zh-CN","description":"按本地日期安排每日行动，在四领域选择今日重点，并可进行 5、15 或 25 分钟专注。","icons":[]}
