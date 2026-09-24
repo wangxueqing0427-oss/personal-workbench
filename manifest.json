@@ -1,1 +1,1 @@
-{"name":"我的 Agent V1.3.4","short_name":"我的 Agent","id":"./","start_url":"./index.html?v=1340924","scope":"./","display":"standalone","background_color":"#f3f6fa","theme_color":"#102a43","lang":"zh-CN","description":"支持 Word、Excel 与可提取文字的 PDF，资料册可直接打开。","icons":[]}
+{"name":"我的 Agent V1.3.5","short_name":"我的 Agent","id":"./","start_url":"./index.html?v=1350924","scope":"./","display":"standalone","background_color":"#f3f6fa","theme_color":"#102a43","lang":"zh-CN","description":"首页直接上传常用文件，资料册可下载为 Word 可编辑的 HTML 文件。","icons":[]}
