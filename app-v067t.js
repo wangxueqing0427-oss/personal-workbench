@@ -1,6 +1,7 @@
 ﻿const KEY="personalWorkbench";
-const today=()=>new Date().toISOString().slice(0,10);
-const addDays=(date,n)=>{const d=new Date(date+"T12:00:00");d.setDate(d.getDate()+n);return d.toISOString().slice(0,10)};
+const formatLocalDate=date=>`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
+const today=()=>formatLocalDate(new Date());
+const addDays=(date,offset)=>{const result=new Date(date+"T12:00:00");result.setDate(result.getDate()+offset);return formatLocalDate(result)};
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
 const clean=v=>String(v||"").replace(/```[\s\S]*?```/g,"").replace(/^\s*(?:#{1,6}\s*|\d+[.)]\s*|[-*>]\s*)/gm,"").replace(/\*\*/g,"").trim();
 const defaults=()=>({notes:[],finance:[],life:[],health:[],study:[],tasks:[],followups:[],radar:[],hospitals:[],opportunities:[],ai:{endpoint:"",auto:false},passkey:{enabled:false},backupVersion:1});
