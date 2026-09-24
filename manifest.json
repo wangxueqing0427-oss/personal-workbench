@@ -1,1 +1,1 @@
-{"name":"我的 Agent V1.3.2","short_name":"我的 Agent","id":"./","start_url":"./index.html?v=1320924","scope":"./","display":"standalone","background_color":"#f3f6fa","theme_color":"#102a43","lang":"zh-CN","description":"提问前可查看匹配记忆，回答后可核对提交的候选资料。","icons":[]}
+{"name":"我的 Agent V1.3.3","short_name":"我的 Agent","id":"./","start_url":"./index.html?v=1330924","scope":"./","display":"standalone","background_color":"#f3f6fa","theme_color":"#102a43","lang":"zh-CN","description":"上传文件后自动整理资料卡，由用户选择生成任务或整理成册。","icons":[]}
