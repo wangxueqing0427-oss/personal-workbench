@@ -1,1 +1,1 @@
-{"name":"我的 Agent V1.3.3","short_name":"我的 Agent","id":"./","start_url":"./index.html?v=1330924","scope":"./","display":"standalone","background_color":"#f3f6fa","theme_color":"#102a43","lang":"zh-CN","description":"上传文件后自动整理资料卡，由用户选择生成任务或整理成册。","icons":[]}
+{"name":"我的 Agent V1.3.4","short_name":"我的 Agent","id":"./","start_url":"./index.html?v=1340924","scope":"./","display":"standalone","background_color":"#f3f6fa","theme_color":"#102a43","lang":"zh-CN","description":"支持 Word、Excel 与可提取文字的 PDF，资料册可直接打开。","icons":[]}
