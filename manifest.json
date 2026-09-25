@@ -1,1 +1,1 @@
-{"name":"我的 Agent V1.4.0","short_name":"我的 Agent","id":"./","start_url":"./index.html?v=1400925","scope":"./","display":"standalone","background_color":"#f3f6fa","theme_color":"#102a43","lang":"zh-CN","description":"从 V1.3.6 兼容升级，在医院下查看合同项目和手工创建的业务推进项目。","icons":[]}
+{"name":"我的 Agent V1.4.0","short_name":"我的 Agent","id":"./","start_url":"./index.html?v=1400925b","scope":"./","display":"standalone","background_color":"#f3f6fa","theme_color":"#102a43","lang":"zh-CN","description":"从 V1.3.6 兼容升级，修复客户医院入口，按医院查看合同与业务推进项目。","icons":[]}
