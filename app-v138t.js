@@ -1,5 +1,5 @@
 WORKBENCH_LATEST_VERSION="1.3.8";
-WORKBENCH_STABLE_QUERY="1380925";
+WORKBENCH_STABLE_QUERY="1380925b";
 
 var contractImportPreviewV138=null;
 var contractImportMessageV138="";
@@ -24,9 +24,9 @@ function contractParseWorkbookV138(workbook){
   var summarySheet=workbook.Sheets["合同资金总控"];
   if(!actionSheet||!sourceSheet||!summarySheet)throw new Error("缺少‘项目行动池’、‘大数据底表’或‘合同资金总控’工作表");
   var options={header:1,raw:true,defval:"",blankrows:true};
-  var actions=XLSX.utils.sheet_to_json(actionSheet,options);
-  var source=XLSX.utils.sheet_to_json(sourceSheet,options);
-  var summary=XLSX.utils.sheet_to_json(summarySheet,options);
+  var actions=window.XLSX.utils.sheet_to_json(actionSheet,options);
+  var source=window.XLSX.utils.sheet_to_json(sourceSheet,options);
+  var summary=window.XLSX.utils.sheet_to_json(summarySheet,options);
   var headerIndex=actions.findIndex(function(row){return contractTextV138(row[0])==="底表行号"&&contractTextV138(row[1])==="客户/医院"});
   if(headerIndex<0)throw new Error("项目行动池列名不匹配，已停止导入");
   var projects=[];
@@ -62,7 +62,8 @@ async function contractInspectFileV138(){
   contractImportPreviewV138=null;
   if(!/\.xlsx$/i.test(file.name)){contractImportMessageV138="请选择原始 .xlsx 合同底表";render();return}
   try{
-    var workbook=XLSX.read(await file.arrayBuffer(),{type:"array",cellText:true});
+    if(!window.XLSX)throw new Error("表格读取组件未加载，请刷新页面重试");
+    var workbook=window.XLSX.read(await file.arrayBuffer(),{type:"array",cellText:true});
     var projects=contractParseWorkbookV138(workbook);
     var hospitals=new Set(projects.map(function(item){return item.hospital})).size;
     var existing=new Set(contractProjectsV138().map(function(item){return item.sourceKey}));
