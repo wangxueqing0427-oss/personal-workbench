@@ -1,1 +1,1 @@
-{"name":"我的 Agent V1.3.8","short_name":"我的 Agent","id":"./","start_url":"./index.html?v=1380925b","scope":"./","display":"standalone","background_color":"#f3f6fa","theme_color":"#102a43","lang":"zh-CN","description":"从 V1.3.6 兼容升级，安全导入 99 个合同项目并按医院查看合同资金状态。","icons":[]}
+{"name":"我的 Agent V1.3.9","short_name":"我的 Agent","id":"./","start_url":"./index.html?v=1390925","scope":"./","display":"standalone","background_color":"#f3f6fa","theme_color":"#102a43","lang":"zh-CN","description":"从 V1.3.6 兼容升级，查看合同项目并独立记录项目行动与进展。","icons":[]}
