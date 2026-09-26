@@ -71,7 +71,7 @@ async function organizeFileV151(id){
     var limited=!!item.partial||source.length>12000;
     var draft={summary:summary,type:suggestedTypeV151(item.name+' '+summary),projectId:matches.length===1||matches.length>1&&matches[0].score>matches[1].score?matches[0].project.id:'',limited:limited,createdAt:new Date().toISOString()};
     var previous=state.inbox;
-    state.inbox=previous.map(function(entry){return entry.id===id?Object.assign({},entry,{organizationDraftV151:draft}):entry});
+    state.inbox=previous.map(function(entry){return entry.id===id?Object.assign({},entry,{organizationDraftV151:draft,summary:draft.summary,analysisStatus:'AI已整理'}):entry});
     try{save()}catch(error){state.inbox=previous;throw error}
     fileDraftsV151[id]=draft;fileMessageV151='AI整理完成。请核对内容、资料类型和关联项目，再确认生成。'+(limited?' AI只读取部分文字，不能视为全文结论。':'');
   }catch(error){fileMessageV151='整理未完成：'+(error.name==='AbortError'?'请求超时，请重试。':error.message)}
