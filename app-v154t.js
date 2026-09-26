@@ -2,20 +2,28 @@ WORKBENCH_LATEST_VERSION='1.5.4';
 WORKBENCH_STABLE_QUERY='1540926';
 var documentTypesV154=['会议纪要','医院通知','招标公告','报价/合同','维修工单','微信截图','设备资料','其他'];
 function normalizeV154(value){return String(value||'').normalize('NFKC').toLowerCase().replace(/[\s\p{P}\p{S}]/gu,'')}
-function hospitalV154(value){return normalizeV154(value).replace(/北京大学第三医院|北医三院|北医三|三院/g,'北医三院').replace(/^北京市|^北京/,'').replace(/中国医学科学院肿瘤医院/g,'中科院肿瘤医院')}
+function hospitalV154(value){return normalizeV154(value).replace(/北京大学第三医院|北医三院|北医三|三院/g,'北医三院').replace(/^北京市|^北京/,'').replace(/中国医学科学院肿瘤医院/g,'中科院肿瘤医院').replace(/医院$/,'')}
+function hospitalDistanceV154(left,right){
+  var row=Array.from({length:right.length+1},function(_,index){return index});
+  for(var outer=1;outer<=left.length;outer++){var next=[outer];for(var inner=1;inner<=right.length;inner++)next[inner]=Math.min(next[inner-1]+1,row[inner]+1,row[inner-1]+(left[outer-1]===right[inner-1]?0:1));row=next}
+  return row[right.length];
+}
 function candidatesV154(item,projects){
-  if(item.actionNeeded===false||item.historical===true)return [];
+  if(item.historical===true)return [];
   var hospital=hospitalV154(item.hospital),subject=normalizeV154(item.project),groups=new Map();
   if(!hospital||!subject)return [];
   projects.forEach(function(project){
     var target=hospitalV154(project.hospital),name=normalizeV154(project.name);
-    if(!(hospital===target||hospital===target+'廊坊院区'||hospital===target+'海淀院区'))return;
+    var same=hospital===target||hospital===target+'医院廊坊院区'||hospital===target+'医院海淀院区'||hospital===target+'廊坊院区'||hospital===target+'海淀院区';
+    var near=!same&&hospital.length>=5&&target.length>=5&&hospitalDistanceV154(hospital,target)<=2;
+    if(!same&&!near)return;
     var anchors=['tomo','开机率','场地改造','64排','12台','双源','移机','射波刀','750w','gotop','灭菌器','光子','halcyon','revolution','pioneer'];
     var hits=anchors.filter(function(word){return subject.includes(word)&&name.includes(word)});
     var exact=subject.length>=4&&subject===name;
+    if(near&&!hits.some(function(word){return ['tomo','开机率','64排','750w','gotop','halcyon','revolution','pioneer'].includes(word)}))return;
     if(!exact&&!hits.length)return;
-    var score=(exact?100:0)+hits.length*10,key=target+'|'+name,entry=groups.get(key);
-    if(!entry){entry={key:key,name:project.name,hospital:project.hospital,projects:[],score:score,reason:'医院一致；'+(exact?'项目名称一致':hits.join('、')+'一致')};groups.set(key,entry)}
+    var score=(exact?100:0)+hits.length*10+(same?5:0),key=target+'|'+name,entry=groups.get(key);
+    if(!entry){entry={key:key,name:project.name,hospital:project.hospital,projects:[],score:score,reason:(same?'医院一致':'医院名称近似，可能OCR误字，需核对原图')+'；'+(exact?'项目名称一致':hits.join('、')+'一致')};groups.set(key,entry)}
     if(!entry.projects.some(function(previous){return previous.id===project.id}))entry.projects.push(project);
   });
   return Array.from(groups.values()).sort(function(left,right){return right.score-left.score||left.key.localeCompare(right.key)}).slice(0,3);
@@ -33,7 +41,7 @@ function parseMeetingV154(result){
     value.actionNeeded=typeof item.actionNeeded==='boolean'?item.actionNeeded:null;
     value.historical=item.historical===true;
     value.candidates=candidatesV154(value,workbenchProjectsV150());
-    value.category=value.historical||value.actionNeeded===false?'仅供记录，无需形成项目':value.candidates.length?'更新已有项目':'可能的新业务/商机';
+    value.category=value.historical?'仅供记录，无需形成项目':value.candidates.length?'更新已有项目':value.actionNeeded===false?'仅供记录，无需形成项目':'可能的新业务/商机';
     return value;
   }),createdAt:new Date().toISOString()};
 }
@@ -82,6 +90,7 @@ function confirmMatterV154(sourceId,matterId){
 }
 function meetingPanelV154(source){
   var meeting=source.meetingV154;
+  meeting=Object.assign({},meeting,{items:meeting.items.map(function(item){var candidates=candidatesV154(item,workbenchProjectsV150());return Object.assign({},item,{candidates:candidates,category:item.historical?'仅供记录，无需形成项目':candidates.length?'更新已有项目':item.actionNeeded===false?'仅供记录，无需形成项目':'可能的新业务/商机'})})});
   return '<article class="card"><h3>'+esc(source.name)+'</h3><p>资料类型：'+esc(meeting.documentType)+'</p><button class="btn secondary" onclick="downloadOriginalV151(&quot;'+esc(source.id)+'&quot;)">下载原图</button><details><summary>OCR正文（原图识别依据）</summary><div style="white-space:pre-wrap">'+esc(meeting.ocr)+'</div></details>'+meeting.items.map(function(item){var key=source.id+'-'+item.id,done=(state.meetingConfirmationsV154||[]).find(function(entry){return entry.id===key});return '<section class="list-item"><h4>'+esc(item.hospital||'医院待确认')+'｜'+esc(item.project||'事项待确认')+'</h4><p>人物：'+esc(item.people||'未提及')+'<br>当前进展：'+esc(item.progress)+'<br>需要行动：'+(item.actionNeeded===null?'待确认':item.actionNeeded?'是':'否')+'<br>建议下一步：'+esc(item.nextStep||'无')+'<br>时间节点：'+esc(item.date||'未提及')+'</p><details><summary>本事项原文依据</summary><p>'+esc(item.evidence)+'</p></details>'+(done?'<p>已确认：'+esc(done.category)+'</p>':'<p>建议分类：'+esc(item.category)+'（待确认）</p><label>处理方式<select class="field" id="category-'+esc(key)+'">'+['更新已有项目','可能的新业务/商机','仅供记录，无需形成项目'].map(function(category){return '<option'+(category===item.category?' selected':'')+'>'+category+'</option>'}).join('')+'</select></label><p>最相关候选（最多3组；同院同名合并展示）：</p>'+item.candidates.map(function(candidate){return '<p>'+esc(candidate.hospital)+' → '+esc(candidate.name)+'<br>匹配理由：'+esc(candidate.reason)+(candidate.projects.length>1?'；存在'+candidate.projects.length+'条同名记录，必须核对合同编号':'')+'</p>'}).join('')+(!item.candidates.length?'<p>没有足够具体的匹配依据，不使用CT、医院等泛词推荐。</p>':'')+'<label>确认关联项目<select class="field" id="project-'+esc(key)+'"><option value="">不自动选择，请确认</option>'+item.candidates.map(function(candidate){return candidate.projects.map(function(project){return '<option value="'+esc(project.id)+'">'+esc(project.hospital+' → '+project.name+(candidate.projects.length>1?'｜合同 '+(project.contractNumber||'无编号')+'｜记录 '+project.id:''))+'</option>'}).join('')}).join('')+'</select></label><label><input type="checkbox" id="timeline-'+esc(key)+'"> 同时补充时间线（可选，不更新状态/日期/下一步）</label><button class="btn" onclick="confirmMatterV154(&quot;'+esc(source.id)+'&quot;,&quot;'+esc(item.id)+'&quot;)">确认此事项</button>')+'</section>'}).join('')+'</article>';
 }
 const inboxBaseV154=inboxPanel;
