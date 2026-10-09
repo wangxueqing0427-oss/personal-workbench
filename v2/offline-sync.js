@@ -29,6 +29,7 @@
       try {
         const response = await fetcher(config.url, { method, signal: controller.signal, headers: { Authorization: 'Bearer ' + config.token, 'Content-Type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) });
         if (response.status === 409) return { conflict: true };
+        if (response.status === 401) throw new Error('身份失效：请重新验证测试身份；本地原件和队列保留');
         if (!response.ok) throw new Error('隔离同步请求失败：' + response.status);
         return response.json();
       } finally { clearTimeout(timeout); }
@@ -101,5 +102,30 @@
     const data = await store.queueData();
     return { status: data.jobs.some(job => job.status === '存在冲突') ? '存在冲突' : data.jobs.some(job => job.status === '同步失败') ? '同步失败' : data.jobs.length ? '等待同步' : data.meta ? '已同步' : '等待同步', pending: data.jobs.length, configured: !!data.config };
   }
-  root.WorkbenchOfflineSync = { configure, create, status, hash };
+  async function previewConflict(jobId) {
+    const data = await store.queueData();
+    const conflict = data.conflicts.find(item => item.jobId === jobId);
+    if (!conflict || !data.config) throw new Error('冲突或测试身份不存在');
+    if (await hash(conflict.cloud.payload) !== conflict.cloud.hash) throw new Error('云端副本校验失败');
+    const payload = conflict.cloud.payload;
+    const key = await crypto.subtle.importKey('raw', unbase64(data.config.key), 'AES-GCM', false, ['decrypt']);
+    const sealed = new Uint8Array([...unbase64(payload.ciphertext), ...unbase64(payload.tag)]);
+    const cloud = JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unbase64(payload.iv) }, key, sealed)));
+    const differences = [];
+    const localProjects = conflict.localSnapshot.projects || [];
+    const remoteProjects = cloud.state.projects || [];
+    for (const id of new Set([...localProjects, ...remoteProjects].map(item => item.id))) {
+      const local = localProjects.find(item => item.id === id), remote = remoteProjects.find(item => item.id === id);
+      for (const field of new Set([...Object.keys(local || {}), ...Object.keys(remote || {})])) {
+        if (JSON.stringify(local?.[field]) !== JSON.stringify(remote?.[field])) differences.push({ id, name: local?.name || remote?.name || id, field, local: local?.[field], cloud: remote?.[field] });
+      }
+    }
+    return { jobId, cloudRevision: conflict.cloud.revision, differences, local: conflict.localSnapshot, cloud: cloud.state };
+  }
+  async function saveReview(jobId, choices) {
+    const preview = await previewConflict(jobId);
+    if (choices.length !== preview.differences.length || choices.some(choice => !['local', 'cloud', 'both'].includes(choice))) throw new Error('请逐项核对差异');
+    await store.changeQueue('conflict-review:' + jobId, (previous, transaction) => transaction.put({ jobId, cloudRevision: preview.cloudRevision, choices, reviewedAt: new Date().toISOString(), applied: false }, 'conflict-review:' + jobId));
+  }
+  root.WorkbenchOfflineSync = { configure, create, status, hash, previewConflict, saveReview };
 })(globalThis);

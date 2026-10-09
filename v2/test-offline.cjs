@@ -88,6 +88,18 @@ async function main() {
       await other.evaluate(async config => { offlineRunner.stop(); await WorkbenchOfflineSync.configure(config); await offlineRunner.run(); }, { url: backend.url, token, key: key.toString('base64') });
       check((await other.evaluate(() => WorkbenchOfflineSync.status())).status === '存在冲突', '另一设备旧基线不覆盖云端');
       check((await other.evaluate(() => WorkbenchBusinessStore.queueData())).conflicts.length === 1, '双方快照持久留存供用户处理');
+      const review = await other.evaluate(async () => {
+        const data = await WorkbenchBusinessStore.queueData();
+        const preview = await WorkbenchOfflineSync.previewConflict(data.conflicts[0].jobId);
+        const before = JSON.stringify(await WorkbenchBusinessStore.read());
+        await WorkbenchOfflineSync.saveReview(preview.jobId, preview.differences.map(() => 'both'));
+        return { unchanged: before === JSON.stringify(await WorkbenchBusinessStore.read()), differences: preview.differences.length, status: (await WorkbenchOfflineSync.status()).status };
+      });
+      check(review.unchanged && review.status === '存在冲突', '核对草稿不覆盖本地或解除冲突');
+      await other.getByRole('button', { name: '查看同步队列 / 核对冲突' }).click();
+      await other.getByRole('button', { name: '保存核对草稿（不写入项目）' }).click();
+      await other.getByRole('button', { name: '草稿已保存，双方数据保持不变' }).waitFor();
+      check(true, '手机宽度实际点击核对界面');
     } finally { await second.close(); }
     const beforeOversize = await cloud();
     await page.evaluate(async () => {
