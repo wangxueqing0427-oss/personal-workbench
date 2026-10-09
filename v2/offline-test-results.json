@@ -1,0 +1,9 @@
+{
+  "passed": 18,
+  "failed": 0,
+  "browser": "Edge移动尺寸持久测试配置",
+  "productionConnected": false,
+  "iphoneTested": false,
+  "quotaTest": "QuotaExceeded及事务中断故障注入，不是实际设备磁盘耗尽",
+  "largestAttachmentBytes": 2097152
+}

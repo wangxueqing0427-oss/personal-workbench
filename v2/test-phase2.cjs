@@ -173,7 +173,7 @@ async function main() {
       assert.equal(await other.evaluate(async () => (await WorkbenchBusinessStore.read()).hospitals.some(item => item.name === '不应覆盖的医院B')), false);
       await other.close();
       assert.equal(await reopened.evaluate(() => localStorage.getItem('personalWorkbench')), null);
-      assert.equal((await reopened.evaluate(() => navigator.serviceWorker.getRegistrations())).length, 0);
+      assert.equal(await reopened.evaluate(async () => (await navigator.serviceWorker.getRegistrations()).every(registration => registration.scope.includes('/v2/'))), true);
       assert.deepEqual(errors, []); assert.deepEqual(external, []);
       await reopened.locator('nav [data-route="home"]').click();
       await reopened.screenshot({ path: path.join(__dirname, 'phase2-' + viewport.width + '.png'), fullPage: true });

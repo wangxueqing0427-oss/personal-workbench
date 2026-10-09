@@ -3,6 +3,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
+const http = require('node:http');
 const { createLab, hash } = require('./sync-lab.cjs');
 const encryptionKey = crypto.randomBytes(32);
 function seal(value) {
@@ -65,6 +66,11 @@ async function main() {
     const beforeInvalid = await get();
     const invalidResponse = await fetch(server.url, { method: 'PUT', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify({ expectedRevision: beforeInvalid.revision, expectedHash: beforeInvalid.hash, payload: firstPayload, hash: 'invalid' }) });
     check(invalidResponse.status === 400 && (await get()).revision === beforeInvalid.revision, '篡改传输哈希不能写入');
+    await new Promise(resolve => {
+      const request = http.request(server.url, { method: 'PUT', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json', 'Content-Length': 100000 } });
+      request.on('error', resolve); request.write('{"payload":"partial'); setTimeout(() => { request.destroy(); resolve(); }, 20);
+    });
+    check((await get()).revision === beforeInvalid.revision, '真实HTTP上传中途断开不提交部分包');
     await fs.writeFile(path.join(__dirname, 'sync-http-results.json'), JSON.stringify({ coreAssertions: passed, environment: '仅127.0.0.1真实HTTP隔离后端及系统临时合成数据目录', productionConnected: false, iphoneTested: false, findings: '并发CAS、断网编辑、重启持久化、联网恢复、重复请求拒绝及附件校验通过' }, null, 2));
     console.log(JSON.stringify({ coreAssertions: passed, productionConnected: false, iphoneTested: false }));
   } finally { await server.close(); }

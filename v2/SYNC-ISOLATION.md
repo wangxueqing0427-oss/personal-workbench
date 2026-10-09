@@ -2,7 +2,7 @@
 
 新增sync-lab.cjs及test-sync-http.cjs。不是生产Cloudflare后端，也不是iPhone同步适配器。
 
-本地HTTP仅绑定127.0.0.1，需要每次测试随机生成的鉴权令牌；保存对象为AES-GCM加密合成业务记录及附件。写入在单进程队列中检查expectedRevision和expectedHash，写新临时文件、flush后重命名，再返回成功。接口限制1MB。本工具不应部署：无多进程锁、无生产身份体系、无生产容量/配额/监控保障。
+本地HTTP仅绑定127.0.0.1，需要每次测试随机生成的鉴权令牌；保存对象为AES-GCM加密合成业务记录及附件。写入在单进程队列中检查expectedRevision和expectedHash，写新临时文件、flush后重命名，再返回成功。接口限制20MB。本工具不应部署：无多进程锁、无生产身份体系、无生产容量/配额/监控保障。
 
 测试结果以sync-http-results.json为准；首次13项，后续补测离线期间另一端编辑及传输哈希校验。
 
@@ -19,7 +19,7 @@
 
 ## 仍待完成
 
-浏览器持久离线队列与该协议的端到端集成、真正双设备身份接入、大文件分片、上传中断/丢失响应的状态恢复、真实Cloudflare后端事务方案、iPhone Safari/PWA验收。当前测试不代表这些功能完成。
+后续已完成浏览器持久队列与本地HTTP协议集成、响应丢失状态恢复和离线重开测试，详见OFFLINE-ACCEPTANCE.md。仍未完成真正双设备生产身份接入、大文件分片、真实Cloudflare后端事务方案、iPhone Safari/PWA验收。
 
 ## 提交状态
 

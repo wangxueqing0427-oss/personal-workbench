@@ -1,5 +1,5 @@
 {
-  "coreAssertions": 17,
+  "coreAssertions": 18,
   "environment": "仅127.0.0.1真实HTTP隔离后端及系统临时合成数据目录",
   "productionConnected": false,
   "iphoneTested": false,

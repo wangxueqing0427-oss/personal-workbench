@@ -10,6 +10,10 @@ async function createLab(directory, token) {
   catch (error) { if (error.code !== 'ENOENT') throw error; current = { revision: 0, hash: hash(null), payload: null }; }
   let sequence = Promise.resolve();
   const server = http.createServer(async (request, response) => {
+    const origin = request.headers.origin;
+    if (origin && !/^http:\/\/127\.0\.0\.1:\d+$/.test(origin)) { response.writeHead(403).end(); return; }
+    if (origin) response.setHeader('Access-Control-Allow-Origin', origin);
+    if (request.method === 'OPTIONS') { response.writeHead(204, { 'Access-Control-Allow-Methods': 'GET, PUT, OPTIONS', 'Access-Control-Allow-Headers': 'Authorization, Content-Type' }); response.end(); return; }
     const send = (status, result) => { response.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); response.end(JSON.stringify(result)); };
     if (request.headers.authorization !== 'Bearer ' + token) { send(401, { error: 'Unauthorized' }); return; }
     if (request.url !== '/sync') { send(404, { error: 'Not found' }); return; }
@@ -17,7 +21,7 @@ async function createLab(directory, token) {
     if (request.method !== 'PUT') { send(405, { error: 'Method not allowed' }); return; }
     try {
       let size = 0; const chunks = [];
-      for await (const chunk of request) { size += chunk.length; if (size > 1024 * 1024) { send(413, { error: 'Lab payload limit' }); return; } chunks.push(chunk); }
+      for await (const chunk of request) { size += chunk.length; if (size > 20 * 1024 * 1024) { send(413, { error: 'Lab payload limit' }); return; } chunks.push(chunk); }
       const input = JSON.parse(Buffer.concat(chunks));
       if (!Number.isSafeInteger(input.expectedRevision) || input.expectedRevision < 0 || typeof input.expectedHash !== 'string' || !input.payload?.ciphertext || !input.payload?.iv || !input.payload?.tag || input.hash !== hash(input.payload)) { send(400, { error: 'Invalid envelope or hash' }); return; }
       const job = sequence.then(async () => {
