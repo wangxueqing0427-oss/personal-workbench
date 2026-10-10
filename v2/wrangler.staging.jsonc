@@ -3,7 +3,7 @@
   "main": "staging-worker.mjs",
   "compatibility_date": "2026-10-10",
   "workers_dev": true,
-  "assets": { "directory": "./staging-public", "binding": "ASSETS", "run_worker_first": ["/sync", "/sync/*"] },
+  "assets": { "directory": "./staging-public", "binding": "ASSETS", "html_handling": "none", "run_worker_first": ["/sync", "/sync/*"] },
   "vars": { "TEST_ENVIRONMENT": "synthetic-only" },
   "durable_objects": { "bindings": [{ "name": "TEST_SYNC", "class_name": "TestSync" }] },
   "migrations": [{ "tag": "v2-staging-sqlite-1", "new_sqlite_classes": ["TestSync"] }],
