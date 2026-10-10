@@ -7,13 +7,25 @@
   async function hash(value) { return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', encoder.encode(JSON.stringify(value)))), byte => byte.toString(16).padStart(2, '0')).join(''); }
   function checkEndpoint(value) {
     const url = new URL(value);
-    if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || url.pathname !== '/sync') throw new Error('仅允许127.0.0.1隔离测试后端，不允许生产地址');
+    const local = url.protocol === 'http:' && url.hostname === '127.0.0.1';
+    const staging = url.protocol === 'https:' && /^personal-workbench-v2-staging\.[a-z0-9-]+\.workers\.dev$/.test(url.hostname) && url.origin === root.location.origin;
+    if ((!local && !staging) || url.pathname !== '/sync' || url.search || url.hash || url.username || url.password) throw new Error('仅允许localhost或同源V2隔离测试Worker，不允许生产地址');
   }
   async function configure(config) {
     checkEndpoint(config.url);
     if (!config.token || unbase64(config.key).length !== 32) throw new Error('测试身份不完整');
     const existing = await store.queueData();
     if (existing.config) throw new Error('身份已配置；不能直接替换或重置同步基线');
+    const response = await root.fetch(config.url, { headers: { Authorization: 'Bearer ' + config.token }, signal: AbortSignal.timeout(15000) });
+    if (!response.ok) throw new Error('测试身份验证未通过，配置未保存');
+    const cloud = await response.json();
+    if (await hash(cloud.payload) !== cloud.hash) throw new Error('测试云端副本校验未通过');
+    if (cloud.payload) {
+      const key = await crypto.subtle.importKey('raw', unbase64(config.key), 'AES-GCM', false, ['decrypt']);
+      const sealed = new Uint8Array([...unbase64(cloud.payload.ciphertext), ...unbase64(cloud.payload.tag)]);
+      try { await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unbase64(cloud.payload.iv) }, key, sealed); }
+      catch { throw new Error('测试加密密钥不匹配，配置未保存'); }
+    }
     await store.changeQueue('sync-config', (previous, transaction) => {
       if (previous) throw new Error('另一窗口已配置身份');
       transaction.put(config, 'sync-config');
@@ -23,11 +35,11 @@
     let busy = false, timer, stopped = false, delay = 1000;
     const fetcher = options.fetch || root.fetch.bind(root);
     const announce = () => root.dispatchEvent(new Event('workbench-sync-status'));
-    async function request(config, method, body) {
+    async function request(config, method, body, suffix = '') {
       checkEndpoint(config.url);
       const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 15000);
       try {
-        const response = await fetcher(config.url, { method, signal: controller.signal, headers: { Authorization: 'Bearer ' + config.token, 'Content-Type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) });
+        const response = await fetcher(config.url + suffix, { method, signal: controller.signal, headers: { Authorization: 'Bearer ' + config.token, 'Content-Type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) });
         if (response.status === 409) return { conflict: true };
         if (response.status === 401) throw new Error('身份失效：请重新验证测试身份；本地原件和队列保留');
         if (!response.ok) throw new Error('隔离同步请求失败：' + response.status);
@@ -64,6 +76,22 @@
         transaction.delete(job.key);
       });
     }
+    async function upload(job, config) {
+      const serialized = JSON.stringify(job.packet);
+      if (serialized.length < 256 * 1024) return request(config, 'PUT', job.packet);
+      const uploadId = await hash(job.packet), size = 64 * 1024, parts = Math.ceil(serialized.length / size);
+      let acknowledged = job.upload?.uploadId === uploadId ? job.upload.parts : 0;
+      for (let index = acknowledged; index < parts; index++) {
+        const reply = await request(config, 'PUT', { data: serialized.slice(index * size, (index + 1) * size) }, '/uploads/' + uploadId + '/' + index);
+        if (reply.uploadId !== uploadId || reply.index !== index) throw new Error('分片确认不一致，保留本地原件');
+        acknowledged = index + 1;
+        await store.changeQueue(job.key, (current, transaction) => {
+          if (!current || current.id !== job.id) throw new Error('上传期间队列已改变');
+          transaction.put({ ...current, upload: { uploadId, parts: acknowledged, total: parts } }, job.key);
+        });
+      }
+      return request(config, 'PUT', { uploadId, parts });
+    }
     async function run() {
       if (busy) return; busy = true;
       let active;
@@ -84,7 +112,7 @@
               transaction.put({ jobId: current.id, localSnapshot: current.snapshot, cloud, detectedAt: new Date().toISOString() }, 'conflict:' + current.id);
             }); break;
           }
-          cloud = await request(data.config, 'PUT', active.packet);
+          cloud = await upload(active, data.config);
           if (cloud.conflict) throw new Error('云端版本已改变，请重试读取以保留冲突双方');
           await acknowledge(active, cloud); data = await store.queueData();
         }
@@ -112,20 +140,64 @@
     const sealed = new Uint8Array([...unbase64(payload.ciphertext), ...unbase64(payload.tag)]);
     const cloud = JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unbase64(payload.iv) }, key, sealed)));
     const differences = [];
-    const localProjects = conflict.localSnapshot.projects || [];
-    const remoteProjects = cloud.state.projects || [];
-    for (const id of new Set([...localProjects, ...remoteProjects].map(item => item.id))) {
-      const local = localProjects.find(item => item.id === id), remote = remoteProjects.find(item => item.id === id);
-      for (const field of new Set([...Object.keys(local || {}), ...Object.keys(remote || {})])) {
-        if (JSON.stringify(local?.[field]) !== JSON.stringify(remote?.[field])) differences.push({ id, name: local?.name || remote?.name || id, field, local: local?.[field], cloud: remote?.[field] });
+    const current = await store.read();
+    for (const collection of new Set([...Object.keys(current), ...Object.keys(cloud.state)])) {
+      if (collection === 'revision' || collection === 'schema') continue;
+      if (!Array.isArray(current[collection]) || !Array.isArray(cloud.state[collection])) {
+        if (JSON.stringify(current[collection]) !== JSON.stringify(cloud.state[collection])) differences.push({ collection, field: collection, name: collection, local: current[collection], cloud: cloud.state[collection] });
+        continue;
+      }
+      const localItems = current[collection], remoteItems = cloud.state[collection];
+      if ([...localItems, ...remoteItems].some(item => !item?.id)) {
+        if (JSON.stringify(localItems) !== JSON.stringify(remoteItems)) differences.push({ collection, field: collection, name: collection, local: localItems, cloud: remoteItems });
+        continue;
+      }
+      for (const id of new Set([...localItems, ...remoteItems].map(item => item.id))) {
+        const local = localItems.find(item => item.id === id), remote = remoteItems.find(item => item.id === id);
+        if (!local || !remote) continue;
+        for (const field of new Set([...Object.keys(local), ...Object.keys(remote)])) {
+          if (JSON.stringify(local[field]) !== JSON.stringify(remote[field])) differences.push({ collection, id, name: local.name || remote.name || id, field, local: local[field], cloud: remote[field] });
+        }
       }
     }
-    return { jobId, cloudRevision: conflict.cloud.revision, differences, local: conflict.localSnapshot, cloud: cloud.state };
+    return { jobId, cloudRevision: conflict.cloud.revision, cloudHash: conflict.cloud.hash, differences, local: current, cloud: cloud.state, files: cloud.files || [] };
+  }
+  async function reauthenticate(token) {
+    const data = await store.queueData();
+    if (!data.config) throw new Error('请先配置隔离测试身份');
+    checkEndpoint(data.config.url);
+    const response = await root.fetch(data.config.url, { headers: { Authorization: 'Bearer ' + token }, signal: AbortSignal.timeout(15000) });
+    if (!response.ok) throw new Error('身份验证未通过，本地配置未更改');
+    await store.changeQueue('sync-config', (current, transaction) => {
+      if (current.url !== data.config.url || current.key !== data.config.key) throw new Error('身份配置已改变');
+      transaction.put({ ...current, token }, 'sync-config');
+    });
+  }
+  async function applyReview(jobId, choices, expectedRevision) {
+    const preview = await previewConflict(jobId);
+    if (preview.local.revision !== expectedRevision || choices.length !== preview.differences.length || choices.some(choice => !['local', 'cloud', 'both'].includes(choice))) throw new Error('请重新核对当前版本和每项差异');
+    const merged = structuredClone(preview.local);
+    for (const [collection, items] of Object.entries(preview.cloud)) {
+      if (Array.isArray(items) && Array.isArray(merged[collection])) for (const item of items) if (item?.id && !merged[collection].some(existing => existing.id === item.id)) merged[collection].push(structuredClone(item));
+    }
+    preview.differences.forEach((difference, index) => {
+      const target = difference.id ? merged[difference.collection].find(item => item.id === difference.id) : merged;
+      if (choices[index] === 'cloud') target[difference.field] = structuredClone(difference.cloud);
+      if (choices[index] === 'both' && Array.isArray(difference.local) && Array.isArray(difference.cloud)) target[difference.field] = [...difference.local, ...difference.cloud.filter(item => !difference.local.some(existing => JSON.stringify(existing) === JSON.stringify(item)))];
+    });
+    const files = [];
+    for (const remote of preview.files) {
+      const bytes = unbase64(remote.data), existing = await store.readFile(remote.id);
+      if (existing) {
+        if (base64(new Uint8Array(await existing.arrayBuffer())) !== remote.data) throw new Error('同编号原件不同，保留冲突双方，需单独核对附件');
+      } else files.push({ id: remote.id, value: new File([bytes], remote.name, { type: remote.type, lastModified: remote.modified }) });
+    }
+    return store.resolveConflict(jobId, merged, expectedRevision, { revision: preview.cloudRevision, hash: preview.cloudHash }, files);
   }
   async function saveReview(jobId, choices) {
     const preview = await previewConflict(jobId);
     if (choices.length !== preview.differences.length || choices.some(choice => !['local', 'cloud', 'both'].includes(choice))) throw new Error('请逐项核对差异');
     await store.changeQueue('conflict-review:' + jobId, (previous, transaction) => transaction.put({ jobId, cloudRevision: preview.cloudRevision, choices, reviewedAt: new Date().toISOString(), applied: false }, 'conflict-review:' + jobId));
   }
-  root.WorkbenchOfflineSync = { configure, create, status, hash, previewConflict, saveReview };
+  root.WorkbenchOfflineSync = { configure, create, status, hash, previewConflict, saveReview, applyReview, reauthenticate };
 })(globalThis);

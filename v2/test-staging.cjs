@@ -1,0 +1,38 @@
+const assert = require('node:assert/strict');
+const { DatabaseSync } = require('node:sqlite');
+const { randomBytes, createHash } = require('node:crypto');
+async function main() {
+  const { default: worker, TestSync } = await import('./staging-worker.mjs');
+  const database = new DatabaseSync(':memory:');
+  const sql = { exec(query, ...args) { const statement = database.prepare(query); const rows = statement.columns().length ? statement.all(...args) : (statement.run(...args), []); return { toArray: () => rows }; } };
+  const storage = { sql, transactionSync(callback) { database.exec('BEGIN'); try { const result = callback(); database.exec('COMMIT'); return result; } catch (error) { database.exec('ROLLBACK'); throw error; } } };
+  let backend = new TestSync({ storage }), passed = 0;
+  const token = randomBytes(32).toString('hex');
+  const env = { TEST_ENVIRONMENT: 'synthetic-only', TEST_TOKEN: token, TEST_SYNC: { idFromName: value => value, get: () => backend }, ASSETS: { fetch: () => new Response('synthetic-static') } };
+  const hash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
+  const call = (method, body, suffix = '', credential = token) => worker.fetch(new Request('https://isolated.test/sync' + suffix, { method, headers: { Authorization: 'Bearer ' + credential }, ...(body ? { body: JSON.stringify(body) } : {}) }), env);
+  const check = (value, message) => { assert.ok(value, message); passed++; };
+  check((await call('GET', null, '', 'wrong')).status === 401, 'auth required');
+  const current = await (await call('GET')).json();
+  const packet = { expectedRevision: 0, expectedHash: current.hash, payload: { iv: 'synthetic-iv', tag: 'synthetic-tag', ciphertext: randomBytes(300000).toString('base64') } }; packet.hash = hash(packet.payload);
+  const uploadId = hash(packet), serialized = JSON.stringify(packet), parts = Math.ceil(serialized.length / 65536);
+  check((await call('PUT', { uploadId, parts })).status === 400, 'partial never commits');
+  for (let index = 0; index < parts; index++) check((await call('PUT', { data: serialized.slice(index * 65536, (index + 1) * 65536) }, '/uploads/' + uploadId + '/' + index)).status === 200, 'chunk saved');
+  backend = new TestSync({ storage });
+  check((await call('PUT', { data: serialized.slice(0, 65536) }, '/uploads/' + uploadId + '/0')).status === 200, 'restart idempotent part');
+  check((await call('PUT', { data: 'different' }, '/uploads/' + uploadId + '/0')).status === 409, 'part cannot overwrite');
+  check((await call('PUT', { uploadId, parts })).status === 200, 'atomic manifest commit');
+  check((await call('PUT', { uploadId, parts })).status === 409, 'CAS refuses stale write');
+  check((await (await call('GET')).json()).hash === packet.hash, 'hash unchanged');
+  const next = { expectedRevision: 1, expectedHash: packet.hash, payload: { iv: 'synthetic', tag: 'synthetic', ciphertext: 'next-synthetic' } }; next.hash = hash(next.payload);
+  const outcomes = await Promise.all([call('PUT', next), call('PUT', next)]);
+  check(outcomes.filter(item => item.status === 200).length === 1 && outcomes.filter(item => item.status === 409).length === 1, 'concurrent CAS only one succeeds');
+  check((await worker.fetch(new Request('https://isolated.test/sync', { headers: { Authorization: 'Bearer ' + token, Origin: 'https://production.invalid' } }), env)).status === 403, 'foreign origin denied');
+  check((await call('PUT', { data: 'x'.repeat(310 * 1024) })).status === 413, 'oversize request blocked');
+  backend.put('bytes', String(50 * 1024 * 1024));
+  check((await call('PUT', { data: 'small-synthetic' }, '/uploads/' + 'a'.repeat(64) + '/0')).status === 507, 'storage ceiling prevents unbounded writes');
+  check((await (await call('GET')).json()).revision === 2, 'failed chunk never advances current');
+  check((await worker.fetch(new Request('https://isolated.test/sync'), { ...env, TEST_ENVIRONMENT: 'production' })).status === 503, 'isolation guard');
+  database.close(); console.log(JSON.stringify({ passed, failed: 0, runtime: 'Node SQLite simulation, not Cloudflare deployed', productionConnected: false }));
+}
+main().catch(error => { console.error(error); process.exitCode = 1; });

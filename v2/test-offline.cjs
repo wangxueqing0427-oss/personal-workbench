@@ -60,7 +60,7 @@ async function main() {
     check(complete.files.every((file, index) => Buffer.from(file.data, 'base64').every(byte => byte === index + 1)), '三份原件逐字节一致');
     await page.evaluate(async () => {
       offlineRunner.stop(); const next = await WorkbenchBusinessStore.read(); next.notes.push({ id: 'lost-response', progress: '合成响应丢失测试' }); await WorkbenchBusinessStore.commit(next, next.revision);
-      const runner = WorkbenchOfflineSync.create({ fetch: async (...args) => { const response = await fetch(...args); if (args[1].method === 'PUT') throw new Error('合成响应丢失'); return response; } }); await runner.run();
+      const runner = WorkbenchOfflineSync.create({ fetch: async (...args) => { const response = await fetch(...args); if (args[1].method === 'PUT' && !args[0].includes('/uploads/')) throw new Error('合成响应丢失'); return response; } }); await runner.run();
     });
     check((await page.evaluate(() => WorkbenchOfflineSync.status())).status === '同步失败', '写入成功但响应丢失显示失败且队列保留');
     const beforeRetry = await cloud(); await page.evaluate(() => offlineRunner.run());
@@ -100,6 +100,34 @@ async function main() {
       await other.getByRole('button', { name: '保存核对草稿（不写入项目）' }).click();
       await other.getByRole('button', { name: '草稿已保存，双方数据保持不变' }).waitFor();
       check(true, '手机宽度实际点击核对界面');
+      check(await other.evaluate(async config => {
+        let rejected = false;
+        try { await WorkbenchOfflineSync.reauthenticate('invalid-synthetic-token'); } catch { rejected = true; }
+        await WorkbenchOfflineSync.reauthenticate(config.token);
+        return rejected && (await WorkbenchBusinessStore.queueData()).config.key === config.key;
+      }, { token, key: key.toString('base64') }), '重新认证不改变密钥或基线，错误身份拒绝');
+      check(await other.evaluate(async () => {
+        const data = await WorkbenchBusinessStore.queueData(), preview = await WorkbenchOfflineSync.previewConflict(data.conflicts[0].jobId);
+        const current = await WorkbenchBusinessStore.read(); current.notes.push({ id: 'late-edit', progress: '核对期间新编辑' }); await WorkbenchBusinessStore.commit(current, current.revision);
+        try { await WorkbenchOfflineSync.applyReview(preview.jobId, preview.differences.map(() => 'both'), preview.local.revision); return false; } catch { return true; }
+      }), '核对后新增编辑阻止旧核对结果覆盖');
+      check(await other.evaluate(async () => {
+        const data = await WorkbenchBusinessStore.queueData(), preview = await WorkbenchOfflineSync.previewConflict(data.conflicts[0].jobId);
+        await WorkbenchOfflineSync.applyReview(preview.jobId, preview.differences.map(() => 'both'), preview.local.revision);
+        const current = await WorkbenchBusinessStore.read();
+        await offlineRunner.run();
+        return current.notes.some(item => item.id === 'late-edit') && current.notes.some(item => item.id === 'offline-note') && (await WorkbenchBusinessStore.readFile('file-0')) && (await WorkbenchOfflineSync.status()).status === '已同步';
+      }), '显式合并保留两端记录和附件并安全同步');
+      await other.evaluate(async () => {
+        const current = await WorkbenchBusinessStore.read(); current.notes.push({ id: 'chunk-retry', progress: '分片中断测试' }); await WorkbenchBusinessStore.commit(current, current.revision);
+        const runner = WorkbenchOfflineSync.create({ fetch: async (url, options) => { if (url.includes('/uploads/') && url.endsWith('/2')) throw new Error('合成传输中断'); return fetch(url, options); } });
+        await runner.run();
+      });
+      check(await other.evaluate(async () => { const data = await WorkbenchBusinessStore.queueData(); return data.jobs[0].upload.parts === 2 && data.jobs[0].status === '同步失败'; }), '分片中断后已确认进度持久保留');
+      await other.reload(); await other.waitForFunction(() => typeof offlineRunner !== 'undefined');
+      await other.evaluate(async () => { offlineRunner.stop(); await offlineRunner.run(); });
+      for (let attempt = 0; attempt < 100 && (await other.evaluate(() => WorkbenchOfflineSync.status())).status !== '已同步'; attempt++) await new Promise(resolve => setTimeout(resolve, 100));
+      check((await other.evaluate(() => WorkbenchOfflineSync.status())).status === '已同步', '重新打开后续传剩余分片成功');
     } finally { await second.close(); }
     const beforeOversize = await cloud();
     await page.evaluate(async () => {

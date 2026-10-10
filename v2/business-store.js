@@ -79,5 +79,45 @@
       });
     } finally { database.close(); }
   }
-  root.WorkbenchBusinessStore = { read, commit, readFile, name, queueData, changeQueue };
+  async function resolveConflict(jobId, state, expectedRevision, cloud, files) {
+    const database = await open();
+    try {
+      return await new Promise((resolve, reject) => {
+        const transaction = database.transaction(['state', 'files'], 'readwrite');
+        const records = transaction.objectStore('state');
+        let saved, problem;
+        const request = records.get('current');
+        request.onsuccess = () => {
+          if (request.result?.revision !== expectedRevision) { problem = new Error('核对期间本地已修改，请重新核对'); transaction.abort(); return; }
+          const conflictRequest = records.get('conflict:' + jobId);
+          conflictRequest.onsuccess = () => {
+            try {
+              if (!conflictRequest.result || conflictRequest.result.cloud.hash !== cloud.hash) throw new Error('冲突副本已改变');
+              records.put({ local: request.result, conflict: conflictRequest.result, resolvedAt: new Date().toISOString() }, 'resolution-archive:' + crypto.randomUUID());
+              saved = structuredClone(state); saved.revision = expectedRevision + 1;
+              const cursorRequest = records.openCursor();
+              cursorRequest.onsuccess = () => {
+                const cursor = cursorRequest.result;
+                if (cursor) {
+                  if (String(cursor.key).startsWith('queue:')) { records.put(cursor.value, 'queue-archive:' + cursor.value.id); cursor.delete(); }
+                  cursor.continue();
+                } else {
+                  try {
+                    for (const file of files) transaction.objectStore('files').add(file.value, file.id);
+                    records.put(saved, 'current');
+                    records.put({ revision: cloud.revision, hash: cloud.hash, syncedAt: null }, 'sync-meta');
+                    records.put({ id: crypto.randomUUID(), localRevision: saved.revision, snapshot: saved, status: '等待同步', attempts: 0, createdAt: new Date().toISOString() }, 'queue:' + String(saved.revision).padStart(12, '0'));
+                    records.delete('conflict:' + jobId);
+                  } catch (error) { problem = error; transaction.abort(); }
+                }
+              };
+            } catch (error) { problem = error; transaction.abort(); }
+          };
+        };
+        transaction.oncomplete = () => resolve(saved);
+        transaction.onabort = transaction.onerror = () => reject(problem || transaction.error);
+      });
+    } finally { database.close(); }
+  }
+  root.WorkbenchBusinessStore = { read, commit, readFile, name, queueData, changeQueue, resolveConflict };
 })(globalThis);
