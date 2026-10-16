@@ -1,27 +1,37 @@
 (function () {
   'use strict';
   const panel = document.createElement('dialog');
-  panel.style.cssText = 'max-width:720px;width:calc(100% - 32px);max-height:85vh;overflow:auto;border:0;border-radius:16px;padding:20px';
+  panel.className = 'sync-dialog';
   document.body.append(panel);
   const text = (tag, value) => { const element = document.createElement(tag); element.textContent = value; return element; };
   async function show() {
     panel.replaceChildren(text('h2', '同步与冲突核对'));
-    const close = text('button', '关闭'); close.onclick = () => panel.close(); panel.append(close);
+    const close = text('button', '关闭'); close.className = 'dialog-close'; close.onclick = () => panel.close(); panel.append(close);
     const data = await WorkbenchBusinessStore.queueData();
     panel.append(text('p', '仅合成测试。草稿不写入项目；显式确认合并后保留双方归档。'));
+    const code = document.createElement('input'); code.inputMode = 'numeric'; code.autocomplete = 'off'; code.maxLength = 14; code.placeholder = '一次性12位设备授权码'; code.setAttribute('aria-label', '设备授权码');
+    const connect = text('button', data.config ? '授权重新登录（保留本地数据）' : '使用授权码接入');
+    connect.onclick = async () => { connect.disabled = true; try { await WorkbenchDevicePair.redeem(code.value); code.value = ''; await show(); } catch (error) { panel.append(text('p', error.message)); } finally { connect.disabled = false; } };
+    panel.append(code, connect);
+    if (data.config) {
+      const create = text('button', '为另一台设备生成授权码');
+      create.onclick = async () => { try { const value = await WorkbenchDevicePair.create(); const output = text('p', value.match(/.{4}/g).join(' ') + ' · 15分钟有效，仅可使用一次，请勿公开'); output.className = 'pair-code'; create.after(output); setTimeout(() => output.remove(), 900000); } catch (error) { panel.append(text('p', error.message)); } };
+      panel.append(create);
+    }
+    const advanced = document.createElement('details'); advanced.append(text('summary', '高级身份设置（通常无需使用）')); panel.append(advanced);
     if (!data.config) {
       const endpoint = document.createElement('input'); endpoint.type = 'url'; endpoint.value = location.origin + '/sync'; endpoint.setAttribute('aria-label', '隔离测试地址');
       const token = document.createElement('input'); token.type = 'password'; token.placeholder = '隔离测试凭证'; token.autocomplete = 'off';
       const key = document.createElement('input'); key.type = 'password'; key.placeholder = '两端相同的独立测试加密密钥（Base64）'; key.autocomplete = 'off';
       const configure = text('button', '确认接入隔离测试（仅合成数据）');
       configure.onclick = async () => { try { await WorkbenchOfflineSync.configure({ url: endpoint.value, token: token.value, key: key.value }); token.value = ''; key.value = ''; await show(); } catch (error) { panel.append(text('p', error.message)); } };
-      panel.append(endpoint, token, key, configure);
+      advanced.append(endpoint, token, key, configure);
     }
     const retry = text('button', '重试失败同步'); retry.onclick = async () => { retry.disabled = true; await offlineRunner.run(); await show(); }; panel.append(retry);
     const credential = document.createElement('input'); credential.type = 'password'; credential.autocomplete = 'off'; credential.placeholder = '新的隔离测试凭证（不修改加密密钥）';
     const login = text('button', '重新验证测试身份');
     login.onclick = async () => { try { await WorkbenchOfflineSync.reauthenticate(credential.value); credential.value = ''; login.textContent = '身份已验证'; } catch (error) { login.textContent = error.message; } };
-    panel.append(credential, login);
+    advanced.append(credential, login);
     for (const job of data.jobs) {
       panel.append(text('p', `本地版本 ${job.localRevision} · ${job.status} · 已尝试 ${job.attempts} 次` + (job.upload ? ` · 分片 ${job.upload.parts}/${job.upload.total}` : '')));
       if (job.error) panel.append(text('p', job.error));

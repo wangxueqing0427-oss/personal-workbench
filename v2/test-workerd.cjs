@@ -32,7 +32,9 @@ async function main() {
       }
     }, { url: base + '/sync', ...identity });
     for (let attempt = 0; attempt < 100 && (await page.evaluate(() => WorkbenchOfflineSync.status())).status !== '已同步'; attempt++) await new Promise(resolve => setTimeout(resolve, 100));
-    check((await page.evaluate(() => WorkbenchOfflineSync.status())).status === '已同步', 'business state synchronized to actual local SQLite Durable Object');
+    const initialStatus = await page.evaluate(() => WorkbenchOfflineSync.status());
+    if (initialStatus.status !== '已同步') console.log(JSON.stringify(await page.evaluate(async () => ({ status: await WorkbenchOfflineSync.status(), errors: (await WorkbenchBusinessStore.queueData()).jobs.map(job => job.error || job.status) }))));
+    check(initialStatus.status === '已同步', 'business state synchronized to actual local SQLite Durable Object');
     await page.evaluate(async () => {
       const current = await WorkbenchBusinessStore.read();
       const id = crypto.randomUUID();

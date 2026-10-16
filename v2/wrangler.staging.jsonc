@@ -4,7 +4,7 @@
   "compatibility_date": "2026-10-10",
   "workers_dev": true,
   "assets": { "directory": "./staging-public", "binding": "ASSETS", "html_handling": "none", "run_worker_first": ["/sync", "/sync/*"] },
-  "vars": { "TEST_ENVIRONMENT": "synthetic-only" },
+  "vars": { "TEST_ENVIRONMENT": "synthetic-only", "TEST_DATASET": "mobile-20261016" },
   "durable_objects": { "bindings": [{ "name": "TEST_SYNC", "class_name": "TestSync" }] },
   "migrations": [{ "tag": "v2-staging-sqlite-1", "new_sqlite_classes": ["TestSync"] }],
   "observability": { "enabled": false }

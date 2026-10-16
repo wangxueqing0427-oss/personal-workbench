@@ -6,10 +6,13 @@ export default {
   async fetch(request, env) {
     if (env.TEST_ENVIRONMENT !== 'synthetic-only') return response(503, { error: 'Isolation guard' });
     const url = new URL(request.url);
+    const testId = env.TEST_DATASET === 'mobile-20261016' ? 'synthetic-v2-mobile-20261016' : 'synthetic-v2-test';
     if (!url.pathname.startsWith('/sync')) return env.ASSETS.fetch(request);
+    if (request.headers.get('Origin') && request.headers.get('Origin') !== url.origin) return response(403, { error: 'Origin denied' });
+    if (url.pathname === '/sync/pair/redeem') return env.TEST_SYNC.get(env.TEST_SYNC.idFromName(testId)).fetch(request);
     if (!env.TEST_TOKEN || await digest(request.headers.get('Authorization') || '') !== await digest('Bearer ' + env.TEST_TOKEN)) return response(401, { error: 'Unauthorized' });
     if (request.headers.get('Origin') && request.headers.get('Origin') !== url.origin) return response(403, { error: 'Origin denied' });
-    return env.TEST_SYNC.get(env.TEST_SYNC.idFromName('synthetic-v2-test')).fetch(request);
+    return env.TEST_SYNC.get(env.TEST_SYNC.idFromName(testId)).fetch(request);
   }
 };
 export class TestSync {
@@ -33,6 +36,7 @@ export class TestSync {
     if (this.window !== minute) { this.window = minute; this.count = 0; }
     if (++this.count > 180) return response(429, { error: 'Test rate limit' });
     const url = new URL(request.url), route = /^\/sync\/uploads\/([a-f0-9]{64})\/(\d{1,3})$/.exec(url.pathname);
+    if (url.pathname.startsWith('/sync/pair/')) return this.pair(request, url.pathname);
     if (url.pathname !== '/sync' && !route) return response(404, { error: 'Not found' });
     const current = JSON.parse(this.read('current') || JSON.stringify({ revision: 0, hash: await hash(null), payload: null }));
     if (request.method === 'GET' && !route) {
@@ -86,5 +90,30 @@ export class TestSync {
       });
       return response(result.status, result.value);
     } catch { return response(400, { error: 'Incomplete or invalid upload; originals retained locally' }); }
+  }
+  async pair(request, pathname) {
+    if (request.method !== 'POST') return response(405, { error: 'Method denied' });
+    const reader = request.body?.getReader(); if (!reader) return response(400, { error: 'Body required' });
+    const chunks = []; let length = 0;
+    while (true) { const part = await reader.read(); if (part.done) break; length += part.value.length; if (length > 8192) { await reader.cancel(); return response(413, { error: 'Pairing size limit' }); } chunks.push(part.value); }
+    const body = new Uint8Array(length); let offset = 0; for (const part of chunks) { body.set(part, offset); offset += part.length; }
+    const inputText = new TextDecoder().decode(body);
+    let input; try { input = JSON.parse(inputText); } catch { return response(400, { error: 'Invalid request' }); }
+    if (pathname === '/sync/pair/create') {
+      if (!/^[a-f0-9]{64}$/.test(input.hash || '') || typeof input.sealed !== 'string' || input.sealed.length > 4096) return response(400, { error: 'Invalid pairing' });
+      this.put('pair-current', JSON.stringify({ hash: input.hash, sealed: input.sealed, expires: Date.now() + 15 * 60000, attempts: 0, used: false }));
+      return response(200, { expiresIn: 900 });
+    }
+    if (pathname !== '/sync/pair/redeem' || !/^\d{12}$/.test(input.code || '')) return response(400, { error: 'Invalid code' });
+    const codeHash = await digest(input.code);
+    const result = this.ctx.storage.transactionSync(() => {
+      const saved = JSON.parse(this.read('pair-current') || 'null');
+      if (!saved || saved.used || saved.expires < Date.now() || saved.attempts >= 5) return { status: 410, value: { error: '授权已失效，请在已接入设备重新生成' } };
+      saved.attempts++;
+      if (saved.hash !== codeHash) { this.put('pair-current', JSON.stringify(saved)); return { status: 403, value: { error: '授权码错误' } }; }
+      saved.used = true; this.put('pair-current', JSON.stringify(saved));
+      return { status: 200, value: { sealed: saved.sealed } };
+    });
+    return response(result.status, result.value);
   }
 }
