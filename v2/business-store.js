@@ -48,8 +48,15 @@
     try {
       return await new Promise((resolve, reject) => {
         const request = database.transaction('files', 'readonly').objectStore('files').get(id);
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
+        request.onsuccess = async () => {
+          try {
+            const original = request.result;
+            if (!(original instanceof Blob)) { resolve(original); return; }
+            const bytes = await original.arrayBuffer();
+            resolve(new File([bytes], original.name || '原件', { type: original.type, lastModified: original.lastModified || 0 }));
+          } catch { reject(new Error('原件读取失败：本机文件未能完整读取，操作已停止。请勿清空浏览器数据；原记录和原件未被替换。')); }
+        };
+        request.onerror = () => reject(new Error('原件存储读取失败，操作已停止；未替换原记录或文件，请勿清空浏览器数据。'));
       });
     } finally { database.close(); }
   }
@@ -115,7 +122,8 @@
           };
         };
         transaction.oncomplete = () => resolve(saved);
-        transaction.onabort = transaction.onerror = () => reject(problem || transaction.error);
+        transaction.onerror = () => { problem = problem || transaction.error || new Error('本地合并事务失败'); };
+        transaction.onabort = () => reject(problem || transaction.error || new Error('本地合并事务已回滚'));
       });
     } finally { database.close(); }
   }

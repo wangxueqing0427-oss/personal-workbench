@@ -16,7 +16,7 @@
     if (!config.token || unbase64(config.key).length !== 32) throw new Error('测试身份不完整');
     const existing = await store.queueData();
     if (existing.config) throw new Error('身份已配置；不能直接替换或重置同步基线');
-    const response = await root.fetch(config.url, { headers: { Authorization: 'Bearer ' + config.token }, signal: AbortSignal.timeout(15000) });
+    const response = await root.fetch(config.url, { headers: { Authorization: 'Bearer ' + config.token }, signal: AbortSignal.timeout(60000) });
     if (!response.ok) throw new Error('测试身份验证未通过，配置未保存');
     const cloud = await response.json();
     if (await hash(cloud.payload) !== cloud.hash) throw new Error('测试云端副本校验未通过');
@@ -37,7 +37,7 @@
     const announce = () => root.dispatchEvent(new Event('workbench-sync-status'));
     async function request(config, method, body, suffix = '') {
       checkEndpoint(config.url);
-      const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 15000);
+      const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), method === 'GET' ? 60000 : 15000);
       try {
         const response = await fetcher(config.url + suffix, { method, signal: controller.signal, headers: { Authorization: 'Bearer ' + config.token, 'Content-Type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) });
         if (response.status === 409) return { conflict: true };
@@ -166,7 +166,7 @@
     const data = await store.queueData();
     if (!data.config) throw new Error('请先配置隔离测试身份');
     checkEndpoint(data.config.url);
-    const response = await root.fetch(data.config.url, { headers: { Authorization: 'Bearer ' + token }, signal: AbortSignal.timeout(15000) });
+    const response = await root.fetch(data.config.url, { headers: { Authorization: 'Bearer ' + token }, signal: AbortSignal.timeout(60000) });
     if (!response.ok) throw new Error('身份验证未通过，本地配置未更改');
     await store.changeQueue('sync-config', (current, transaction) => {
       if (current.url !== data.config.url || current.key !== data.config.key) throw new Error('身份配置已改变');
@@ -191,6 +191,13 @@
       if (existing) {
         if (base64(new Uint8Array(await existing.arrayBuffer())) !== remote.data) throw new Error('同编号原件不同，保留冲突双方，需单独核对附件');
       } else files.push({ id: remote.id, value: new File([bytes], remote.name, { type: remote.type, lastModified: remote.modified }) });
+    }
+    for (const reference of merged.files || []) {
+      const prepared = files.find(file => file.id === reference.id);
+      const original = prepared?.value || await store.readFile(reference.id);
+      if (!original) throw new Error('合并前校验发现原件缺失，未写入合并；请勿删除本地数据');
+      try { await original.arrayBuffer(); }
+      catch { throw new Error('合并前原件读取失败，未写入合并；原记录、原件和冲突均保留'); }
     }
     return store.resolveConflict(jobId, merged, expectedRevision, { revision: preview.cloudRevision, hash: preview.cloudHash }, files);
   }

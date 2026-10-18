@@ -1,0 +1,16 @@
+{
+  "passed": 18,
+  "failed": 0,
+  "phoneAccess": false,
+  "cloudWrites": 0,
+  "cloudRevision": 9,
+  "capturedReplay": true,
+  "initialCounts": {
+    "localOnly": 6,
+    "cloudOnly": 34,
+    "differences": 0
+  },
+  "archiveIsolatedRestore": true,
+  "faultInjection": "original read + transaction write",
+  "duplicateMergeRejected": true
+}

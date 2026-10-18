@@ -49,6 +49,9 @@ async function main() {
   backend.put('bytes', String(50 * 1024 * 1024));
   check((await call('PUT', { data: 'small-synthetic' }, '/uploads/' + 'a'.repeat(64) + '/0')).status === 507, 'storage ceiling prevents unbounded writes');
   check((await (await call('GET')).json()).revision === 2, 'failed chunk never advances current');
+  const oldVersion = await (await call('GET', null, '/history/1')).json();
+  check(oldVersion.hash === packet.hash && oldVersion.payload.ciphertext === packet.payload.ciphertext, 'historical original envelope retained');
+  check(!!oldVersion.committedAt && (await (await call('GET')).json()).revision === 2, 'history query read-only and new commits timestamped');
   check((await worker.fetch(new Request('https://isolated.test/sync'), { ...env, TEST_ENVIRONMENT: 'production' })).status === 503, 'isolation guard');
   database.close(); console.log(JSON.stringify({ passed, failed: 0, runtime: 'Node SQLite simulation, not Cloudflare deployed', productionConnected: false }));
 }

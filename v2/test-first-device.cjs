@@ -12,13 +12,21 @@ async function main() {
   const browser = await chromium.launch({ executablePath: 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', headless: true });
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   try {
+    if (process.env.MERGE_SOURCE_PREVIEW === '1') await context.route('**/*.js', async route => {
+      const name = new URL(route.request().url()).pathname.slice(1);
+      if (!['business-store.js', 'offline-sync.js', 'sync-panel.js', 'staging-init.js'].includes(name)) return route.continue();
+      return route.fulfill({ contentType: 'application/javascript', body: await fs.readFile(path.join(__dirname, name), 'utf8') });
+    });
     await context.route('**/sync**', route => route.request().method() === 'GET' ? route.continue() : route.abort());
-    const page = await context.newPage(); await page.goto(base + '/business.html'); await page.waitForFunction(() => typeof offlineRunner !== 'undefined');
+    if (process.env.MERGE_CAPTURE_REPLAY === '1') await context.route('**/sync', route => route.request().method() === 'GET' ? route.fulfill({ contentType: 'application/json', body: JSON.stringify(before) }) : route.abort());
+    const page = await context.newPage(); await page.goto(base + '/business.html', { waitUntil: 'domcontentloaded', timeout: 60000 }); await page.waitForFunction(() => typeof offlineRunner !== 'undefined', null, { timeout: 60000 });
     await page.evaluate(async identity => { offlineRunner.stop(); await WorkbenchOfflineSync.configure({ url: location.origin + '/sync', ...identity }); await offlineRunner.run(); }, identity);
     const status = await page.evaluate(() => WorkbenchOfflineSync.status());
     check(status.configured, 'authentication and cloud decryption accepted');
     check(status.status === '存在冲突' && status.pending === 1, 'fresh seed reproducibly causes one protected pending snapshot');
     check(status.firstConnection && status.cloudRevision === before.revision, 'first-device divergence explicitly identified');
+    const initialCounts = await page.evaluate(async () => { const data = await WorkbenchBusinessStore.queueData(); const preview = await WorkbenchOfflineSync.previewConflict(data.conflicts[0].jobId); return { localOnly: preview.localOnly.length, cloudOnly: preview.cloudOnly.length, differences: preview.differences.length }; });
+    console.log(JSON.stringify({ initialCounts, cloudRevision: before.revision }));
     await page.getByRole('button', { name: '查看同步队列 / 核对冲突' }).click();
     await page.getByText(/设备身份已接入/).waitFor();
     check(await page.getByText(/本机独有.*云端独有/).isVisible(), 'both-side additions explained');
@@ -26,11 +34,27 @@ async function main() {
       const initial = await WorkbenchBusinessStore.read();
       initial.notes.push({ id: 'isolated-first-device-proof', progress: '合成独立验证记录' });
       initial.projects[0].timeline.push({ text: '合成本机历史保留', date: '2026-10-18' });
-      await WorkbenchBusinessStore.commit(initial, initial.revision);
+      initial.files.push({ id: 'isolated-io-original', name: '合成读取验证.bin' });
+      await WorkbenchBusinessStore.commit(initial, initial.revision, { id: 'isolated-io-original', value: new File(['synthetic-original'], '合成读取验证.bin', { type: 'application/x-io-test' }) });
       const queues = await WorkbenchBusinessStore.queueData();
       const preview = await WorkbenchOfflineSync.previewConflict(queues.conflicts[0].jobId);
+      const beforeState = JSON.stringify(await WorkbenchBusinessStore.read()), beforeQueue = JSON.stringify(await WorkbenchBusinessStore.queueData());
+      const read = Blob.prototype.arrayBuffer;
+      let ioRejected = false;
+      Blob.prototype.arrayBuffer = function () { return this.type === 'application/x-io-test' ? Promise.reject(new DOMException('The I/O read operation failed.', 'NotReadableError')) : read.call(this); };
+      try { await WorkbenchOfflineSync.applyReview(preview.jobId, preview.differences.map(() => 'both'), preview.local.revision); } catch (error) { ioRejected = error.message.includes('读取失败'); } finally { Blob.prototype.arrayBuffer = read; }
+      const ioUnchanged = beforeState === JSON.stringify(await WorkbenchBusinessStore.read()) && beforeQueue === JSON.stringify(await WorkbenchBusinessStore.queueData());
+      const put = IDBObjectStore.prototype.put;
+      let transactionRejected = false;
+      IDBObjectStore.prototype.put = function (value, key) { if (key === 'current') throw new DOMException('Synthetic write failure', 'QuotaExceededError'); return put.call(this, value, key); };
+      try { await WorkbenchOfflineSync.applyReview(preview.jobId, preview.differences.map(() => 'both'), preview.local.revision); } catch { transactionRejected = true; } finally { IDBObjectStore.prototype.put = put; }
+      const rollback = beforeState === JSON.stringify(await WorkbenchBusinessStore.read()) && beforeQueue === JSON.stringify(await WorkbenchBusinessStore.queueData()) && !(await WorkbenchBusinessStore.readFile(preview.files[0]?.id));
       await WorkbenchOfflineSync.applyReview(preview.jobId, preview.differences.map(() => 'both'), preview.local.revision);
       const merged = await WorkbenchBusinessStore.read();
+      const afterMergeQueue = JSON.stringify(await WorkbenchBusinessStore.queueData());
+      let repeatedRejected = false;
+      try { await WorkbenchOfflineSync.applyReview(preview.jobId, preview.differences.map(() => 'both'), preview.local.revision); } catch { repeatedRejected = true; }
+      const repeatedUnchanged = JSON.stringify(merged) === JSON.stringify(await WorkbenchBusinessStore.read()) && afterMergeQueue === JSON.stringify(await WorkbenchBusinessStore.queueData());
       const originals = await Promise.all(preview.files.map(async remote => {
         const file = await WorkbenchBusinessStore.readFile(remote.id);
         if (!file) return false;
@@ -41,12 +65,16 @@ async function main() {
         const request = indexedDB.open(WorkbenchBusinessStore.name);
         request.onsuccess = () => { const database = request.result; const transaction = database.transaction('state'); const store = transaction.objectStore('state'); const output = []; const cursor = store.openCursor(); cursor.onsuccess = () => { const item = cursor.result; if (item) { if (String(item.key).startsWith('resolution-archive:')) output.push(item.value); item.continue(); } }; transaction.oncomplete = () => { database.close(); resolve(output); }; transaction.onerror = () => reject(transaction.error); };
       });
-      return { localHistory: merged.projects.some(item => item.timeline.some(entry => entry.text === '合成本机历史保留')), remoteProjects: preview.cloud.projects.every(remote => merged.projects.some(item => item.id === remote.id)), localNote: merged.notes.some(item => item.id === 'isolated-first-device-proof'), originals: originals.every(Boolean), archive: archives.some(item => item.conflict.cloud.hash === preview.cloudHash && item.local.notes.some(note => note.id === 'isolated-first-device-proof')) };
+      return { ioRejected, ioUnchanged, transactionRejected, rollback, repeatedRejected, repeatedUnchanged, localOriginal: await (await WorkbenchBusinessStore.readFile('isolated-io-original')).text() === 'synthetic-original', localHistory: merged.projects.some(item => item.timeline.some(entry => entry.text === '合成本机历史保留')), remoteProjects: preview.cloud.projects.every(remote => merged.projects.some(item => item.id === remote.id)), localNote: merged.notes.some(item => item.id === 'isolated-first-device-proof'), originals: originals.every(Boolean), archive: archives.length === 1 && archives.some(item => item.conflict.cloud.hash === preview.cloudHash && JSON.stringify(item.local) === beforeState) };
     });
     for (const [label, value] of Object.entries(result)) check(value, 'isolated merge retains ' + label);
+    await page.addScriptTag({ url: base + '/safety-core.js' });
+    check(await page.evaluate(async () => { const backup = await WorkbenchSafety.createBackup(window); const result = await WorkbenchSafety.restoreIsolated(window, backup); return result.verified && result.sourceChanged === false; }), 'merge archive and originals restore into separate database without changing source');
     const after = await readCloud();
     check(after.revision === before.revision && after.hash === before.hash, 'phone shared cloud unchanged throughout independent verification');
-    console.log(JSON.stringify({ passed, failed: 0, phoneAccess: false, cloudWrites: 0, cloudRevision: after.revision }));
+    const report = { passed, failed: 0, phoneAccess: false, cloudWrites: 0, cloudRevision: after.revision, capturedReplay: process.env.MERGE_CAPTURE_REPLAY === '1', initialCounts, archiveIsolatedRestore: true, faultInjection: 'original read + transaction write', duplicateMergeRejected: true };
+    await fs.writeFile(path.join(__dirname, 'first-device-results.json'), JSON.stringify(report, null, 2));
+    console.log(JSON.stringify(report));
   } finally { await context.close(); await browser.close(); }
 }
 main().catch(error => { console.error(error.message); process.exitCode = 1; });

@@ -57,9 +57,10 @@
       const apply = text('button', '确认合并并保存（保留两端归档）');
       apply.onclick = async () => {
         if (!confirm('将按逐项选择保存合并结果；两端副本和原件保留。保留双方的标量字段暂沿用本地值，云端值存归档。继续？')) return;
+        if (apply.disabled) return; apply.disabled = true;
         try { offlineRunner.stop(); await WorkbenchOfflineSync.applyReview(job.id, selectors.map(selector => selector.value), preview.local.revision); location.reload(); }
         catch (error) { panel.append(text('p', error.message)); }
-        finally { offlineRunner.start(); }
+        finally { apply.disabled = false; offlineRunner.start(); }
       };
       panel.append(apply);
     }

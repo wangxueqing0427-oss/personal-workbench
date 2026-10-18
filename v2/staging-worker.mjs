@@ -36,6 +36,13 @@ export class TestSync {
     if (this.window !== minute) { this.window = minute; this.count = 0; }
     if (++this.count > 180) return response(429, { error: 'Test rate limit' });
     const url = new URL(request.url), route = /^\/sync\/uploads\/([a-f0-9]{64})\/(\d{1,3})$/.exec(url.pathname);
+    const historyRoute = /^\/sync\/history\/(\d{1,8})$/.exec(url.pathname);
+    if (historyRoute && request.method === 'GET') {
+      const saved = JSON.parse(this.read('history:' + Number(historyRoute[1])) || 'null');
+      if (!saved) return response(404, { error: 'Version not found' });
+      try { return response(200, { ...saved, payload: this.assemble(saved.uploadId, saved.parts).payload }); }
+      catch { return response(503, { error: 'Historical envelope unavailable' }); }
+    }
     if (url.pathname === '/sync/diagnostics' && request.method === 'GET') {
       const current = JSON.parse(this.read('current') || 'null');
       const pair = JSON.parse(this.read('pair-current') || 'null');
@@ -89,7 +96,7 @@ export class TestSync {
           if (total > 50 * 1024 * 1024) return { status: 507, value: { error: 'Test storage cap' } };
           this.sql.exec('INSERT INTO parts(upload, idx, data) VALUES(?, ?, ?)', uploadId, 0, serialized); this.put('bytes', String(total));
         }
-        const next = { revision: latest.revision + 1, hash: input.hash, uploadId, parts };
+        const next = { revision: latest.revision + 1, hash: input.hash, uploadId, parts, committedAt: new Date().toISOString(), previousHash: latest.hash };
         this.put('history:' + next.revision, JSON.stringify(next)); this.put('current', JSON.stringify(next));
         return { status: 200, value: { revision: next.revision, hash: next.hash, payload: input.payload } };
       });
