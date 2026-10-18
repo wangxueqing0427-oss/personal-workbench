@@ -13,6 +13,9 @@ async function main() {
   const call = (method, body, suffix = '', credential = token) => worker.fetch(new Request('https://isolated.test/sync' + suffix, { method, headers: { Authorization: 'Bearer ' + credential }, ...(body ? { body: JSON.stringify(body) } : {}) }), env);
   const check = (value, message) => { assert.ok(value, message); passed++; };
   check((await call('GET', null, '', 'wrong')).status === 401, 'auth required');
+  check((await call('GET', null, '/diagnostics', 'wrong')).status === 401, 'diagnostics require identity');
+  const diagnostics = await (await call('GET', null, '/diagnostics')).json();
+  check(diagnostics.syntheticOnly && diagnostics.revision === 0 && !JSON.stringify(diagnostics).includes(token), 'diagnostics contain only safe metadata');
   const pairInput = { hash: 'a'.repeat(64), sealed: 'synthetic-encrypted-not-credentials' };
   const pair = (method, body, suffix, credential = token) => call(method, body, '/pair/' + suffix, credential);
   check((await pair('POST', pairInput, 'create', 'wrong')).status === 401, 'pair creation requires identity');

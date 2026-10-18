@@ -36,6 +36,11 @@ export class TestSync {
     if (this.window !== minute) { this.window = minute; this.count = 0; }
     if (++this.count > 180) return response(429, { error: 'Test rate limit' });
     const url = new URL(request.url), route = /^\/sync\/uploads\/([a-f0-9]{64})\/(\d{1,3})$/.exec(url.pathname);
+    if (url.pathname === '/sync/diagnostics' && request.method === 'GET') {
+      const current = JSON.parse(this.read('current') || 'null');
+      const pair = JSON.parse(this.read('pair-current') || 'null');
+      return response(200, { syntheticOnly: true, revision: current?.revision || 0, hash: current?.hash || null, storedBytes: Number(this.read('bytes') || 0), historyVersions: this.sql.exec("SELECT COUNT(*) AS count FROM meta WHERE key LIKE 'history:%'").toArray()[0].count, authorization: pair ? { used: pair.used, attempts: pair.attempts, expires: pair.expires } : null });
+    }
     if (url.pathname.startsWith('/sync/pair/')) return this.pair(request, url.pathname);
     if (url.pathname !== '/sync' && !route) return response(404, { error: 'Not found' });
     const current = JSON.parse(this.read('current') || JSON.stringify({ revision: 0, hash: await hash(null), payload: null }));

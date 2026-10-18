@@ -8,6 +8,8 @@
     panel.replaceChildren(text('h2', '同步与冲突核对'));
     const close = text('button', '关闭'); close.className = 'dialog-close'; close.onclick = () => panel.close(); panel.append(close);
     const data = await WorkbenchBusinessStore.queueData();
+    const syncStatus = await WorkbenchOfflineSync.status();
+    panel.append(text('p', (data.config ? '设备身份已接入。' : '设备尚未接入。') + (syncStatus.reason || '') + ' 云端版本：' + syncStatus.cloudRevision));
     panel.append(text('p', '仅合成测试。草稿不写入项目；显式确认合并后保留双方归档。'));
     const code = document.createElement('input'); code.inputMode = 'numeric'; code.autocomplete = 'off'; code.maxLength = 14; code.placeholder = '一次性12位设备授权码'; code.setAttribute('aria-label', '设备授权码');
     const connect = text('button', data.config ? '授权重新登录（保留本地数据）' : '使用授权码接入');
@@ -37,6 +39,10 @@
       if (job.error) panel.append(text('p', job.error));
       if (job.status !== '存在冲突') continue;
       const preview = await WorkbenchOfflineSync.previewConflict(job.id);
+      panel.append(text('p', `本机独有 ${preview.localOnly.length} 条，云端独有 ${preview.cloudOnly.length} 条，共有记录字段差异 ${preview.differences.length} 项。确认合并会保留两端独有记录和原件，并归档合并前双方副本；目前尚未写入。`));
+      const additions = document.createElement('details'); additions.append(text('summary', '查看两端独有记录（不是字段覆盖冲突）'));
+      for (const [label, items] of [['本机', preview.localOnly], ['云端', preview.cloudOnly]]) for (const item of items) additions.append(text('p', label + ' · ' + item.collection + ' · ' + item.name));
+      panel.append(additions);
       const selectors = [];
       for (const difference of preview.differences) {
         panel.append(text('h3', difference.name + ' / ' + difference.field));

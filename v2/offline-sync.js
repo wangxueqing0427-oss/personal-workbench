@@ -128,7 +128,7 @@
   }
   async function status() {
     const data = await store.queueData();
-    return { status: data.jobs.some(job => job.status === '存在冲突') ? '存在冲突' : data.jobs.some(job => job.status === '同步失败') ? '同步失败' : data.jobs.length ? '等待同步' : data.meta ? '已同步' : '等待同步', pending: data.jobs.length, configured: !!data.config };
+    return { status: data.jobs.some(job => job.status === '存在冲突') ? '存在冲突' : data.jobs.some(job => job.status === '同步失败') ? '同步失败' : data.jobs.length ? '等待同步' : data.meta ? '已同步' : '等待同步', pending: data.jobs.length, configured: !!data.config, cloudRevision: data.meta?.revision || data.conflicts[0]?.cloud?.revision || 0, firstConnection: !!data.config && !data.meta, reason: data.conflicts.length ? (!data.meta ? '设备已接入；本机初始数据与已有云端版本不同，尚未上传，等待确认合并。' : '本机与云端版本不同，已暂停上传并保留双方数据。') : '' };
   }
   async function previewConflict(jobId) {
     const data = await store.queueData();
@@ -139,7 +139,7 @@
     const key = await crypto.subtle.importKey('raw', unbase64(data.config.key), 'AES-GCM', false, ['decrypt']);
     const sealed = new Uint8Array([...unbase64(payload.ciphertext), ...unbase64(payload.tag)]);
     const cloud = JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unbase64(payload.iv) }, key, sealed)));
-    const differences = [];
+    const differences = [], localOnly = [], cloudOnly = [];
     const current = await store.read();
     for (const collection of new Set([...Object.keys(current), ...Object.keys(cloud.state)])) {
       if (collection === 'revision' || collection === 'schema') continue;
@@ -154,13 +154,13 @@
       }
       for (const id of new Set([...localItems, ...remoteItems].map(item => item.id))) {
         const local = localItems.find(item => item.id === id), remote = remoteItems.find(item => item.id === id);
-        if (!local || !remote) continue;
+        if (!local || !remote) { (local ? localOnly : cloudOnly).push({ collection, id, name: (local || remote).name || (local || remote).progress || id }); continue; }
         for (const field of new Set([...Object.keys(local), ...Object.keys(remote)])) {
           if (JSON.stringify(local[field]) !== JSON.stringify(remote[field])) differences.push({ collection, id, name: local.name || remote.name || id, field, local: local[field], cloud: remote[field] });
         }
       }
     }
-    return { jobId, cloudRevision: conflict.cloud.revision, cloudHash: conflict.cloud.hash, differences, local: current, cloud: cloud.state, files: cloud.files || [] };
+    return { jobId, cloudRevision: conflict.cloud.revision, cloudHash: conflict.cloud.hash, differences, localOnly, cloudOnly, local: current, cloud: cloud.state, files: cloud.files || [] };
   }
   async function reauthenticate(token) {
     const data = await store.queueData();
