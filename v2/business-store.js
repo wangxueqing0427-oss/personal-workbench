@@ -1,6 +1,11 @@
 (function (root) {
   'use strict';
   const name = 'personal-workbench-v2-demo';
+  const digest = async bytes => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), byte => byte.toString(16).padStart(2, '0')).join('');
+  async function packFile(file) {
+    const data = await file.arrayBuffer();
+    return { format: 'workbench-file-bytes-v1', data, size: data.byteLength, sha256: await digest(data), name: file.name || '原件', type: file.type || '', lastModified: file.lastModified || 0 };
+  }
   async function open() {
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(name, 1);
@@ -22,6 +27,7 @@
     } finally { database.close(); }
   }
   async function commit(state, expectedRevision, file) {
+    const preparedFile = file ? { id: file.id, value: await packFile(file.value) } : null;
     const database = await open();
     try {
       return await new Promise((resolve, reject) => {
@@ -34,7 +40,7 @@
           if ((request.result?.revision ?? -1) !== expectedRevision) { problem = new Error('另一窗口已保存新内容，请刷新后重试，未覆盖其数据'); transaction.abort(); return; }
           saved = structuredClone(state); saved.revision = expectedRevision + 1;
           store.put(saved, 'current');
-          if (file) transaction.objectStore('files').add(file.value, file.id);
+          if (preparedFile) transaction.objectStore('files').add(preparedFile.value, preparedFile.id);
           store.put({ id: crypto.randomUUID(), localRevision: saved.revision, snapshot: saved, status: '等待同步', attempts: 0, createdAt: new Date().toISOString() }, 'queue:' + String(saved.revision).padStart(12, '0'));
           } catch (error) { problem = error.name === 'QuotaExceededError' ? new Error('本地存储空间不足，记录、原件和队列均未部分保存；请保留上传原件，不要清空浏览器数据') : error; transaction.abort(); }
         };
@@ -51,6 +57,10 @@
         request.onsuccess = async () => {
           try {
             const original = request.result;
+            if (original?.format === 'workbench-file-bytes-v1') {
+              if (!(original.data instanceof ArrayBuffer) || original.data.byteLength !== original.size || await digest(original.data) !== original.sha256) throw new Error('原件字节校验失败');
+              resolve(new File([original.data], original.name, { type: original.type, lastModified: original.lastModified })); return;
+            }
             if (!(original instanceof Blob)) { resolve(original); return; }
             const bytes = await original.arrayBuffer();
             resolve(new File([bytes], original.name || '原件', { type: original.type, lastModified: original.lastModified || 0 }));
@@ -87,6 +97,8 @@
     } finally { database.close(); }
   }
   async function resolveConflict(jobId, state, expectedRevision, cloud, files) {
+    const preparedFiles = [];
+    for (const file of files) preparedFiles.push({ id: file.id, value: await packFile(file.value) });
     const database = await open();
     try {
       return await new Promise((resolve, reject) => {
@@ -110,7 +122,7 @@
                   cursor.continue();
                 } else {
                   try {
-                    for (const file of files) transaction.objectStore('files').add(file.value, file.id);
+                    for (const file of preparedFiles) transaction.objectStore('files').add(file.value, file.id);
                     records.put(saved, 'current');
                     records.put({ revision: cloud.revision, hash: cloud.hash, syncedAt: null }, 'sync-meta');
                     records.put({ id: crypto.randomUUID(), localRevision: saved.revision, snapshot: saved, status: '等待同步', attempts: 0, createdAt: new Date().toISOString() }, 'queue:' + String(saved.revision).padStart(12, '0'));

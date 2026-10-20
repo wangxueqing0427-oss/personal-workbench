@@ -1,4 +1,4 @@
-const cacheName = 'workbench-v2-isolated-offline-2';
+const cacheName = 'workbench-v2-isolated-offline-3';
 const files = ['business.html', 'business.css', 'business-core.js', 'business-store.js', 'offline-sync.js', 'business-ui.js', 'sync-panel.js', 'staging.webmanifest', 'staging-init.js', 'p0.html', 'p0-ui.js', 'safety-core.js'];
 files.push('device-pair.js');
 self.addEventListener('install', event => event.waitUntil(caches.open(cacheName).then(cache => cache.addAll(files)).then(() => self.skipWaiting())));

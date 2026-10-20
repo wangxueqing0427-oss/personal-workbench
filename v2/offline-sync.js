@@ -206,5 +206,19 @@
     if (choices.length !== preview.differences.length || choices.some(choice => !['local', 'cloud', 'both'].includes(choice))) throw new Error('请逐项核对差异');
     await store.changeQueue('conflict-review:' + jobId, (previous, transaction) => transaction.put({ jobId, cloudRevision: preview.cloudRevision, choices, reviewedAt: new Date().toISOString(), applied: false }, 'conflict-review:' + jobId));
   }
-  root.WorkbenchOfflineSync = { configure, create, status, hash, previewConflict, saveReview, applyReview, reauthenticate };
+  async function inspectLocal() {
+    const before = await store.read();
+    const originals = [];
+    for (const reference of before?.files || []) {
+      try {
+        const file = await store.readFile(reference.id); if (!file) throw new Error('原件缺失');
+        const bytes = await file.arrayBuffer();
+        const sha256 = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), byte => byte.toString(16).padStart(2, '0')).join('');
+        originals.push({ id: reference.id, bytes: bytes.byteLength, sha256, readable: true });
+      } catch (error) { originals.push({ id: reference.id, readable: false, error: error.message }); }
+    }
+    const after = await store.read();
+    return { readOnly: true, revision: before?.revision, records: Object.values(before || {}).filter(Array.isArray).reduce((total, items) => total + items.length, 0), originals, sourceUnchanged: JSON.stringify(before) === JSON.stringify(after) };
+  }
+  root.WorkbenchOfflineSync = { configure, create, status, hash, previewConflict, saveReview, applyReview, reauthenticate, inspectLocal };
 })(globalThis);

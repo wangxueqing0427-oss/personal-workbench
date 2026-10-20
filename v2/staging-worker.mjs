@@ -6,9 +6,14 @@ export default {
   async fetch(request, env) {
     if (env.TEST_ENVIRONMENT !== 'synthetic-only') return response(503, { error: 'Isolation guard' });
     const url = new URL(request.url);
-    const testId = env.TEST_DATASET === 'mobile-20261016' ? 'synthetic-v2-mobile-20261016' : 'synthetic-v2-test';
+    let testId = env.TEST_DATASET === 'mobile-20261016' ? 'synthetic-v2-mobile-20261016' : 'synthetic-v2-test';
     if (!url.pathname.startsWith('/sync')) return env.ASSETS.fetch(request);
     if (request.headers.get('Origin') && request.headers.get('Origin') !== url.origin) return response(403, { error: 'Origin denied' });
+    const testRun = request.headers.get('X-Workbench-Test-Run');
+    if (testRun) {
+      if (!/^[a-f0-9-]{36}$/.test(testRun) || !env.TEST_TOKEN || await digest(request.headers.get('Authorization') || '') !== await digest('Bearer ' + env.TEST_TOKEN)) return response(401, { error: 'Isolated test identity required' });
+      testId = 'issue1-regression:' + testRun;
+    }
     if (url.pathname === '/sync/pair/redeem') return env.TEST_SYNC.get(env.TEST_SYNC.idFromName(testId)).fetch(request);
     if (!env.TEST_TOKEN || await digest(request.headers.get('Authorization') || '') !== await digest('Bearer ' + env.TEST_TOKEN)) return response(401, { error: 'Unauthorized' });
     if (request.headers.get('Origin') && request.headers.get('Origin') !== url.origin) return response(403, { error: 'Origin denied' });

@@ -6,7 +6,8 @@ const http = require('node:http');
 const crypto = require('node:crypto');
 const { createRequire } = require('node:module');
 const { createLab } = require('./sync-lab.cjs');
-const { chromium } = createRequire('C:/Users/王学庆/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/runtime-loader.cjs')('playwright');
+const playwright = createRequire('C:/Users/王学庆/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/runtime-loader.cjs')('playwright');
+const chromium = process.env.WB_BROWSER === 'webkit' ? playwright.webkit : playwright.chromium;
 async function main() {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'workbench-offline-synthetic-'));
   const token = crypto.randomBytes(32).toString('hex'), key = crypto.randomBytes(32);
@@ -18,7 +19,7 @@ async function main() {
   });
   await new Promise(resolve => staticServer.listen(0, '127.0.0.1', resolve));
   const url = 'http://127.0.0.1:' + staticServer.address().port + '/business.html';
-  const executablePath = 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
+  const executablePath = process.env.WB_BROWSER === 'webkit' ? undefined : 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
   const profile = path.join(directory, 'fresh-browser');
   const launch = () => chromium.launchPersistentContext(profile, { executablePath, headless: true, viewport: { width: 390, height: 844 } });
   let context = await launch(), passed = 0;
@@ -141,4 +142,5 @@ async function main() {
     console.log(JSON.stringify({ passed, failed: 0 }));
   } finally { await context.close(); await backend.close(); await new Promise(resolve => staticServer.close(resolve)); }
 }
-main().catch(error => { console.error(error.stack); process.exitCode = 1; });
+const testDeadline = setTimeout(() => { console.error('Isolated browser test exceeded 180 seconds; no real data was accessed'); process.exit(1); }, 180000);
+main().catch(error => { console.error(error.stack); process.exitCode = 1; }).finally(() => clearTimeout(testDeadline));

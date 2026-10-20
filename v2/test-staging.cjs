@@ -13,6 +13,8 @@ async function main() {
   const call = (method, body, suffix = '', credential = token) => worker.fetch(new Request('https://isolated.test/sync' + suffix, { method, headers: { Authorization: 'Bearer ' + credential }, ...(body ? { body: JSON.stringify(body) } : {}) }), env);
   const check = (value, message) => { assert.ok(value, message); passed++; };
   check((await call('GET', null, '', 'wrong')).status === 401, 'auth required');
+  check((await worker.fetch(new Request('https://isolated.test/sync', { headers: { Authorization: 'Bearer ' + token, 'X-Workbench-Test-Run': 'not-a-uuid' } }), env)).status === 401, 'malformed isolated test namespace refused');
+  check((await worker.fetch(new Request('https://isolated.test/sync/pair/redeem', { method: 'POST', headers: { 'X-Workbench-Test-Run': randomBytes(18).toString('hex') }, body: '{}' }), env)).status === 401, 'isolated redemption cannot bypass test identity');
   check((await call('GET', null, '/diagnostics', 'wrong')).status === 401, 'diagnostics require identity');
   const diagnostics = await (await call('GET', null, '/diagnostics')).json();
   check(diagnostics.syntheticOnly && diagnostics.revision === 0 && !JSON.stringify(diagnostics).includes(token), 'diagnostics contain only safe metadata');

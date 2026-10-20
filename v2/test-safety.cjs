@@ -4,7 +4,7 @@ const path = require('node:path');
 const http = require('node:http');
 const { createRequire } = require('node:module');
 const runtimeRequire = createRequire('C:/Users/王学庆/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/runtime-loader.cjs');
-const { chromium } = runtimeRequire('playwright');
+const { chromium, webkit } = runtimeRequire('playwright');
 async function main() {
   const root = path.resolve(__dirname, '..');
   const server = http.createServer(async (request, response) => {
@@ -16,27 +16,37 @@ async function main() {
     } catch { response.writeHead(404).end(); }
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-  const browser = await chromium.launch({ executablePath: 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', headless: true });
+  const browser = await (process.env.WB_BROWSER === 'webkit' ? webkit : chromium).launch({ ...(process.env.WB_BROWSER === 'webkit' ? {} : { executablePath: 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe' }), headless: true });
   try {
     for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 }]) {
       const context = await browser.newContext({ viewport });
+      if (process.env.WB_BROWSER === 'webkit') await context.addInitScript(() => { window.testUseByteRecords = true; });
       const page = await context.newPage();
       await page.goto('http://127.0.0.1:' + server.address().port + '/v2/p0.html');
       const result = await page.evaluate(async () => {
         let passed = 0;
         const check = (condition, message) => { if (!condition) throw new Error(message); passed++; };
         const expectFailure = async (operation, message) => { let failed = false; try { await operation(); } catch { failed = true; } check(failed, message); };
-        const write = (name, store, entries) => new Promise((resolve, reject) => {
+        const write = async (name, store, entries) => {
+          const prepared = [];
+          for (const [key, value] of entries) {
+            if (window.testUseByteRecords && value instanceof Blob) {
+              const data = await value.arrayBuffer(); const sha256 = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', data)), byte => byte.toString(16).padStart(2, '0')).join('');
+              prepared.push([key, { format: 'workbench-file-bytes-v1', data, size: data.byteLength, sha256, name: value.name || '', type: value.type, lastModified: value.lastModified || 0 }]);
+            } else prepared.push([key, value]);
+          }
+          return new Promise((resolve, reject) => {
           const request = indexedDB.open(name, 1);
           request.onupgradeneeded = () => request.result.createObjectStore(store);
           request.onerror = () => reject(request.error);
           request.onsuccess = () => {
             const database = request.result, transaction = database.transaction(store, 'readwrite');
-            for (const [key, value] of entries) transaction.objectStore(store).put(value, key);
+            for (const [key, value] of prepared) transaction.objectStore(store).put(value, key);
             transaction.oncomplete = () => { database.close(); resolve(); };
             transaction.onabort = () => { database.close(); reject(transaction.error); };
           };
-        });
+          });
+        };
         const empty = await WorkbenchSafety.createBackup(window);
         check(empty.manifest.files === 0 && empty.manifest.databases === 0, '空数据备份');
         check((await indexedDB.databases()).length === 0, '读取不存在的数据库不会新建');

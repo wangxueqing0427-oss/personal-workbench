@@ -10,6 +10,10 @@
     const data = await WorkbenchBusinessStore.queueData();
     const syncStatus = await WorkbenchOfflineSync.status();
     panel.append(text('p', (data.config ? '设备身份已接入。' : '设备尚未接入。') + (syncStatus.reason || '') + ' 云端版本：' + syncStatus.cloudRevision));
+    panel.append(text('p', '“已同步 · 0项”仅表示本机队列已清空及最近版本已确认，不代表所有设备的数据已经一致。'));
+    const inspect = text('button', '本机只读核验（不写数据）');
+    inspect.onclick = async () => { inspect.disabled = true; try { const result = await WorkbenchOfflineSync.inspectLocal(); const output = text('pre', `本机记录 ${result.records} 条 · 本地版本 ${result.revision}\n原件 ${result.originals.length} 份 · 可读 ${result.originals.filter(item => item.readable).length} 份\n核验期间原记录${result.sourceUnchanged ? '未改变' : '发生变化，请稍后重试'}\n` + result.originals.map(item => `${item.id} · ${item.readable ? item.bytes + '字节 · SHA-256 ' + item.sha256 : item.error}`).join('\n')); inspect.after(output); } catch (error) { panel.append(text('p', error.message)); } finally { inspect.disabled = false; } };
+    panel.append(inspect);
     panel.append(text('p', '仅合成测试。草稿不写入项目；显式确认合并后保留双方归档。'));
     const code = document.createElement('input'); code.inputMode = 'numeric'; code.autocomplete = 'off'; code.maxLength = 14; code.placeholder = '一次性12位设备授权码'; code.setAttribute('aria-label', '设备授权码');
     const connect = text('button', data.config ? '授权重新登录（保留本地数据）' : '使用授权码接入');

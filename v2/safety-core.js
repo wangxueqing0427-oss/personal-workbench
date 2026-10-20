@@ -145,15 +145,27 @@
       const fileRecords = development.stores.find(store => store.name === 'files')?.records || [];
       if (stateRecord) {
         const businessState = await decodeValue(stateRecord.value);
-        for (const file of businessState.files || []) if (!fileRecords.some(record => record.key.kind === 'scalar' && record.key.value === file.id && record.value.kind === 'blob')) fail('新业务文件缺少原件，不能宣称完整备份');
+        for (const file of businessState.files || []) if (!fileRecords.some(record => record.key.kind === 'scalar' && record.key.value === file.id && originalSize(record.value) !== null)) fail('新业务文件缺少原件，不能宣称完整备份');
+        for (const record of fileRecords) if (record.value.kind !== 'blob') {
+          const original = await decodeValue(record.value);
+          if (original?.format !== 'workbench-file-bytes-v1' || !(original.data instanceof ArrayBuffer) || original.size !== original.data.byteLength || original.sha256 !== await digest(new Uint8Array(original.data))) fail('业务原件字节校验失败');
+        }
       }
     }
+  }
+  function originalSize(value) {
+    if (value.kind === 'blob') return value.size;
+    if (value.kind === 'object' && value.value.find(([key]) => key === 'format')?.[1]?.value === 'workbench-file-bytes-v1') {
+      const size = value.value.find(([key]) => key === 'size')?.[1]?.value;
+      if (Number.isSafeInteger(size) && size >= 0) return size;
+    }
+    return null;
   }
   function counts(data) {
     let records = 0, files = 0, fileBytes = 0;
     for (const database of data.databases) for (const store of database.stores) for (const record of store.records) {
       records++;
-      if (record.value.kind === 'blob') { files++; fileBytes += record.value.size; }
+      const size = originalSize(record.value); if (size !== null) { files++; fileBytes += size; }
     }
     return { storageEntries: data.storage.length, databases: data.databases.length, records, files, fileBytes };
   }
@@ -211,6 +223,8 @@
   }
   async function restoreIsolated(environment, backup) {
     const records = await validateBackup(backup);
+    const encodedRecords = [];
+    for (const record of records) encodedRecords.push({ database: record.database, store: record.store, encoded: true, key: await encodeValue(record.key), value: await encodeValue(record.value) });
     const before = JSON.stringify(await collect(environment));
     const name = 'personal-workbench-p0-test-' + crypto.randomUUID();
     const database = await new Promise((resolve, reject) => {
@@ -224,13 +238,13 @@
         const transaction = database.transaction('records', 'readwrite');
         const store = transaction.objectStore('records');
         for (const [key, value] of backup.data.storage) store.add({ storageKey: key, value });
-        for (const record of records) store.add(record);
+        for (const record of encodedRecords) store.add(record);
         transaction.oncomplete = resolve;
         transaction.onerror = transaction.onabort = () => reject(transaction.error || new Error('隔离恢复失败'));
       });
     } finally { database.close(); }
     const restored = await readDatabase(environment.indexedDB, name);
-    const expected = backup.data.storage.map(([key, value]) => ({ storageKey: key, value })).concat(records);
+    const expected = backup.data.storage.map(([key, value]) => ({ storageKey: key, value })).concat(encodedRecords);
     const actual = restored.stores[0].records.map(record => record.value);
     if (actual.length !== expected.length) fail('隔离恢复数量校验失败');
     for (let index = 0; index < actual.length; index++) if (JSON.stringify(await encodeValue(actual[index])) !== JSON.stringify(await encodeValue(expected[index]))) fail('隔离恢复内容校验失败');

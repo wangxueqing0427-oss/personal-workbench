@@ -4,7 +4,7 @@ const path = require('node:path');
 const http = require('node:http');
 const { createRequire } = require('node:module');
 const runtimeRequire = createRequire('C:/Users/王学庆/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/runtime-loader.cjs');
-const { chromium } = runtimeRequire('playwright');
+const { chromium, webkit } = runtimeRequire('playwright');
 async function main() {
   const root = path.resolve(__dirname, '..');
   const server = http.createServer(async (request, response) => {
@@ -14,7 +14,7 @@ async function main() {
     catch { response.writeHead(404).end(); }
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-  const browser = await chromium.launch({ executablePath: 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', headless: true });
+  const browser = await (process.env.WB_BROWSER === 'webkit' ? webkit : chromium).launch({ ...(process.env.WB_BROWSER === 'webkit' ? {} : { executablePath: 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe' }), headless: true });
   const reports = [];
   try {
     for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 }]) {
@@ -177,10 +177,10 @@ async function main() {
       assert.deepEqual(errors, []); assert.deepEqual(external, []);
       await reopened.locator('nav [data-route="home"]').click();
       await reopened.screenshot({ path: path.join(__dirname, 'phase2-' + viewport.width + '.png'), fullPage: true });
-      reports.push({ viewport, coreAssertions: result.passed, modules: 'P1-1至P1-6隔离原型', browserFlow: '新建、进展确认、原件上传下载、导航、刷新、关闭重开通过', externalRequests: 0, realDataAccess: false, safariTested: false });
+      reports.push({ viewport, engine: process.env.WB_BROWSER || 'edge', coreAssertions: result.passed, modules: 'P1-1至P1-6隔离原型', browserFlow: '新建、进展确认、原件上传下载、导航、刷新、关闭重开通过', externalRequests: 0, realDataAccess: false, safariTested: false });
       await context.close();
     }
-    await fs.writeFile(path.join(__dirname, 'phase2-test-results.json'), JSON.stringify(reports, null, 2));
+    await fs.writeFile(path.join(__dirname, process.env.WB_BROWSER === 'webkit' ? 'phase2-webkit-results.json' : 'phase2-test-results.json'), JSON.stringify(reports, null, 2));
     console.log(JSON.stringify(reports, null, 2));
   } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }
 }
