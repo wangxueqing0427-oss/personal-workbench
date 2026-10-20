@@ -9,15 +9,37 @@ export default {
     let testId = env.TEST_DATASET === 'mobile-20261016' ? 'synthetic-v2-mobile-20261016' : 'synthetic-v2-test';
     if (!url.pathname.startsWith('/sync')) return env.ASSETS.fetch(request);
     if (request.headers.get('Origin') && request.headers.get('Origin') !== url.origin) return response(403, { error: 'Origin denied' });
-    const testRun = request.headers.get('X-Workbench-Test-Run');
-    if (testRun) {
-      if (!/^[a-f0-9-]{36}$/.test(testRun) || !env.TEST_TOKEN || await digest(request.headers.get('Authorization') || '') !== await digest('Bearer ' + env.TEST_TOKEN)) return response(401, { error: 'Isolated test identity required' });
-      testId = 'issue1-regression:' + testRun;
+    const authorized = !!env.TEST_TOKEN && await digest(request.headers.get('Authorization') || '') === await digest('Bearer ' + env.TEST_TOKEN);
+    const signingKey = () => crypto.subtle.importKey('raw', encoder.encode(env.TEST_TOKEN), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']);
+    if (url.pathname === '/sync/test-session') {
+      if (!authorized || request.method !== 'POST') return response(401, { error: 'Test administrator required' });
+      const text = await request.text(); if (text.length > 128) return response(413, { error: 'Invalid test session' });
+      let input; try { input = JSON.parse(text); } catch { return response(400, { error: 'Invalid session' }); }
+      if (!/^[a-f0-9-]{36}$/.test(input.run || '')) return response(400, { error: 'Invalid test run' });
+      const value = input.run + '.' + (Date.now() + 3600000);
+      const signature = Array.from(new Uint8Array(await crypto.subtle.sign('HMAC', await signingKey(), encoder.encode(value))), byte => byte.toString(16).padStart(2, '0')).join('');
+      return new Response(JSON.stringify({ syntheticOnly: true }), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Set-Cookie': 'wb_test_run=' + value + '.' + signature + '; Path=/sync; HttpOnly; Secure; SameSite=Strict; Max-Age=3600' } });
     }
-    if (url.pathname === '/sync/pair/redeem') return env.TEST_SYNC.get(env.TEST_SYNC.idFromName(testId)).fetch(request);
+    let testRun = request.headers.get('X-Workbench-Test-Run');
+    if (testRun) {
+      if (!/^[a-f0-9-]{36}$/.test(testRun) || !authorized) return response(401, { error: 'Isolated test identity required' });
+    }
+    const cookie = (request.headers.get('Cookie') || '').match(/(?:^|;\s*)wb_test_run=([a-f0-9-]{36})\.(\d{13})\.([a-f0-9]{64})(?:;|$)/);
+    if ((request.headers.get('Cookie') || '').includes('wb_test_run=') && !cookie) return response(401, { error: 'Malformed isolated session' });
+    if (cookie) {
+      if (!env.TEST_TOKEN || Number(cookie[2]) < Date.now() || !await crypto.subtle.verify('HMAC', await signingKey(), Uint8Array.from(cookie[3].match(/../g), pair => parseInt(pair, 16)), encoder.encode(cookie[1] + '.' + cookie[2])) || (testRun && testRun !== cookie[1])) return response(401, { error: 'Invalid isolated session' });
+      testRun = cookie[1];
+    }
+    if (testRun) testId = 'issue1-regression:' + testRun;
+    const forward = async () => {
+      const result = await env.TEST_SYNC.get(env.TEST_SYNC.idFromName(testId)).fetch(request);
+      const headers = new Headers(result.headers); if (testRun) headers.set('X-Workbench-Test-Run', testRun);
+      return new Response(result.body, { status: result.status, headers });
+    };
+    if (url.pathname === '/sync/pair/redeem') return forward();
     if (!env.TEST_TOKEN || await digest(request.headers.get('Authorization') || '') !== await digest('Bearer ' + env.TEST_TOKEN)) return response(401, { error: 'Unauthorized' });
     if (request.headers.get('Origin') && request.headers.get('Origin') !== url.origin) return response(403, { error: 'Origin denied' });
-    return env.TEST_SYNC.get(env.TEST_SYNC.idFromName(testId)).fetch(request);
+    return forward();
   }
 };
 export class TestSync {

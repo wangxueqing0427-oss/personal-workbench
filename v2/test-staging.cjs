@@ -13,6 +13,15 @@ async function main() {
   const call = (method, body, suffix = '', credential = token) => worker.fetch(new Request('https://isolated.test/sync' + suffix, { method, headers: { Authorization: 'Bearer ' + credential }, ...(body ? { body: JSON.stringify(body) } : {}) }), env);
   const check = (value, message) => { assert.ok(value, message); passed++; };
   check((await call('GET', null, '', 'wrong')).status === 401, 'auth required');
+  const testRun = '11111111-1111-4111-8111-111111111111';
+  check((await call('POST', { run: testRun }, '/test-session', 'wrong')).status === 401, 'test session requires administrator identity');
+  const session = await call('POST', { run: testRun }, '/test-session');
+  const cookie = session.headers.get('set-cookie');
+  check(session.status === 200 && cookie.includes('HttpOnly') && cookie.includes('Secure') && cookie.includes('SameSite=Strict'), 'test scope cookie uses protected attributes');
+  const scoped = await worker.fetch(new Request('https://isolated.test/sync', { headers: { Authorization: 'Bearer ' + token, Cookie: cookie.split(';')[0] } }), env);
+  check(scoped.headers.get('X-Workbench-Test-Run') === testRun, 'signed session resolves exact regression scope');
+  check((await worker.fetch(new Request('https://isolated.test/sync', { headers: { Cookie: cookie.split(';')[0] } }), env)).status === 401, 'scope cookie alone cannot read data');
+  check((await worker.fetch(new Request('https://isolated.test/sync', { headers: { Authorization: 'Bearer ' + token, Cookie: cookie.split(';')[0].replace(/.$/, 'z') } }), env)).status === 401, 'invalid session cannot fall through to shared store');
   check((await worker.fetch(new Request('https://isolated.test/sync', { headers: { Authorization: 'Bearer ' + token, 'X-Workbench-Test-Run': 'not-a-uuid' } }), env)).status === 401, 'malformed isolated test namespace refused');
   check((await worker.fetch(new Request('https://isolated.test/sync/pair/redeem', { method: 'POST', headers: { 'X-Workbench-Test-Run': randomBytes(18).toString('hex') }, body: '{}' }), env)).status === 401, 'isolated redemption cannot bypass test identity');
   check((await call('GET', null, '/diagnostics', 'wrong')).status === 401, 'diagnostics require identity');

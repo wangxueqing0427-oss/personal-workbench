@@ -28,7 +28,7 @@ async function main() {
   try {
     let page = await context.newPage(); await page.goto(url);
     await page.waitForFunction(() => typeof offlineRunner !== 'undefined' && document.querySelector('[data-route="home"]'));
-    await page.evaluate(async config => { offlineRunner.stop(); await WorkbenchOfflineSync.configure(config); await navigator.serviceWorker.ready; }, { url: backend.url, token, key: key.toString('base64') });
+    await page.evaluate(async config => { offlineRunner.stop(); await WorkbenchOfflineSync.configure(config); await Promise.race([navigator.serviceWorker.ready, new Promise((resolve, reject) => setTimeout(() => reject(new Error('Isolated Service Worker initialization exceeded 20 seconds')), 20000))]); }, { url: backend.url, token, key: key.toString('base64') });
     await page.reload(); await page.waitForFunction(() => navigator.serviceWorker.controller);
     await page.evaluate(() => offlineRunner.stop());
     await context.setOffline(true);

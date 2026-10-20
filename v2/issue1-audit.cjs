@@ -51,9 +51,16 @@ async function main() {
   const decoded = JSON.parse(Buffer.concat([cipher.update(Buffer.from(cloud.payload.ciphertext, 'base64')), cipher.final()]));
   const originals = decoded.files.map(file => ({ id: file.id, bytes: Buffer.from(file.data, 'base64').length, sha256: sha(Buffer.from(file.data, 'base64')) }));
   const report = { label, inspectedAt: new Date().toISOString(), localCommit: execFileSync(process.env.WORKBENCH_GIT || 'git', ['rev-parse', 'HEAD'], { cwd: path.join(__dirname, '..'), encoding: 'utf8' }).trim(), assets, modules, deployments, bindingTypes: settings.bindings.map(binding => ({ name: binding.name, type: binding.type })), cloud: { revision: cloud.revision, hash: cloud.hash, records: Object.values(decoded.state).filter(Array.isArray).reduce((total, items) => total + items.length, 0), originals }, backupDirectory: directory, readsOnly: true };
+  if (label !== 'before') {
+    const info = JSON.parse((await get(base + '/build-info.json')).bytes);
+    const expectedCommit = execFileSync(process.env.WORKBENCH_GIT || 'git', ['rev-parse', reference], { cwd: path.join(__dirname, '..'), encoding: 'utf8' }).trim();
+    report.buildVerified = info.sourceCommit === expectedCommit && assets.every(asset => info.assets[asset.name]?.sha256 === asset.sha256 && asset.matchesReference);
+    report.publishedSource = info.sourceCommit;
+    if (!report.buildVerified) throw new Error('Published source or manifest hash mismatch');
+  }
   await fs.writeFile(path.join(directory, 'audit.json'), JSON.stringify(report, null, 2));
   await fs.writeFile(path.join(__dirname, '.tools/issue1', label + '-latest.json'), JSON.stringify(report, null, 2));
-  await fs.writeFile(path.join(__dirname, 'issue1-audit-' + label + '.json'), JSON.stringify({ label, inspectedAt: report.inspectedAt, localCommit: report.localCommit, reference, assets, modules, activeVersions: deployments.deployments?.[0]?.versions || [], cloud: report.cloud, readsOnly: true, encryptedBackupRetained: true }, null, 2));
+  await fs.writeFile(path.join(__dirname, 'issue1-audit-' + label + '.json'), JSON.stringify({ label, inspectedAt: report.inspectedAt, localCommit: report.localCommit, reference, assets, modules, activeVersions: deployments.deployments?.[0]?.versions || [], cloud: report.cloud, readsOnly: true, encryptedBackupRetained: true, buildVerified: report.buildVerified, publishedSource: report.publishedSource }, null, 2));
   console.log(JSON.stringify({ label, localCommit: report.localCommit, reference, assetsMatch: assets.every(item => item.matchesReference), mismatches: assets.filter(item => !item.matchesReference).map(item => item.name), modules, deployments, cloud: report.cloud, backupCreated: true }));
 }
 main().catch(error => { console.error(error.message); process.exitCode = 1; });
