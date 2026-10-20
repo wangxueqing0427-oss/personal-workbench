@@ -1,0 +1,22 @@
+{
+  "reports": [
+    {
+      "engine": "edge",
+      "passed": 48,
+      "failed": 0,
+      "testNamespace": "10fd1fc4-7e9a-4fae-91e3-1a7cee2a9700",
+      "sharedWrites": 0,
+      "physicalIPhone": false
+    },
+    {
+      "engine": "webkit",
+      "passed": 48,
+      "failed": 0,
+      "testNamespace": "27b43649-c98a-4a1c-a4f0-e19d63510539",
+      "sharedWrites": 0,
+      "physicalIPhone": false
+    }
+  ],
+  "sharedUnchanged": true,
+  "sharedRevision": 9
+}

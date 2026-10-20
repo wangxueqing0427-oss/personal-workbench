@@ -4,6 +4,7 @@
       "width": 1280,
       "height": 800
     },
+    "engine": "edge",
     "coreAssertions": 35,
     "modules": "P1-1至P1-6隔离原型",
     "browserFlow": "新建、进展确认、原件上传下载、导航、刷新、关闭重开通过",
@@ -16,6 +17,7 @@
       "width": 390,
       "height": 844
     },
+    "engine": "edge",
     "coreAssertions": 35,
     "modules": "P1-1至P1-6隔离原型",
     "browserFlow": "新建、进展确认、原件上传下载、导航、刷新、关闭重开通过",
