@@ -1,7 +1,7 @@
 {
-  "date": "2026-10-21",
-  "publishedSource": "f6d43d4b6f36e49d1363f610d6d376571858ec0a",
-  "workerVersion": "feeb3fe2-ea69-4905-adf8-b962a3e27e15",
+  "date": "2026-10-22",
+  "publishedSource": "957856bb058114f9f769a4ecf1191a800419c692",
+  "workerVersion": "d4c54788-0c3e-44a8-a801-2fa066dafe5b",
   "suites": [
     {
       "suite": "Edge backup and isolated recovery",
@@ -32,19 +32,23 @@
       "passed": 70
     },
     {
-      "suite": "First-device six local plus thirty-four cloud capture replay fault rollback",
-      "passed": 18
-    },
-    {
       "suite": "Real staging Edge",
       "passed": 48
     },
     {
       "suite": "Real staging WebKit",
       "passed": 48
+    },
+    {
+      "suite": "edge first-device inventory capture replay and rollback",
+      "passed": 26
+    },
+    {
+      "suite": "webkit first-device inventory capture replay and rollback",
+      "passed": 26
     }
   ],
-  "passed": 451,
+  "passed": 485,
   "productAssertionFailures": 0,
   "blockedSuites": [
     {

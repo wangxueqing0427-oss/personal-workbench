@@ -1,5 +1,7 @@
 # Issue #1 — V2.0 staging regression and iPhone handoff
 
+Latest follow-up (2026-10-22): see `ISSUE1-ORIGINAL-INVENTORY-20261022.md` for the local-zero/cloud-original distinction, source `957856b`, deployment `d4c54788-0c3e-44a8-a801-2fa066dafe5b`, and updated 485-assertion matrix. The historical report below remains evidence of the preceding release.
+
 Date: 2026-10-21 (Asia/Shanghai). This report supersedes older all-pass summaries for this issue. Production approval is not requested or implied.
 
 ## Result

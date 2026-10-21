@@ -7,12 +7,18 @@ const chromium = process.env.WB_BROWSER === 'webkit' ? playwright.webkit : playw
 async function main() {
   const identity = JSON.parse(await fs.readFile(path.join(__dirname, '.tools/synthetic-test-identity.json'), 'utf8'));
   const base = 'https://personal-workbench-v2-staging.wangxueqing0427.workers.dev';
-  const readCloud = async () => { const response = await fetch(base + '/sync', { headers: { Authorization: 'Bearer ' + identity.token } }); assert.equal(response.status, 200); return response.json(); };
+  const readCloud = async () => { const response = await fetch(base + '/sync', { headers: { Authorization: 'Bearer ' + identity.token }, signal: AbortSignal.timeout(90000) }); assert.equal(response.status, 200); return response.json(); };
   const before = await readCloud(); let passed = 0;
   const check = (value, label) => { assert.ok(value, label); passed++; };
   const browser = await chromium.launch({ ...(process.env.WB_BROWSER === 'webkit' ? {} : { executablePath: 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe' }), headless: true });
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   try {
+    if (process.env.MERGE_CAPTURE_REPLAY === '1') await context.route(base + '/**', async route => {
+      const name = new URL(route.request().url()).pathname.slice(1);
+      const allowed = ['business.html', 'business.css', 'business-core.js', 'business-store.js', 'offline-sync.js', 'business-ui.js', 'sync-panel.js', 'device-pair.js', 'staging.webmanifest', 'staging-init.js', 'offline-sw.js', 'p0.html', 'p0-ui.js', 'safety-core.js'];
+      if (!allowed.includes(name)) return route.fulfill({ status: 404, body: '' });
+      return route.fulfill({ contentType: name.endsWith('.js') ? 'application/javascript' : name.endsWith('.css') ? 'text/css' : name.endsWith('.webmanifest') ? 'application/manifest+json' : 'text/html; charset=utf-8', body: await fs.readFile(path.join(__dirname, name)) });
+    });
     if (process.env.MERGE_SOURCE_PREVIEW === '1') await context.route('**/*.js', async route => {
       const name = new URL(route.request().url()).pathname.slice(1);
       if (!['business-store.js', 'offline-sync.js', 'sync-panel.js', 'staging-init.js'].includes(name)) return route.continue();
@@ -54,6 +60,7 @@ async function main() {
     await page.getByRole('button', { name: '查看同步队列 / 核对冲突' }).click();
     await page.getByText(/设备身份已接入/).waitFor();
     await page.getByRole('button', { name: '本机只读核验（不写数据）' }).click();
+    await page.getByText(/待合并云端缓存：版本 9 · 34 条记录 · 原件 2 份/).waitFor();
     check(await page.getByText(/待合并云端缓存：版本 9 · 34 条记录 · 原件 2 份/).isVisible(), 'UI distinguishes cached cloud originals from local originals');
     check(await page.getByText(/本机独有.*云端独有/).isVisible(), 'both-side additions explained');
     const result = await page.evaluate(async () => {
@@ -98,8 +105,8 @@ async function main() {
     check(await page.evaluate(async () => { const backup = await WorkbenchSafety.createBackup(window); const result = await WorkbenchSafety.restoreIsolated(window, backup); return result.verified && result.sourceChanged === false; }), 'merge archive and originals restore into separate database without changing source');
     const after = await readCloud();
     check(after.revision === before.revision && after.hash === before.hash, 'phone shared cloud unchanged throughout independent verification');
-    const report = { passed, failed: 0, phoneAccess: false, cloudWrites: 0, cloudRevision: after.revision, capturedReplay: process.env.MERGE_CAPTURE_REPLAY === '1', initialCounts, archiveIsolatedRestore: true, faultInjection: 'original read + transaction write', duplicateMergeRejected: true };
-    await fs.writeFile(path.join(__dirname, 'first-device-results.json'), JSON.stringify(report, null, 2));
+    const report = { passed, failed: 0, engine: process.env.WB_BROWSER === 'webkit' ? 'webkit' : 'edge', phoneAccess: false, cloudWrites: 0, cloudRevision: after.revision, capturedReplay: process.env.MERGE_CAPTURE_REPLAY === '1', initialCounts, initialInventory: audit, inventoryFaultProbes: probes, archiveIsolatedRestore: true, faultInjection: 'original read + transaction write', duplicateMergeRejected: true };
+    await fs.writeFile(path.join(__dirname, process.env.WB_BROWSER === 'webkit' ? 'first-device-webkit-results.json' : 'first-device-results.json'), JSON.stringify(report, null, 2));
     console.log(JSON.stringify(report));
   } finally { await context.close(); await browser.close(); }
 }
