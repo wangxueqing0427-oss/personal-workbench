@@ -2,14 +2,15 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { createRequire } = require('node:module');
-const { chromium } = createRequire('C:/Users/王学庆/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/runtime-loader.cjs')('playwright');
+const playwright = createRequire('C:/Users/王学庆/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/runtime-loader.cjs')('playwright');
+const chromium = process.env.WB_BROWSER === 'webkit' ? playwright.webkit : playwright.chromium;
 async function main() {
   const identity = JSON.parse(await fs.readFile(path.join(__dirname, '.tools/synthetic-test-identity.json'), 'utf8'));
   const base = 'https://personal-workbench-v2-staging.wangxueqing0427.workers.dev';
   const readCloud = async () => { const response = await fetch(base + '/sync', { headers: { Authorization: 'Bearer ' + identity.token } }); assert.equal(response.status, 200); return response.json(); };
   const before = await readCloud(); let passed = 0;
   const check = (value, label) => { assert.ok(value, label); passed++; };
-  const browser = await chromium.launch({ executablePath: 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', headless: true });
+  const browser = await chromium.launch({ ...(process.env.WB_BROWSER === 'webkit' ? {} : { executablePath: 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe' }), headless: true });
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   try {
     if (process.env.MERGE_SOURCE_PREVIEW === '1') await context.route('**/*.js', async route => {
@@ -27,8 +28,33 @@ async function main() {
     check(status.firstConnection && status.cloudRevision === before.revision, 'first-device divergence explicitly identified');
     const initialCounts = await page.evaluate(async () => { const data = await WorkbenchBusinessStore.queueData(); const preview = await WorkbenchOfflineSync.previewConflict(data.conflicts[0].jobId); return { localOnly: preview.localOnly.length, cloudOnly: preview.cloudOnly.length, differences: preview.differences.length }; });
     console.log(JSON.stringify({ initialCounts, cloudRevision: before.revision }));
+    const audit = await page.evaluate(() => WorkbenchOfflineSync.inspectLocal());
+    check(audit.records === 6 && audit.revision === 0 && audit.references === 0 && audit.storedOriginals === 0 && audit.originals.length === 0, 'fresh local seed has six records but no local attachment references or stored originals');
+    check(audit.cloud.records === 34 && audit.cloud.revision === 9 && audit.cloud.originals.length === 2 && audit.cloud.originals.every(file => file.bytes === 524288), 'cached cloud originals remain separate from zero local originals');
+    check(audit.sourceUnchanged && audit.scope.otherBrowserStoresInspected === false, 'inspection does not mutate state or claim other browser access');
+    const probes = await page.evaluate(async () => {
+      const store = WorkbenchBusinessStore, read = store.read, keys = store.fileKeys, readFile = store.readFile;
+      const results = {};
+      try {
+        store.fileKeys = async () => ['synthetic-unreferenced'];
+        store.readFile = async () => new File(['synthetic-unreferenced-bytes'], 'orphan.bin');
+        const orphan = await WorkbenchOfflineSync.inspectLocal(); results.orphanFound = orphan.storedOriginals === 1 && orphan.originals.length === 1 && orphan.originals[0].readable && !orphan.originals[0].referenced;
+        store.fileKeys = async () => [];
+        store.read = async () => { const state = await read(); state.files.push({ id: 'synthetic-missing' }); return state; };
+        store.readFile = async () => undefined;
+        const missing = await WorkbenchOfflineSync.inspectLocal(); results.missingDetected = missing.references === 1 && missing.originals.length === 1 && !missing.originals[0].readable;
+        store.readFile = async () => { throw new DOMException('Synthetic I/O read failure', 'NotReadableError'); };
+        const failed = await WorkbenchOfflineSync.inspectLocal(); results.ioNotCountedAsZero = failed.originals.length === 1 && !failed.originals[0].readable;
+        store.fileKeys = async () => { throw new Error('Synthetic catalog failure'); };
+        try { await WorkbenchOfflineSync.inspectLocal(); results.catalogFailsClosed = false; } catch { results.catalogFailsClosed = true; }
+      } finally { store.read = read; store.fileKeys = keys; store.readFile = readFile; }
+      return results;
+    });
+    for (const [label, value] of Object.entries(probes)) check(value, label);
     await page.getByRole('button', { name: '查看同步队列 / 核对冲突' }).click();
     await page.getByText(/设备身份已接入/).waitFor();
+    await page.getByRole('button', { name: '本机只读核验（不写数据）' }).click();
+    check(await page.getByText(/待合并云端缓存：版本 9 · 34 条记录 · 原件 2 份/).isVisible(), 'UI distinguishes cached cloud originals from local originals');
     check(await page.getByText(/本机独有.*云端独有/).isVisible(), 'both-side additions explained');
     const result = await page.evaluate(async () => {
       const initial = await WorkbenchBusinessStore.read();

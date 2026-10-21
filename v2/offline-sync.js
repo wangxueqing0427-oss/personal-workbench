@@ -208,17 +208,33 @@
   }
   async function inspectLocal() {
     const before = await store.read();
+    const queueBefore = JSON.stringify(await store.queueData());
+    const keys = await store.fileKeys();
     const originals = [];
-    for (const reference of before?.files || []) {
+    const references = before?.files || [];
+    for (const id of new Set([...references.map(reference => reference.id), ...keys])) {
       try {
-        const file = await store.readFile(reference.id); if (!file) throw new Error('原件缺失');
+        const file = await store.readFile(id); if (!file) throw new Error('本地引用存在，但当前原件库没有对应原件');
         const bytes = await file.arrayBuffer();
         const sha256 = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), byte => byte.toString(16).padStart(2, '0')).join('');
-        originals.push({ id: reference.id, bytes: bytes.byteLength, sha256, readable: true });
-      } catch (error) { originals.push({ id: reference.id, readable: false, error: error.message }); }
+        originals.push({ id, bytes: bytes.byteLength, sha256, readable: true, referenced: references.some(reference => reference.id === id) });
+      } catch (error) { originals.push({ id, readable: false, error: error.message }); }
+    }
+    const data = await store.queueData();
+    let cloud = null;
+    if (data.conflicts.length) {
+      try {
+        const preview = await previewConflict(data.conflicts[0].jobId);
+        const files = [];
+        for (const file of preview.files) {
+          const bytes = unbase64(file.data);
+          files.push({ id: file.id, bytes: bytes.byteLength, sha256: Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), byte => byte.toString(16).padStart(2, '0')).join('') });
+        }
+        cloud = { cached: true, revision: preview.cloudRevision, records: Object.values(preview.cloud).filter(Array.isArray).reduce((total, items) => total + items.length, 0), originals: files, references: (preview.cloud.files || []).length, missing: (preview.cloud.files || []).filter(reference => !files.some(file => file.id === reference.id)).map(reference => reference.id) };
+      } catch (error) { cloud = { error: error.message }; }
     }
     const after = await store.read();
-    return { readOnly: true, revision: before?.revision, records: Object.values(before || {}).filter(Array.isArray).reduce((total, items) => total + items.length, 0), originals, sourceUnchanged: JSON.stringify(before) === JSON.stringify(after) };
+    return { readOnly: true, scope: { origin: root.location.origin, database: store.name, standalone: !!(root.navigator.standalone || root.matchMedia?.('(display-mode: standalone)').matches), otherBrowserStoresInspected: false }, revision: before?.revision, records: Object.values(before || {}).filter(Array.isArray).reduce((total, items) => total + items.length, 0), references: references.length, storedOriginals: keys.length, originals, cloud, sourceUnchanged: JSON.stringify(before) === JSON.stringify(after) && queueBefore === JSON.stringify(await store.queueData()) };
   }
   root.WorkbenchOfflineSync = { configure, create, status, hash, previewConflict, saveReview, applyReview, reauthenticate, inspectLocal };
 })(globalThis);

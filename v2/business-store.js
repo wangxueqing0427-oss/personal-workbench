@@ -139,5 +139,16 @@
       });
     } finally { database.close(); }
   }
-  root.WorkbenchBusinessStore = { read, commit, readFile, name, queueData, changeQueue, resolveConflict };
+  async function fileKeys() {
+    const database = await open();
+    try {
+      return await new Promise((resolve, reject) => {
+        const transaction = database.transaction('files', 'readonly');
+        const request = transaction.objectStore('files').getAllKeys();
+        transaction.oncomplete = () => resolve(request.result);
+        transaction.onabort = transaction.onerror = () => reject(transaction.error || new Error('原件目录读取失败'));
+      });
+    } finally { database.close(); }
+  }
+  root.WorkbenchBusinessStore = { read, commit, readFile, fileKeys, name, queueData, changeQueue, resolveConflict };
 })(globalThis);

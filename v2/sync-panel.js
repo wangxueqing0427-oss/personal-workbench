@@ -12,7 +12,25 @@
     panel.append(text('p', (data.config ? '设备身份已接入。' : '设备尚未接入。') + (syncStatus.reason || '') + ' 云端版本：' + syncStatus.cloudRevision));
     panel.append(text('p', '“已同步 · 0项”仅表示本机队列已清空及最近版本已确认，不代表所有设备的数据已经一致。'));
     const inspect = text('button', '本机只读核验（不写数据）');
-    inspect.onclick = async () => { inspect.disabled = true; try { const result = await WorkbenchOfflineSync.inspectLocal(); const output = text('pre', `本机记录 ${result.records} 条 · 本地版本 ${result.revision}\n原件 ${result.originals.length} 份 · 可读 ${result.originals.filter(item => item.readable).length} 份\n核验期间原记录${result.sourceUnchanged ? '未改变' : '发生变化，请稍后重试'}\n` + result.originals.map(item => `${item.id} · ${item.readable ? item.bytes + '字节 · SHA-256 ' + item.sha256 : item.error}`).join('\n')); inspect.after(output); } catch (error) { panel.append(text('p', error.message)); } finally { inspect.disabled = false; } };
+    inspect.onclick = async () => {
+      inspect.disabled = true;
+      try {
+        const result = await WorkbenchOfflineSync.inspectLocal();
+        const lines = [`范围：${result.scope.origin} · ${result.scope.database} · ${result.scope.standalone ? '主屏幕APP' : '浏览器页面'}`, '只检查当前浏览器存储，不检查其他浏览器、其他域名或其他主屏幕安装。', `本机记录 ${result.records} 条 · 本地版本 ${result.revision}`, `原件 ${result.originals.length} 份 · 可读 ${result.originals.filter(item => item.readable).length} 份`, `本地附件引用 ${result.references} 份 · 原件库实际 ${result.storedOriginals} 份`];
+        if (!result.references && !result.storedOriginals) lines.push('当前本地库没有附件引用或原件；不代表云端附件丢失，也不代表已检查整台手机。');
+        if (result.cloud?.error) lines.push('云端缓存无法核验：' + result.cloud.error);
+        else if (result.cloud) {
+          lines.push(`待合并云端缓存：版本 ${result.cloud.revision} · ${result.cloud.records} 条记录 · 原件 ${result.cloud.originals.length} 份`, '云端原件尚未通过用户确认写入本地；此处只读取已有冲突缓存，不联网、不合并。');
+          lines.push(...result.cloud.originals.map(item => `云端 ${item.id} · ${item.bytes}字节 · SHA-256 ${item.sha256}`));
+          if (result.cloud.missing.length) lines.push('云端缓存存在缺失原件引用：' + result.cloud.missing.join('、'));
+        } else lines.push('没有可核验的待合并云端缓存；未把“0份”解释为云端没有附件。');
+        lines.push(`核验期间原记录及队列${result.sourceUnchanged ? '未改变' : '发生变化，请稍后重试'}`);
+        lines.push(...result.originals.map(item => `${item.id} · ${item.readable ? item.bytes + '字节 · SHA-256 ' + item.sha256 + (item.referenced ? '' : ' · 原件存在但未被当前文件列表引用') : item.error}`));
+        panel.querySelector('[data-local-inspection]')?.remove();
+        const output = text('pre', lines.join('\n')); output.dataset.localInspection = ''; inspect.after(output);
+      } catch (error) { panel.append(text('p', '只读核验失败，不能据此判断附件缺失：' + error.message)); }
+      finally { inspect.disabled = false; }
+    };
     panel.append(inspect);
     panel.append(text('p', '仅合成测试。草稿不写入项目；显式确认合并后保留双方归档。'));
     const code = document.createElement('input'); code.inputMode = 'numeric'; code.autocomplete = 'off'; code.maxLength = 14; code.placeholder = '一次性12位设备授权码'; code.setAttribute('aria-label', '设备授权码');
