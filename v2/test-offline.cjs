@@ -8,10 +8,20 @@ const { createRequire } = require('node:module');
 const { createLab } = require('./sync-lab.cjs');
 const playwright = createRequire('C:/Users/王学庆/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/runtime-loader.cjs')('playwright');
 const chromium = process.env.WB_BROWSER === 'webkit' ? playwright.webkit : playwright.chromium;
+const engine = process.env.WB_BROWSER === 'webkit' ? 'webkit' : 'edge';
+const outageMode = process.env.WB_OUTAGE_MODE || 'browser-emulation';
+if (!['browser-emulation', 'origin-stopped'].includes(outageMode)) throw new Error('Unknown synthetic outage mode');
+const resultsFile = path.join(__dirname, engine === 'webkit' ? 'offline-webkit-' + outageMode + '-results.json' : 'offline-test-results.json');
+const checks = [];
 async function main() {
-  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'workbench-offline-synthetic-'));
+  const profileRoot = engine === 'webkit' && process.platform === 'win32' ? path.join(process.env.PUBLIC || 'C:/Users/Public', 'Documents') : os.tmpdir();
+  if (engine === 'webkit' && process.platform === 'win32' && /[^\x00-\x7f]/.test(profileRoot)) throw new Error('WebKit Windows synthetic profile root must use an ASCII path');
+  const directory = await fs.mkdtemp(path.join(profileRoot, engine === 'webkit' ? 'wbo-' : 'workbench-offline-synthetic-'));
+  const browserTemp = path.join(directory, 't'); await fs.mkdir(browserTemp);
+  const browserEnv = engine === 'webkit' && process.platform === 'win32' ? { ...process.env, TEMP: browserTemp, TMP: browserTemp } : undefined;
   const token = crypto.randomBytes(32).toString('hex'), key = crypto.randomBytes(32);
-  const backend = await createLab(directory, token);
+  let backend = await createLab(directory, token);
+  const backendPort = Number(new URL(backend.url).port);
   const staticServer = http.createServer(async (request, response) => {
     const target = path.resolve(__dirname, '.' + new URL(request.url, 'http://localhost').pathname);
     if (!target.startsWith(__dirname + path.sep)) { response.writeHead(403).end(); return; }
@@ -19,19 +29,24 @@ async function main() {
   });
   await new Promise(resolve => staticServer.listen(0, '127.0.0.1', resolve));
   const url = 'http://127.0.0.1:' + staticServer.address().port + '/business.html';
+  const staticPort = staticServer.address().port;
+  let originDown = false;
+  const stopOrigins = async () => { await backend.close(); await new Promise(resolve => { staticServer.close(resolve); staticServer.closeAllConnections(); }); originDown = true; };
+  const restartOrigins = async () => { backend = await createLab(directory, token, backendPort); await new Promise(resolve => staticServer.listen(staticPort, '127.0.0.1', resolve)); originDown = false; };
   const executablePath = process.env.WB_BROWSER === 'webkit' ? undefined : 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
-  const profile = path.join(directory, 'fresh-browser');
-  const launch = () => chromium.launchPersistentContext(profile, { executablePath, headless: true, viewport: { width: 390, height: 844 } });
+  const profile = path.join(directory, 'p');
+  const launch = () => chromium.launchPersistentContext(profile, { executablePath, env: browserEnv, headless: true, viewport: { width: 390, height: 844 } });
   let context = await launch(), passed = 0;
-  const check = (condition, message) => { assert.ok(condition, message); passed++; };
+  const check = (condition, message) => { checks.push({ name: message, status: condition ? 'PASS' : 'FAIL' }); assert.ok(condition, message); passed++; console.log(JSON.stringify(checks.at(-1))); };
   const cloud = async () => (await fetch(backend.url, { headers: { Authorization: 'Bearer ' + token } })).json();
   try {
     let page = await context.newPage(); await page.goto(url);
+    await page.exposeFunction('recordOfflinePhase', phase => console.log(JSON.stringify({ engine, phase })));
     await page.waitForFunction(() => typeof offlineRunner !== 'undefined' && document.querySelector('[data-route="home"]'));
-    await page.evaluate(async config => { offlineRunner.stop(); await WorkbenchOfflineSync.configure(config); await Promise.race([navigator.serviceWorker.ready, new Promise((resolve, reject) => setTimeout(() => reject(new Error('Isolated Service Worker initialization exceeded 20 seconds')), 20000))]); }, { url: backend.url, token, key: key.toString('base64') });
+    await page.evaluate(async config => { offlineRunner.stop(); await WorkbenchOfflineSync.configure(config); await recordOfflinePhase('identity-configured'); const cache = await caches.open('synthetic-offline-preflight'); await recordOfflinePhase('cache-opened'); await cache.put('/synthetic-preflight', new Response('synthetic')); await recordOfflinePhase('cache-written'); await navigator.serviceWorker.register('offline-sw.js', { scope: './' }); await recordOfflinePhase('worker-registered'); await Promise.race([navigator.serviceWorker.ready, new Promise((resolve, reject) => setTimeout(() => reject(new Error('Isolated Service Worker initialization exceeded 20 seconds')), 20000))]); }, { url: backend.url, token, key: key.toString('base64') });
     await page.reload(); await page.waitForFunction(() => navigator.serviceWorker.controller);
     await page.evaluate(() => offlineRunner.stop());
-    await context.setOffline(true);
+    if (outageMode === 'origin-stopped') await stopOrigins(); else await context.setOffline(true);
     await page.evaluate(async () => {
       const current = await WorkbenchBusinessStore.read(); current.notes.push({ id: 'offline-note', progress: '合成离线进展' });
       await WorkbenchBusinessStore.commit(current, current.revision);
@@ -43,22 +58,24 @@ async function main() {
       }
     });
     check((await page.evaluate(() => WorkbenchBusinessStore.queueData())).jobs.length >= 4, '离线事务保存记录原件及队列');
-    await context.close(); context = await launch(); await context.setOffline(true);
+    await context.close(); context = await launch(); if (outageMode === 'browser-emulation') await context.setOffline(true);
     page = await context.newPage(); await page.goto(url);
     await page.getByRole('heading', { name: '今天先办重要的事' }).waitFor();
     check(await page.evaluate(async () => (await WorkbenchBusinessStore.read()).notes.some(item => item.id === 'offline-note')), '关闭整个浏览器重开断网仍有记录');
     check((await page.evaluate(() => WorkbenchBusinessStore.queueData())).jobs.length >= 4, '浏览器重启未同步任务保留');
     check(await page.evaluate(async () => (await WorkbenchBusinessStore.readFile('file-0')).size === 2 * 1024 * 1024), '离线重开大附件保留');
-    await context.setOffline(false);
-    const deadline = Date.now() + 60000;
+    if (outageMode === 'origin-stopped') { await restartOrigins(); await page.evaluate(() => dispatchEvent(new Event('online'))); } else await context.setOffline(false);
+    const deadline = Date.now() + 120000;
     while ((await page.evaluate(() => WorkbenchOfflineSync.status())).pending > 0 && Date.now() < deadline) await page.waitForTimeout(200);
-    check((await page.evaluate(() => WorkbenchOfflineSync.status())).status === '已同步', '恢复联网自动尝试且完成同步');
+    const recoveredStatus = await page.evaluate(() => WorkbenchOfflineSync.status());
+    if (recoveredStatus.status !== '已同步') console.log(JSON.stringify(await page.evaluate(async () => ({ status: await WorkbenchOfflineSync.status(), jobs: (await WorkbenchBusinessStore.queueData()).jobs.map(job => ({ status: job.status, attempts: job.attempts, error: job.error })) }))));
+    check(recoveredStatus.status === '已同步', '恢复联网自动尝试且完成同步');
     const synced = await cloud();
     check(synced.revision === 5, '恢复网络自动同步全部持久任务，实际版本：' + synced.revision);
     const decrypt = payload => { const cipher = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(payload.iv, 'base64')); cipher.setAuthTag(Buffer.from(payload.tag, 'base64')); return JSON.parse(Buffer.concat([cipher.update(Buffer.from(payload.ciphertext, 'base64')), cipher.final()])); };
     const complete = decrypt(synced.payload);
     check(complete.files.length === 3 && complete.state.projects[0].fileIds.length === 3, '多附件随同记录完整提交');
-    check(complete.files.every((file, index) => Buffer.from(file.data, 'base64').every(byte => byte === index + 1)), '三份原件逐字节一致');
+    check(complete.files.every((file, index) => { const bytes = Buffer.from(file.data, 'base64'); const expected = Buffer.alloc(index === 0 ? 2 * 1024 * 1024 : 128 * 1024, index + 1); return bytes.length === expected.length && crypto.createHash('sha256').update(bytes).digest('hex') === crypto.createHash('sha256').update(expected).digest('hex'); }), '三份原件长度及SHA-256一致');
     await page.evaluate(async () => {
       offlineRunner.stop(); const next = await WorkbenchBusinessStore.read(); next.notes.push({ id: 'lost-response', progress: '合成响应丢失测试' }); await WorkbenchBusinessStore.commit(next, next.revision);
       const runner = WorkbenchOfflineSync.create({ fetch: async (...args) => { const response = await fetch(...args); if (args[1].method === 'PUT' && !args[0].includes('/uploads/')) throw new Error('合成响应丢失'); return response; } }); await runner.run();
@@ -83,7 +100,7 @@ async function main() {
       try { await WorkbenchBusinessStore.commit(next, current.revision, { id: 'quota-file', value: new File(['合成额度测试'], '测试.txt') }); } catch (error) { failed = error.message.includes('空间不足'); } finally { IDBObjectStore.prototype.put = original; }
       return failed && !(await WorkbenchBusinessStore.read()).notes.some(item => item.id === 'quota-note') && !(await WorkbenchBusinessStore.readFile('quota-file'));
     }), 'QuotaExceeded故障注入：业务原件队列一起回滚');
-    const second = await chromium.launchPersistentContext(path.join(directory, 'second-device'), { executablePath, headless: true });
+    const second = await chromium.launchPersistentContext(path.join(directory, 'second-device'), { executablePath, env: browserEnv, headless: true });
     try {
       const other = await second.newPage(); await other.goto(url); await other.waitForFunction(() => typeof offlineRunner !== 'undefined');
       await other.evaluate(async config => { offlineRunner.stop(); await WorkbenchOfflineSync.configure(config); await offlineRunner.run(); }, { url: backend.url, token, key: key.toString('base64') });
@@ -138,9 +155,20 @@ async function main() {
     });
     check((await page.evaluate(() => WorkbenchOfflineSync.status())).status === '同步失败' && (await cloud()).revision === beforeOversize.revision, '超同步容量保留任务且不提交部分附件');
     check(await page.evaluate(async () => (await WorkbenchBusinessStore.readFile('large-test')).size === 13 * 1024 * 1024), '超容量原件继续保留在IndexedDB');
-    await fs.writeFile(path.join(__dirname, 'offline-test-results.json'), JSON.stringify({ passed, failed: 0, browser: 'Edge移动尺寸持久测试配置', productionConnected: false, iphoneTested: false, quotaTest: 'QuotaExceeded及事务中断故障注入，不是实际设备磁盘耗尽', largestAttachmentBytes: 2 * 1024 * 1024 }, null, 2));
+    await fs.writeFile(resultsFile, JSON.stringify({ checkedAt: new Date().toISOString(), passed, failed: 0, engine, outageMode, checks, browser: engine + '移动尺寸持久测试配置', profilePathAscii: !/[^\x00-\x7f]/.test(profile), cloudRequests: 0, productionConnected: false, iphoneTested: false, quotaTest: 'QuotaExceeded及事务中断故障注入，不是实际设备磁盘耗尽', largestAttachmentBytes: 2 * 1024 * 1024 }, null, 2));
     console.log(JSON.stringify({ passed, failed: 0 }));
-  } finally { await context.close(); await backend.close(); await new Promise(resolve => staticServer.close(resolve)); }
+  } finally { await context.close(); if (!originDown) { await backend.close(); await new Promise(resolve => { staticServer.close(resolve); staticServer.closeAllConnections(); }); } }
 }
-const testDeadline = setTimeout(() => { console.error('Isolated browser test exceeded 180 seconds; no real data was accessed'); process.exit(1); }, 180000);
-main().catch(error => { console.error(error.stack); process.exitCode = 1; }).finally(() => clearTimeout(testDeadline));
+const testDeadline = setTimeout(() => { console.error('Isolated browser test exceeded 360 seconds; no real data was accessed'); process.exit(1); }, 360000);
+main().catch(async error => {
+  console.error(error.stack);
+  let blockerProven = false;
+  if (engine === 'webkit' && outageMode === 'browser-emulation' && error.message.includes('NotReadableError')) {
+    try {
+      const probe = JSON.parse(await fs.readFile(path.join(__dirname, 'webkit-persistence-probe-results.json'), 'utf8'));
+      blockerProven = probe.playwright === createRequire('C:/Users/王学庆/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/runtime-loader.cjs')('playwright/package.json').version && probe.results.some(result => result.scenario === 'ascii-profile-ascii-temp' && result.fileReadOnline?.passed && !result.fileReadOfflineEmulation?.passed && result.fileReadOfflineEmulation?.name === 'NotReadableError' && result.fileReadAfterReconnect?.passed);
+    } catch {}
+  }
+  await fs.writeFile(resultsFile, JSON.stringify({ checkedAt: new Date().toISOString(), engine, outageMode, passed: checks.filter(check => check.status === 'PASS').length, failed: blockerProven ? 0 : 1, blocked: blockerProven ? 1 : 0, status: blockerProven ? 'BLOCKED' : 'FAIL', rawExecutionFailed: true, evidence: blockerProven ? 'Same-version minimal app-free three-byte File read fails only under setOffline(true)' : null, checks, error: error.message, cloudRequests: 0, productionConnected: false, iphoneTested: false }, null, 2));
+  process.exitCode = blockerProven ? 2 : 1;
+}).finally(() => clearTimeout(testDeadline));

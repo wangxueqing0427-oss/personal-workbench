@@ -3,7 +3,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const hash = value => crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
-async function createLab(directory, token) {
+async function createLab(directory, token, port = 0) {
   const currentPath = path.join(directory, 'synthetic-current.json');
   let current;
   try { current = JSON.parse(await fs.readFile(currentPath, 'utf8')); }
@@ -55,7 +55,7 @@ async function createLab(directory, token) {
       await job;
     } catch { if (!response.headersSent) send(500, { error: 'Lab write failed; retry with a fresh read' }); }
   });
-  await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
-  return { url: 'http://127.0.0.1:' + server.address().port + '/sync', close: () => new Promise(resolve => server.close(resolve)) };
+  await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, '127.0.0.1', resolve); });
+  return { url: 'http://127.0.0.1:' + server.address().port + '/sync', close: () => new Promise(resolve => { server.close(resolve); server.closeAllConnections(); }) };
 }
 module.exports = { createLab, hash };

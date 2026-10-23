@@ -1,5 +1,7 @@
 # Issue #1 — V2.0 staging regression and iPhone handoff
 
+Windows automation follow-up (2026-10-23): `WEBKIT-PERSISTENCE-20261023.md` isolates Windows profile/temp-path failures and a minimal `setOffline` File-read limitation. Edge original offline suite and WebKit origin-stopped control each passed 25; native WebKit emulation remains explicitly BLOCKED. No application changes or deployment; the already passed physical iPhone acceptance is not reopened.
+
 Latest follow-up (2026-10-22): see `ISSUE1-ORIGINAL-INVENTORY-20261022.md` for the local-zero/cloud-original distinction, source `957856b`, deployment `d4c54788-0c3e-44a8-a801-2fa066dafe5b`, and updated 485-assertion matrix. The historical report below remains evidence of the preceding release.
 
 Date: 2026-10-21 (Asia/Shanghai). This report supersedes older all-pass summaries for this issue. Production approval is not requested or implied.
