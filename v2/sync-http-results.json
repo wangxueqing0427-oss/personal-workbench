@@ -1,0 +1,7 @@
+{
+  "coreAssertions": 18,
+  "environment": "仅127.0.0.1真实HTTP隔离后端及系统临时合成数据目录",
+  "productionConnected": false,
+  "iphoneTested": false,
+  "findings": "并发CAS、断网编辑、重启持久化、联网恢复、重复请求拒绝及附件校验通过"
+}

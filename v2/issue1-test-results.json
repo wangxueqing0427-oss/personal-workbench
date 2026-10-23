@@ -1,0 +1,62 @@
+{
+  "date": "2026-10-22",
+  "publishedSource": "957856bb058114f9f769a4ecf1191a800419c692",
+  "workerVersion": "d4c54788-0c3e-44a8-a801-2fa066dafe5b",
+  "suites": [
+    {
+      "suite": "Edge backup and isolated recovery",
+      "passed": 56
+    },
+    {
+      "suite": "Edge business UI desktop and mobile",
+      "passed": 70
+    },
+    {
+      "suite": "Edge persistent offline and recovery",
+      "passed": 25
+    },
+    {
+      "suite": "Worker authentication CAS chunks and signed test sessions",
+      "passed": 42
+    },
+    {
+      "suite": "Isolated HTTP synchronization",
+      "passed": 18
+    },
+    {
+      "suite": "WebKit backup and isolated recovery byte envelope fixtures",
+      "passed": 56
+    },
+    {
+      "suite": "WebKit business UI desktop and mobile",
+      "passed": 70
+    },
+    {
+      "suite": "Real staging Edge",
+      "passed": 48
+    },
+    {
+      "suite": "Real staging WebKit",
+      "passed": 48
+    },
+    {
+      "suite": "edge first-device inventory capture replay and rollback",
+      "passed": 26
+    },
+    {
+      "suite": "webkit first-device inventory capture replay and rollback",
+      "passed": 26
+    }
+  ],
+  "passed": 485,
+  "productAssertionFailures": 0,
+  "blockedSuites": [
+    {
+      "suite": "Windows WebKit persistent-profile offline restart",
+      "reason": "UnknownError: Unable to open database file on disk at configure; not counted as passed; real iPhone Safari/PWA offline restart unverified"
+    }
+  ],
+  "physicalIPhoneTested": false,
+  "phonePrivateRecordsRead": false,
+  "sharedCloudWrites": 0
+}

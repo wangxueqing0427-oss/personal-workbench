@@ -1,0 +1,137 @@
+{
+  "label": "before",
+  "inspectedAt": "2026-10-20T10:57:43.873Z",
+  "sourceCommit": "dbf545158aac12115d8c61712d2bb9c249257889",
+  "assets": [
+    {
+      "name": "business.html",
+      "sha256": "d60008b897ad69d5ee12ad976ddafbef599d941dbfc29ae479ad1271cb190ad3",
+      "bytes": 1798,
+      "matchesLocal": true,
+      "matchesReference": true
+    },
+    {
+      "name": "business.css",
+      "sha256": "f9663d4a0a0df757cfc12ea70f1df3a3941dbdf5c1cf0aece89d97937194a08e",
+      "bytes": 4116,
+      "matchesLocal": true,
+      "matchesReference": true
+    },
+    {
+      "name": "business-core.js",
+      "sha256": "f7f0df51525cb2f39346a8738abe2360ceff59ba38c76a23f2f73140c4363bdf",
+      "bytes": 13427,
+      "matchesLocal": true,
+      "matchesReference": true
+    },
+    {
+      "name": "business-store.js",
+      "sha256": "ac6b4d90f588c387a4df397eafd36daa33a1ca261709d6cbfee1aa6edc6fa7bb",
+      "bytes": 7914,
+      "matchesLocal": false,
+      "matchesReference": true
+    },
+    {
+      "name": "offline-sync.js",
+      "sha256": "2416380d216a396ea8035fcfc5b2a290ce38e513e16936f97ed0fada1214908f",
+      "bytes": 16281,
+      "matchesLocal": true,
+      "matchesReference": true
+    },
+    {
+      "name": "business-ui.js",
+      "sha256": "7a225fdd85b486de7d9ecf141db05121381875c61c7f3ffed6d0624d1de17d07",
+      "bytes": 21713,
+      "matchesLocal": true,
+      "matchesReference": true
+    },
+    {
+      "name": "sync-panel.js",
+      "sha256": "85a7838ff11089b2750b4284df7e378d04083b009a92ac265fdfd61efe9f8775",
+      "bytes": 7041,
+      "matchesLocal": true,
+      "matchesReference": true
+    },
+    {
+      "name": "device-pair.js",
+      "sha256": "eeff63087a85eb11d5f2618ef64362b7c772dec72cb2245f55a18221148d6f22",
+      "bytes": 2893,
+      "matchesLocal": true,
+      "matchesReference": true
+    },
+    {
+      "name": "staging.webmanifest",
+      "sha256": "23a47306cbf5247e3ed16cb2692855b80dd514bf8b30c03c28d90be2fad2628d",
+      "bytes": 249,
+      "matchesLocal": true,
+      "matchesReference": true
+    },
+    {
+      "name": "staging-init.js",
+      "sha256": "8c786902013912dca2f81c4ed37e7de9b4b3e19ea5e8c15a6feaa09072d782c7",
+      "bytes": 1278,
+      "matchesLocal": true,
+      "matchesReference": true
+    },
+    {
+      "name": "offline-sw.js",
+      "sha256": "bd38e571eaeacc5e611e0e7ac5486cdaf151b1c58a38849d45555f107faf3f7a",
+      "bytes": 1110,
+      "matchesLocal": true,
+      "matchesReference": true
+    },
+    {
+      "name": "p0.html",
+      "sha256": "8ac9aee2b954f889650cbe05c692cca5f0bc3784be5cb1c1db35ff3b67b84607",
+      "bytes": 2053,
+      "matchesLocal": true,
+      "matchesReference": true
+    },
+    {
+      "name": "p0-ui.js",
+      "sha256": "6eca667a20e1d9050438d623190591438af04cff5013ffa92e48cc018117fedf",
+      "bytes": 3183,
+      "matchesLocal": true,
+      "matchesReference": true
+    },
+    {
+      "name": "safety-core.js",
+      "sha256": "71ee59d9e305ef7074fdd15e7394b411aaa6970bf6a635251e9b5a304ecd8b39",
+      "bytes": 16726,
+      "matchesLocal": false,
+      "matchesReference": true
+    }
+  ],
+  "modules": [
+    {
+      "name": "staging-worker.js",
+      "sha256": "c86da20320ad9a7d9c48608a8b4a99ad0d5a0411a0bed9bf11de9185ee06d79b",
+      "bytes": 10913
+    }
+  ],
+  "activeVersions": [
+    {
+      "version_id": "3a119144-7d98-4226-8127-a478cdf35031",
+      "percentage": 100
+    }
+  ],
+  "cloud": {
+    "revision": 9,
+    "hash": "c1045bbf50eb2b33c19dd927c9f55aea23d85876ab5ad8763e256882f6615ee3",
+    "records": 34,
+    "originals": [
+      {
+        "id": "f402a10c-5f64-4051-8fb9-78f057183d61",
+        "bytes": 524288,
+        "sha256": "afeaa3a39f2cedf8cc1844c06d2f2fd5cf016ce968f33ccbb31c364ce7e89e71"
+      },
+      {
+        "id": "647db2da-bf1f-4416-827c-151d0eb36462",
+        "bytes": 524288,
+        "sha256": "afeaa3a39f2cedf8cc1844c06d2f2fd5cf016ce968f33ccbb31c364ce7e89e71"
+      }
+    ]
+  },
+  "readsOnly": true,
+  "encryptedBackupRetained": true
+}

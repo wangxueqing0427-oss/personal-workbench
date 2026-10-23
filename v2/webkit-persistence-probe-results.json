@@ -1,0 +1,93 @@
+{
+  "checkedAt": "2026-10-23T14:43:28.333Z",
+  "playwright": "1.62.1",
+  "platform": "win32",
+  "realDataAccess": false,
+  "cloudRequests": 0,
+  "results": [
+    {
+      "scenario": "unicode-profile-original-temp",
+      "appScriptsLoaded": false,
+      "serviceWorker": false,
+      "initial": {
+        "passed": false,
+        "name": "UnknownError",
+        "message": "Unable to open database file on disk"
+      }
+    },
+    {
+      "scenario": "ascii-profile-original-temp",
+      "appScriptsLoaded": false,
+      "serviceWorker": {
+        "passed": true
+      },
+      "initial": {
+        "passed": true
+      },
+      "firstCache": {
+        "passed": false,
+        "name": "TypeError",
+        "message": "Failed writing data to the file system"
+      },
+      "reopened": {
+        "passed": true
+      },
+      "cacheStorage": {
+        "passed": false,
+        "name": "TypeError",
+        "message": "Failed writing data to the file system"
+      },
+      "fileReadOnline": {
+        "passed": true
+      },
+      "fileReadOfflineEmulation": {
+        "passed": false,
+        "name": "NotReadableError",
+        "message": "The I/O read operation failed."
+      },
+      "fileReadAfterReconnect": {
+        "passed": true
+      }
+    },
+    {
+      "scenario": "ascii-profile-ascii-temp",
+      "appScriptsLoaded": false,
+      "serviceWorker": {
+        "passed": true
+      },
+      "initial": {
+        "passed": true
+      },
+      "firstCache": {
+        "passed": true
+      },
+      "reopened": {
+        "passed": true
+      },
+      "cacheStorage": {
+        "passed": true
+      },
+      "fileReadOnline": {
+        "passed": true
+      },
+      "fileReadOfflineEmulation": {
+        "passed": false,
+        "name": "NotReadableError",
+        "message": "The I/O read operation failed."
+      },
+      "fileReadAfterReconnect": {
+        "passed": true
+      }
+    },
+    {
+      "scenario": "unicode-profile-ascii-temp",
+      "appScriptsLoaded": false,
+      "serviceWorker": false,
+      "initial": {
+        "passed": false,
+        "name": "UnknownError",
+        "message": "Unable to open database file on disk"
+      }
+    }
+  ]
+}
