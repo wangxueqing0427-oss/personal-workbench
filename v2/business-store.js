@@ -77,7 +77,7 @@
         const transaction = database.transaction('state', 'readonly'), records = {};
         const request = transaction.objectStore('state').openCursor();
         request.onsuccess = () => { const cursor = request.result; if (cursor) { records[cursor.key] = cursor.value; cursor.continue(); } };
-        transaction.oncomplete = () => resolve({ jobs: Object.entries(records).filter(([key]) => key.startsWith('queue:')).map(([key, value]) => ({ key, ...value })), meta: records['sync-meta'] || null, config: records['sync-config'] || null, conflicts: Object.entries(records).filter(([key]) => key.startsWith('conflict:')).map(([, value]) => value) });
+        transaction.oncomplete = () => resolve({ jobs: Object.entries(records).filter(([key]) => key.startsWith('queue:')).map(([key, value]) => ({ key, ...value })), meta: records['sync-meta'] || null, config: records['sync-config'] || null, remoteError: records['remote-check-error'] || '', conflicts: Object.entries(records).filter(([key]) => key.startsWith('conflict:')).map(([, value]) => value) });
         transaction.onabort = transaction.onerror = () => reject(transaction.error);
       });
     } finally { database.close(); }
@@ -139,6 +139,31 @@
       });
     } finally { database.close(); }
   }
+  async function stageRemote(cloud, expectedState, expectedMeta, expectedConfig) {
+    const database = await open();
+    try {
+      return await new Promise((resolve, reject) => {
+        const transaction = database.transaction('state', 'readwrite'), records = transaction.objectStore('state');
+        const values = {}; let staged = false, problem;
+        const request = records.openCursor();
+        request.onsuccess = () => {
+          const cursor = request.result;
+          if (cursor) { values[cursor.key] = cursor.value; cursor.continue(); return; }
+          try {
+            if (Object.keys(values).some(key => key.startsWith('queue:'))) return;
+            if (JSON.stringify(values.current) !== JSON.stringify(expectedState) || JSON.stringify(values['sync-meta']) !== JSON.stringify(expectedMeta) || JSON.stringify(values['sync-config']) !== JSON.stringify(expectedConfig)) throw new Error('检查期间本机数据或身份已改变，请重新检查');
+            const id = 'remote-' + cloud.revision + '-' + cloud.hash;
+            const job = { id, origin: 'remote', snapshot: expectedState, localRevision: expectedState.revision, status: '存在冲突', attempts: 0, createdAt: new Date().toISOString() };
+            records.add(job, 'queue:' + id);
+            records.add({ jobId: id, origin: 'remote', localSnapshot: expectedState, cloud, detectedAt: job.createdAt }, 'conflict:' + id);
+            staged = true;
+          } catch (error) { problem = error; transaction.abort(); }
+        };
+        transaction.oncomplete = () => resolve(staged);
+        transaction.onabort = transaction.onerror = () => reject(problem || transaction.error);
+      });
+    } finally { database.close(); }
+  }
   async function fileKeys() {
     const database = await open();
     try {
@@ -150,5 +175,5 @@
       });
     } finally { database.close(); }
   }
-  root.WorkbenchBusinessStore = { read, commit, readFile, fileKeys, name, queueData, changeQueue, resolveConflict };
+  root.WorkbenchBusinessStore = { read, commit, readFile, fileKeys, name, queueData, changeQueue, resolveConflict, stageRemote };
 })(globalThis);

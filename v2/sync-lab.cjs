@@ -17,6 +17,7 @@ async function createLab(directory, token, port = 0) {
     const send = (status, result) => { response.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); response.end(JSON.stringify(result)); };
     if (request.headers.authorization !== 'Bearer ' + token) { send(401, { error: 'Unauthorized' }); return; }
     const chunkRoute = /^\/sync\/uploads\/([a-f0-9]{64})\/(\d{1,3})$/.exec(request.url);
+    if (request.method === 'GET' && request.url === '/sync/diagnostics') { await sequence.catch(() => {}); send(200, { revision: current.revision, hash: current.hash }); return; }
     if (request.url !== '/sync' && !chunkRoute) { send(404, { error: 'Not found' }); return; }
     if (request.method === 'GET' && !chunkRoute) { await sequence.catch(() => {}); send(200, current); return; }
     if (request.method !== 'PUT') { send(405, { error: 'Method not allowed' }); return; }
