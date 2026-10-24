@@ -32,14 +32,14 @@
     });
   }
   function create(options = {}) {
-    let busy = false, timer, stopped = false, delay = 1000;
+    let busy = false, timer, stopped = false, delay = 1000, nextCheck = 0;
     const fetcher = options.fetch || root.fetch.bind(root);
     const announce = () => root.dispatchEvent(new Event('workbench-sync-status'));
     async function request(config, method, body, suffix = '') {
       checkEndpoint(config.url);
       const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), method === 'GET' ? 60000 : 15000);
       try {
-        const response = await fetcher(config.url + suffix, { method, signal: controller.signal, headers: { Authorization: 'Bearer ' + config.token, 'Content-Type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) });
+        const response = await fetcher(config.url + suffix, { method, cache: 'no-store', signal: controller.signal, headers: { Authorization: 'Bearer ' + config.token, 'Content-Type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) });
         if (response.status === 409) return { conflict: true };
         if (response.status === 401) throw new Error('身份失效：请重新验证测试身份；本地原件和队列保留');
         if (!response.ok) throw new Error('隔离同步请求失败：' + response.status);
@@ -92,14 +92,49 @@
       }
       return request(config, 'PUT', { uploadId, parts });
     }
-    async function run() {
+    async function discover(data) {
+      if (!data.meta) throw new Error('缺少已确认同步基线，已阻止自动接收远端数据');
+      const local = await store.read();
+      const head = await request(data.config, 'GET', null, '/diagnostics');
+      if (!Number.isSafeInteger(head.revision) || head.revision < data.meta.revision || !/^[a-f0-9]{64}$/.test(head.hash || '')) throw new Error('远端版本无效或回退，未修改本机数据');
+      if (head.revision === data.meta.revision) {
+        if (head.hash !== data.meta.hash) throw new Error('相同远端版本的哈希改变，已阻止接收');
+        return;
+      }
+      const cloud = await request(data.config, 'GET');
+      if (cloud.revision !== head.revision || cloud.hash !== head.hash) throw new Error('检查期间远端版本改变，请重试；本机未修改');
+      if (await hash(cloud.payload) !== cloud.hash) throw new Error('远端副本哈希校验失败');
+      const payload = cloud.payload;
+      const key = await crypto.subtle.importKey('raw', unbase64(data.config.key), 'AES-GCM', false, ['decrypt']);
+      const bytes = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unbase64(payload.iv) }, key, new Uint8Array([...unbase64(payload.ciphertext), ...unbase64(payload.tag)]));
+      const incoming = JSON.parse(new TextDecoder().decode(bytes));
+      if (!local || incoming.state?.schema !== local.schema || !Array.isArray(incoming.state.files) || !Array.isArray(incoming.files)) throw new Error('远端数据结构不兼容，已阻止写入');
+      const ids = new Set();
+      for (const file of incoming.files) {
+        if (!file.id || ids.has(file.id) || typeof file.data !== 'string') throw new Error('远端原件目录无效');
+        ids.add(file.id);
+        const content = unbase64(file.data), reference = incoming.state.files.find(item => item.id === file.id);
+        if (base64(content) !== file.data || !reference || (reference.size !== undefined && reference.size !== content.byteLength) || (reference.name !== undefined && reference.name !== file.name) || (reference.type !== undefined && reference.type !== file.type)) throw new Error('远端原件与元数据不一致');
+      }
+      if (incoming.state.files.length !== ids.size || incoming.state.files.some(file => !ids.has(file.id))) throw new Error('远端原件不完整，已阻止写入');
+      await store.stageRemote(cloud, local, data.meta, data.config);
+    }
+    async function run(force = false) {
       if (busy) return; busy = true;
       let active;
       try {
         let data = await store.queueData(); if (!data.config) return;
         if (!navigator.onLine) return;
+        if (!data.jobs.length) {
+          delay = 60000;
+          if (!force && Date.now() < nextCheck) return;
+          nextCheck = Date.now() + 60000;
+          await discover(data);
+          if (data.remoteError) await store.changeQueue('remote-check-error', (previous, transaction) => { if (previous === data.remoteError) transaction.delete('remote-check-error'); });
+          return;
+        }
         for (const pending of data.jobs) {
-          if (pending.status === '存在冲突') break;
+          if (pending.status === '存在冲突') { delay = 60000; return; }
           active = pending;
           active = await prepare(pending, data.config, data.meta);
           let cloud = await request(data.config, 'GET');
@@ -119,16 +154,18 @@
         delay = 1000;
       } catch (error) {
         delay = Math.min(delay * 2, 60000);
+        if (!active) await store.changeQueue('remote-check-error', (previous, transaction) => { if (previous !== error.message) transaction.put(error.message, 'remote-check-error'); }).catch(() => {});
         if (active) await store.changeQueue(active.key, (current, transaction) => { if (current) transaction.put({ ...current, status: '同步失败', attempts: current.attempts + 1, error: error.message }, active.key); }).catch(() => {});
       } finally { busy = false; announce(); }
     }
     async function loop() { if (stopped) return; await run(); if (!stopped) timer = setTimeout(loop, delay); }
-    const online = () => { if (!stopped) { clearTimeout(timer); loop(); } };
-    return { run, start() { stopped = false; root.addEventListener('online', online); loop(); }, stop() { stopped = true; clearTimeout(timer); root.removeEventListener('online', online); } };
+    const online = () => { if (!stopped) { nextCheck = 0; clearTimeout(timer); loop(); } };
+    const visible = () => { if (root.document.visibilityState === 'visible') online(); };
+    return { run, start() { stopped = false; root.addEventListener('online', online); root.document.addEventListener('visibilitychange', visible); loop(); }, stop() { stopped = true; clearTimeout(timer); root.removeEventListener('online', online); root.document.removeEventListener('visibilitychange', visible); } };
   }
   async function status() {
     const data = await store.queueData();
-    return { status: data.jobs.some(job => job.status === '存在冲突') ? '存在冲突' : data.jobs.some(job => job.status === '同步失败') ? '同步失败' : data.jobs.length ? '等待同步' : data.meta ? '已同步' : '等待同步', pending: data.jobs.length, configured: !!data.config, cloudRevision: data.meta?.revision || data.conflicts[0]?.cloud?.revision || 0, firstConnection: !!data.config && !data.meta, reason: data.conflicts.length ? (!data.meta ? '设备已接入；本机初始数据与已有云端版本不同，尚未上传，等待确认合并。' : '本机与云端版本不同，已暂停上传并保留双方数据。') : '' };
+    return { status: data.jobs.some(job => job.status === '存在冲突') ? '存在冲突' : data.remoteError || data.jobs.some(job => job.status === '同步失败') ? '同步失败' : data.jobs.length ? '等待同步' : data.meta ? '已同步' : '等待同步', pending: data.jobs.length, configured: !!data.config, cloudRevision: data.meta?.revision || data.conflicts[0]?.cloud?.revision || 0, firstConnection: !!data.config && !data.meta, reason: data.conflicts.length ? (data.conflicts.some(item => item.origin === 'remote') ? '发现远端更新，已保存待确认副本；尚未覆盖本机记录或原件，请核对后合并。' : !data.meta ? '设备已接入；本机初始数据与已有云端版本不同，尚未上传，等待确认合并。' : '本机与云端版本不同，已暂停上传并保留双方数据。') : data.remoteError };
   }
   async function previewConflict(jobId) {
     const data = await store.queueData();
