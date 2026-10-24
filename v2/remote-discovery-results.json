@@ -1,5 +1,7 @@
 {
-  "scope": "loopback synthetic Edge only; no shared cloud accessed",
+  "scope": "loopback synthetic Chromium-family browser only; no shared cloud accessed",
+  "platform": "win32",
+  "channel": "msedge",
   "summary": {
     "passed": 12,
     "failed": 0,

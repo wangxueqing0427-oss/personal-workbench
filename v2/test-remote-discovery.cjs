@@ -4,9 +4,8 @@ const path = require('node:path');
 const os = require('node:os');
 const http = require('node:http');
 const crypto = require('node:crypto');
-const { createRequire } = require('node:module');
 const { createLab } = require('./sync-lab.cjs');
-const { chromium } = createRequire('C:/Users/王学庆/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/runtime-loader.cjs')('playwright');
+const { chromium } = require('playwright');
 const results = [];
 async function main() {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'wb-remote-synthetic-'));
@@ -20,7 +19,8 @@ async function main() {
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const origin = 'http://127.0.0.1:' + server.address().port;
-  const launchOptions = { executablePath: 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', headless: true };
+  const channel = process.env.WB_BROWSER_CHANNEL || (process.platform === 'win32' ? 'msedge' : undefined);
+  const launchOptions = { ...(channel ? { channel } : {}), headless: true };
   const browser = await chromium.launch(launchOptions), contexts = [];
   const setupRunner = async page => page.evaluate(() => {
     window.calls = []; window.mode = ''; window.lastError = '';
@@ -74,7 +74,7 @@ async function main() {
   const run = page => page.evaluate(() => runner.run(true));
   const check = async (name, input, steps, expected, operation) => {
     try { await operation(); results.push({ name, input, steps, expected, actual: expected, status: 'PASS' }); }
-    catch (error) { results.push({ name, input, steps, expected, actual: error.stack, status: 'FAIL' }); }
+    catch (error) { results.push({ name, input, steps, expected, actual: String(error.stack).split(__dirname).join('<repo>/v2').split(os.homedir()).join('<home>'), status: 'FAIL' }); }
     console.log(JSON.stringify(results.at(-1)));
   };
   try {
@@ -128,7 +128,7 @@ async function main() {
   } finally {
     await browser.close(); await backend.close(); await new Promise(resolve => server.close(resolve));
     const summary = { passed: results.filter(item => item.status === 'PASS').length, failed: results.filter(item => item.status === 'FAIL').length, blocked: 0 };
-    await fs.writeFile(path.join(__dirname, 'remote-discovery-results.json'), JSON.stringify({ scope: 'loopback synthetic Edge only; no shared cloud accessed', summary, results }, null, 2));
+    await fs.writeFile(path.join(__dirname, 'remote-discovery-results.json'), JSON.stringify({ scope: 'loopback synthetic Chromium-family browser only; no shared cloud accessed', platform: process.platform, channel: channel || 'playwright-chromium', summary, results }, null, 2));
     console.log(JSON.stringify(summary)); if (summary.failed) process.exitCode = 1;
   }
 }
