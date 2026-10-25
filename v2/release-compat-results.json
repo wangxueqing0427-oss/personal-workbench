@@ -1,0 +1,62 @@
+{
+  "sourceCommit": "1a4d3450a6812ba180b4bb2db147713331c5f43a",
+  "releaseId": "1e35e4ac887d32168256ddb7cb0eb05cd3ca2e6e517e9dda21d3c876b85266d0",
+  "syntheticOnly": true,
+  "cloudRequests": 0,
+  "localServerWrites": 1,
+  "integrityEvidence": {
+    "sentinelOriginalBytes": 128,
+    "sentinelOriginalSha256": "4c1398e54d53e925cff04da532f4bbaf15f75b5981fc76c2072dfdc6491a9fb1",
+    "comparison": "Complete IndexedDB state, original bytes and metadata compared; queued sentinel and existing archive retained in incompatible cases; only explicit confirmation merges",
+    "cloudCredentialsUsed": false
+  },
+  "passed": 11,
+  "failed": 0,
+  "blocked": 0,
+  "results": [
+    {
+      "name": "old-store-pauses-without-writes",
+      "status": "PASS"
+    },
+    {
+      "name": "old-sync-pauses-without-writes",
+      "status": "PASS"
+    },
+    {
+      "name": "fresh-release-verifies-before-running",
+      "status": "PASS"
+    },
+    {
+      "name": "interrupted-install-keeps-old-worker-and-cache",
+      "status": "PASS"
+    },
+    {
+      "name": "old-worker-partial-network-failure-pauses-before-module-execution",
+      "status": "PASS"
+    },
+    {
+      "name": "wrong-version-200-response-is-rejected-before-any-write",
+      "status": "PASS"
+    },
+    {
+      "name": "interrupted-upgrade-offline-reopen-pauses-without-data-loss",
+      "status": "PASS"
+    },
+    {
+      "name": "complete-upgrade-discovers-and-stages-without-overwrite",
+      "status": "PASS"
+    },
+    {
+      "name": "confirmed-merge-preserves-records-originals-and-archive",
+      "status": "PASS"
+    },
+    {
+      "name": "offline-page-close-reopen-and-online-safe-retry",
+      "status": "PASS"
+    },
+    {
+      "name": "whole-browser-restart-offline-retains-verified-release-and-data",
+      "status": "PASS"
+    }
+  ]
+}

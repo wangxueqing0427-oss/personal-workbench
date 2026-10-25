@@ -16,7 +16,7 @@ async function main() {
   for (const name of ['business.html', 'business.css', 'business-core.js', 'business-store.js', 'offline-sync.js', 'business-ui.js', 'sync-panel.js', 'device-pair.js', 'staging.webmanifest', 'staging-init.js', 'offline-sw.js', 'p0.html', 'p0-ui.js', 'safety-core.js']) old[name] = execFileSync('git', ['show', '4986fd5:v2/' + name], { cwd: path.join(__dirname, '..') });
   const token = crypto.randomBytes(32).toString('hex'), key = crypto.randomBytes(32), bytes = Buffer.alloc(128, 7);
   const files = [{ id: 'sentinel-file', name: 'sentinel.bin', type: 'application/octet-stream', modified: 12345, data: bytes.toString('base64') }];
-  let mode = 'new', blocked = '', mixed = '', current, puts = 0, gets = 0;
+  let mode = 'new', blocked = '', mixed = '', staleGroup = false, current, puts = 0, gets = 0;
   const remote = state => {
     const next = structuredClone(state); next.notes.push({ id: 'remote-addition', progress: 'synthetic remote' });
     const iv = crypto.randomBytes(12), cipher = crypto.createCipheriv('aes-256-gcm', key, iv), ciphertext = Buffer.concat([cipher.update(JSON.stringify({ state: next, files })), cipher.final()]);
@@ -41,7 +41,7 @@ async function main() {
       if (mixed && ['business-store.js', 'offline-sync.js'].includes(name)) {
         const useOld = mixed === 'old-store' ? name === 'business-store.js' : name === 'offline-sync.js';
         content = useOld ? old[name] : await fs.readFile(path.join(__dirname, name));
-      } else content = mode === 'old' && old[name] ? old[name] : await fs.readFile(path.join(directory, name));
+      } else content = staleGroup && name.endsWith('/business-store.js') ? old['business-store.js'] : mode === 'old' && old[name] ? old[name] : await fs.readFile(path.join(directory, name));
       response.setHeader('Cache-Control', 'no-store'); response.setHeader('Content-Type', name.endsWith('.js') ? 'application/javascript; charset=utf-8' : name.endsWith('.html') ? 'text/html; charset=utf-8' : name.endsWith('.css') ? 'text/css' : 'application/json'); response.end(content);
     } catch { response.writeHead(404).end(); }
   });
@@ -85,6 +85,15 @@ async function main() {
       await upgraded.goto(origin + '/business.html'); await upgraded.waitForFunction(() => !!document.getElementById('sync-status')?.dataset.releaseError);
       assert.match(await upgraded.locator('#sync-status').innerText(), /同步已暂停/); assert.equal(await upgraded.evaluate(() => typeof WorkbenchBusinessStore), 'undefined'); assert.deepEqual(await inspect(upgraded), original); assert.equal(puts, 0);
     });
+    await check('wrong-version-200-response-is-rejected-before-any-write', async () => {
+      blocked = ''; staleGroup = true; await upgraded.reload(); await upgraded.waitForFunction(() => !!document.getElementById('sync-status')?.dataset.releaseError);
+      assert.match(await upgraded.locator('#sync-status').getAttribute('data-release-error'), /hash mismatch/); assert.equal(await upgraded.evaluate(() => typeof WorkbenchBusinessStore), 'undefined'); assert.deepEqual(await inspect(upgraded), original); assert.equal(puts, 0); staleGroup = false;
+    });
+    await check('interrupted-upgrade-offline-reopen-pauses-without-data-loss', async () => {
+      await session.setOffline(true); const page = await session.newPage();
+      try { await page.goto(origin + '/business.html'); await page.waitForFunction(() => !!document.getElementById('sync-status')?.dataset.releaseError); assert.match(await page.locator('#sync-status').innerText(), /同步已暂停/); assert.deepEqual(await inspect(page), original); assert.equal(puts, 0); }
+      finally { await page.close(); await session.setOffline(false); }
+    });
     await check('complete-upgrade-discovers-and-stages-without-overwrite', async () => {
       blocked = ''; await upgraded.reload(); await ready(upgraded); await poll(() => upgraded.evaluate(async () => (await WorkbenchBusinessStore.queueData()).jobs.some(job => job.origin === 'remote')));
       await upgraded.evaluate(() => offlineRunner.stop()); const snapshot = await inspect(upgraded); assert.deepEqual(snapshot.originals, original.originals); assert.deepEqual(snapshot.records.find(([key]) => key === 'current'), original.records.find(([key]) => key === 'current')); assert.equal(puts, 0);
@@ -118,7 +127,7 @@ async function main() {
     });
   } finally {
     await browser.close(); await new Promise(resolve => server.close(resolve));
-    await fs.writeFile(path.join(__dirname, 'release-compat-results.json'), JSON.stringify({ sourceCommit: manifest.sourceCommit, releaseId: manifest.releaseId, syntheticOnly: true, cloudRequests: 0, passed: results.filter(item => item.status === 'PASS').length, failed: results.filter(item => item.status === 'FAIL').length, blocked: 0, results }, null, 2));
+    await fs.writeFile(path.join(__dirname, 'release-compat-results.json'), JSON.stringify({ sourceCommit: manifest.sourceCommit, releaseId: manifest.releaseId, syntheticOnly: true, cloudRequests: 0, localServerWrites: puts, integrityEvidence: { sentinelOriginalBytes: bytes.length, sentinelOriginalSha256: sha(bytes), comparison: 'Complete IndexedDB state, original bytes and metadata compared; queued sentinel and existing archive retained in incompatible cases; only explicit confirmation merges', cloudCredentialsUsed: false }, passed: results.filter(item => item.status === 'PASS').length, failed: results.filter(item => item.status === 'FAIL').length, blocked: 0, results }, null, 2));
   }
 }
 main().catch(error => { console.error(error.message); process.exitCode = 1; });
