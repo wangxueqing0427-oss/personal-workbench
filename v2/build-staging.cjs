@@ -15,7 +15,7 @@ async function main() {
     inputs[file] = local;
   }
   const digest = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
-  const id = digest(JSON.stringify(inputs)), prefix = 'releases/' + id + '/';
+  const id = digest(JSON.stringify({ sourceCommit, inputs })), prefix = 'releases/' + id + '/';
   const output = {}, release = { id, sourceCommit, files: {} };
   for (const file of files.filter(file => !['business.html', 'offline-sw.js'].includes(file))) {
     const bytes = Buffer.from(inputs[file]); output[prefix + file] = bytes;

@@ -4,7 +4,7 @@
   const protocol = 'workbench-sync-2';
   const paused = '版本不兼容 / 同步已暂停';
   let syncModule = root.WorkbenchOfflineSync;
-  const blockedSync = () => ({ protocol: 'incompatible', status: async () => ({ status: paused, pending: 0, configured: false, reason: '请联网重新打开完整版本；记录、队列和原件未修改。' }), create: () => ({ run: async () => root.dispatchEvent(new Event('workbench-sync-status')), start: () => root.dispatchEvent(new Event('workbench-sync-status')), stop() {} }), configure: async () => { throw new Error(paused); }, applyReview: async () => { throw new Error(paused); }, saveReview: async () => { throw new Error(paused); }, reauthenticate: async () => { throw new Error(paused); } });
+  const blockedSync = () => ({ protocol: 'incompatible', status: async () => ({ status: paused, pending: 0, configured: false, reason: '请联网重新打开完整版本；记录、队列和原件未修改。' }), create: () => ({ run: async () => root.dispatchEvent(new Event('workbench-sync-status')), start: () => root.dispatchEvent(new Event('workbench-sync-status')), stop() {} }), configure: async () => { throw new Error(paused); }, previewConflict: async () => { throw new Error(paused); }, inspectLocal: async () => { throw new Error(paused); }, applyReview: async () => { throw new Error(paused); }, saveReview: async () => { throw new Error(paused); }, reauthenticate: async () => { throw new Error(paused); } });
   const present = value => value && value.protocol !== protocol ? blockedSync() : value;
   syncModule = present(syncModule);
   Object.defineProperty(root, 'WorkbenchOfflineSync', { configurable: true, get: () => syncModule, set(value) { syncModule = present(value); } });
