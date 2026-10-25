@@ -1,6 +1,14 @@
 (function (root) {
   'use strict';
   const name = 'personal-workbench-v2-demo';
+  const protocol = 'workbench-sync-2';
+  const paused = '版本不兼容 / 同步已暂停';
+  let syncModule = root.WorkbenchOfflineSync;
+  const blockedSync = () => ({ protocol: 'incompatible', status: async () => ({ status: paused, pending: 0, configured: false, reason: '请联网重新打开完整版本；记录、队列和原件未修改。' }), create: () => ({ run: async () => root.dispatchEvent(new Event('workbench-sync-status')), start: () => root.dispatchEvent(new Event('workbench-sync-status')), stop() {} }), configure: async () => { throw new Error(paused); }, applyReview: async () => { throw new Error(paused); }, saveReview: async () => { throw new Error(paused); }, reauthenticate: async () => { throw new Error(paused); } });
+  const present = value => value && value.protocol !== protocol ? blockedSync() : value;
+  syncModule = present(syncModule);
+  Object.defineProperty(root, 'WorkbenchOfflineSync', { configurable: true, get: () => syncModule, set(value) { syncModule = present(value); } });
+  function ensureWritable() { if (root.WorkbenchOfflineSync && root.WorkbenchOfflineSync.protocol !== protocol) throw new Error(paused); }
   const digest = async bytes => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), byte => byte.toString(16).padStart(2, '0')).join('');
   async function packFile(file) {
     const data = await file.arrayBuffer();
@@ -27,6 +35,7 @@
     } finally { database.close(); }
   }
   async function commit(state, expectedRevision, file) {
+    ensureWritable();
     const preparedFile = file ? { id: file.id, value: await packFile(file.value) } : null;
     const database = await open();
     try {
@@ -37,6 +46,7 @@
         let saved, problem;
         request.onsuccess = () => {
           try {
+          ensureWritable();
           if ((request.result?.revision ?? -1) !== expectedRevision) { problem = new Error('另一窗口已保存新内容，请刷新后重试，未覆盖其数据'); transaction.abort(); return; }
           saved = structuredClone(state); saved.revision = expectedRevision + 1;
           store.put(saved, 'current');
@@ -83,13 +93,14 @@
     } finally { database.close(); }
   }
   async function changeQueue(key, operation) {
+    ensureWritable();
     const database = await open();
     try {
       return await new Promise((resolve, reject) => {
         const transaction = database.transaction('state', 'readwrite'), store = transaction.objectStore('state');
         const request = store.get(key); let result, problem;
         request.onsuccess = () => {
-          try { result = operation(request.result, store); } catch (error) { problem = error; transaction.abort(); }
+          try { ensureWritable(); result = operation(request.result, store); } catch (error) { problem = error; transaction.abort(); }
         };
         transaction.oncomplete = () => resolve(result);
         transaction.onabort = transaction.onerror = () => reject(problem || transaction.error);
@@ -97,6 +108,7 @@
     } finally { database.close(); }
   }
   async function resolveConflict(jobId, state, expectedRevision, cloud, files) {
+    ensureWritable();
     const preparedFiles = [];
     for (const file of files) preparedFiles.push({ id: file.id, value: await packFile(file.value) });
     const database = await open();
@@ -111,6 +123,7 @@
           const conflictRequest = records.get('conflict:' + jobId);
           conflictRequest.onsuccess = () => {
             try {
+              ensureWritable();
               if (!conflictRequest.result || conflictRequest.result.cloud.hash !== cloud.hash) throw new Error('冲突副本已改变');
               records.put({ local: request.result, conflict: conflictRequest.result, resolvedAt: new Date().toISOString() }, 'resolution-archive:' + crypto.randomUUID());
               saved = structuredClone(state); saved.revision = expectedRevision + 1;
@@ -140,6 +153,7 @@
     } finally { database.close(); }
   }
   async function stageRemote(cloud, expectedState, expectedMeta, expectedConfig) {
+    ensureWritable();
     const database = await open();
     try {
       return await new Promise((resolve, reject) => {
@@ -150,6 +164,7 @@
           const cursor = request.result;
           if (cursor) { values[cursor.key] = cursor.value; cursor.continue(); return; }
           try {
+            ensureWritable();
             if (Object.keys(values).some(key => key.startsWith('queue:'))) return;
             if (JSON.stringify(values.current) !== JSON.stringify(expectedState) || JSON.stringify(values['sync-meta']) !== JSON.stringify(expectedMeta) || JSON.stringify(values['sync-config']) !== JSON.stringify(expectedConfig)) throw new Error('检查期间本机数据或身份已改变，请重新检查');
             const id = 'remote-' + cloud.revision + '-' + cloud.hash;
@@ -175,5 +190,5 @@
       });
     } finally { database.close(); }
   }
-  root.WorkbenchBusinessStore = { read, commit, readFile, fileKeys, name, queueData, changeQueue, resolveConflict, stageRemote };
+  root.WorkbenchBusinessStore = { protocol, read, commit, readFile, fileKeys, name, queueData, changeQueue, resolveConflict, stageRemote };
 })(globalThis);

@@ -3,6 +3,8 @@
   const core = WorkbenchBusiness, storage = WorkbenchBusinessStore;
   const content = document.getElementById('content');
   const notice = document.getElementById('notice');
+  function compatible() { return storage.protocol === 'workbench-sync-2' && WorkbenchOfflineSync.protocol === 'workbench-sync-2'; }
+  if (!compatible()) { document.getElementById('sync-status').textContent = '版本不兼容 / 同步已暂停'; return; }
   const today = () => new Intl.DateTimeFormat('sv-SE', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
   const escape = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
   const options = (values, current) => values.map(value => `<option${value === current ? ' selected' : ''}>${escape(value)}</option>`).join('');
@@ -10,6 +12,7 @@
   let state, route = 'home', selection = '', suggestion = null, busy = false;
   function message(value) { notice.textContent = value; }
   async function save(next, file) {
+    if (!compatible()) throw new Error('版本不兼容 / 同步已暂停');
     state = await storage.commit(next, state.revision, file);
     message('已保存到独立开发测试区；正式数据未改动。');
   }

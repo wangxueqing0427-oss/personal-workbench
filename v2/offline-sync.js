@@ -1,6 +1,10 @@
 (function (root) {
   'use strict';
   const store = root.WorkbenchBusinessStore;
+  const protocol = 'workbench-sync-2';
+  const compatible = () => store === root.WorkbenchBusinessStore && store?.protocol === protocol && typeof store.stageRemote === 'function' && (!root.WorkbenchOfflineSync || root.WorkbenchOfflineSync.protocol === protocol);
+  function ensureCompatible() { if (!compatible()) throw new Error('版本不兼容 / 同步已暂停'); }
+  if (store && store.protocol !== protocol) for (const name of ['commit', 'changeQueue', 'resolveConflict', 'stageRemote']) store[name] = async () => { throw new Error('版本不兼容 / 同步已暂停'); };
   const encoder = new TextEncoder();
   const base64 = bytes => { let result = ''; for (let offset = 0; offset < bytes.length; offset += 8192) result += String.fromCharCode(...bytes.subarray(offset, offset + 8192)); return btoa(result); };
   const unbase64 = text => Uint8Array.from(atob(text), character => character.charCodeAt(0));
@@ -12,6 +16,7 @@
     if ((!local && !staging) || url.pathname !== '/sync' || url.search || url.hash || url.username || url.password) throw new Error('仅允许localhost或同源V2隔离测试Worker，不允许生产地址');
   }
   async function configure(config) {
+    ensureCompatible();
     checkEndpoint(config.url);
     if (!config.token || unbase64(config.key).length !== 32) throw new Error('测试身份不完整');
     const existing = await store.queueData();
@@ -36,6 +41,7 @@
     const fetcher = options.fetch || root.fetch.bind(root);
     const announce = () => root.dispatchEvent(new Event('workbench-sync-status'));
     async function request(config, method, body, suffix = '') {
+      ensureCompatible();
       checkEndpoint(config.url);
       const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), method === 'GET' ? 60000 : 15000);
       try {
@@ -120,6 +126,7 @@
       await store.stageRemote(cloud, local, data.meta, data.config);
     }
     async function run(force = false) {
+      if (!compatible()) { announce(); return; }
       if (busy) return; busy = true;
       let active;
       try {
@@ -153,6 +160,7 @@
         }
         delay = 1000;
       } catch (error) {
+        if (!compatible()) return;
         delay = Math.min(delay * 2, 60000);
         if (!active) await store.changeQueue('remote-check-error', (previous, transaction) => { if (previous !== error.message) transaction.put(error.message, 'remote-check-error'); }).catch(() => {});
         if (active) await store.changeQueue(active.key, (current, transaction) => { if (current) transaction.put({ ...current, status: '同步失败', attempts: current.attempts + 1, error: error.message }, active.key); }).catch(() => {});
@@ -164,10 +172,12 @@
     return { run, start() { stopped = false; root.addEventListener('online', online); root.document.addEventListener('visibilitychange', visible); loop(); }, stop() { stopped = true; clearTimeout(timer); root.removeEventListener('online', online); root.document.removeEventListener('visibilitychange', visible); } };
   }
   async function status() {
+    if (!compatible()) return { status: '版本不兼容 / 同步已暂停', pending: 0, configured: false, reason: '请联网重新打开完整版本；未读取或修改队列和原件。' };
     const data = await store.queueData();
     return { status: data.jobs.some(job => job.status === '存在冲突') ? '存在冲突' : data.remoteError || data.jobs.some(job => job.status === '同步失败') ? '同步失败' : data.jobs.length ? '等待同步' : data.meta ? '已同步' : '等待同步', pending: data.jobs.length, configured: !!data.config, cloudRevision: data.meta?.revision || data.conflicts[0]?.cloud?.revision || 0, firstConnection: !!data.config && !data.meta, reason: data.conflicts.length ? (data.conflicts.some(item => item.origin === 'remote') ? '发现远端更新，已保存待确认副本；尚未覆盖本机记录或原件，请核对后合并。' : !data.meta ? '设备已接入；本机初始数据与已有云端版本不同，尚未上传，等待确认合并。' : '本机与云端版本不同，已暂停上传并保留双方数据。') : data.remoteError };
   }
   async function previewConflict(jobId) {
+    ensureCompatible();
     const data = await store.queueData();
     const conflict = data.conflicts.find(item => item.jobId === jobId);
     if (!conflict || !data.config) throw new Error('冲突或测试身份不存在');
@@ -200,6 +210,7 @@
     return { jobId, cloudRevision: conflict.cloud.revision, cloudHash: conflict.cloud.hash, differences, localOnly, cloudOnly, local: current, cloud: cloud.state, files: cloud.files || [] };
   }
   async function reauthenticate(token) {
+    ensureCompatible();
     const data = await store.queueData();
     if (!data.config) throw new Error('请先配置隔离测试身份');
     checkEndpoint(data.config.url);
@@ -273,5 +284,5 @@
     const after = await store.read();
     return { readOnly: true, scope: { origin: root.location.origin, database: store.name, standalone: !!(root.navigator.standalone || root.matchMedia?.('(display-mode: standalone)').matches), otherBrowserStoresInspected: false }, revision: before?.revision, records: Object.values(before || {}).filter(Array.isArray).reduce((total, items) => total + items.length, 0), references: references.length, storedOriginals: keys.length, originals, cloud, sourceUnchanged: JSON.stringify(before) === JSON.stringify(after) && queueBefore === JSON.stringify(await store.queueData()) };
   }
-  root.WorkbenchOfflineSync = { configure, create, status, hash, previewConflict, saveReview, applyReview, reauthenticate, inspectLocal };
+  root.WorkbenchOfflineSync = { protocol, configure, create, status, hash, previewConflict, saveReview, applyReview, reauthenticate, inspectLocal };
 })(globalThis);
