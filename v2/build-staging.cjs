@@ -16,6 +16,8 @@ async function main() {
   }
   const digest = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
   const id = digest(JSON.stringify({ sourceCommit, inputs })), prefix = 'releases/' + id + '/';
+  const pwa = JSON.parse(inputs['staging.webmanifest']);
+  if (pwa.id !== '/business.html' || pwa.start_url !== '/business.html' || pwa.scope !== '/') throw new Error('PWA identity and launch scope must remain stable');
   const output = {}, release = { id, sourceCommit, files: {} };
   for (const file of files.filter(file => !['business.html', 'offline-sw.js'].includes(file))) {
     const bytes = Buffer.from(inputs[file]); output[prefix + file] = bytes;
@@ -23,6 +25,7 @@ async function main() {
   }
   const html = root => inputs['business.html'].replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '').replace(/<link\b[^>]*rel="stylesheet"[^>]*>/gi, '').replace('等待同步 · 尚未配置隔离后端', '版本核验中 / 同步已暂停').replace('</body>', '<script>globalThis.WorkbenchRelease=' + JSON.stringify(release) + ';WorkbenchRelease.baseUrl=new URL(' + JSON.stringify(root) + ',location.href).href;\n' + inputs['release-loader.js'] + '</script></body>');
   output['business.html'] = Buffer.from(html('./')); output[prefix + 'business.html'] = Buffer.from(html('../../'));
+  output['staging.webmanifest'] = Buffer.from(inputs['staging.webmanifest']);
   output['p0.html'] = Buffer.from(inputs['p0.html'].replace(/src="([^"]+)"/g, (match, file) => 'src="' + prefix + file + '"'));
   const entries = Object.fromEntries(Object.entries(output).map(([name, bytes]) => [name, { sha256: digest(bytes), bytes: bytes.length }]));
   output['offline-sw.js'] = Buffer.from('self.__WORKBENCH_RELEASE__=' + JSON.stringify({ id, entries }) + ';\n' + inputs['offline-sw.js']);

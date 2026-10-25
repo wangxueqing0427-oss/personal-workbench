@@ -2,7 +2,7 @@
   'use strict';
   const release = root.WorkbenchRelease;
   const output = document.getElementById('sync-status');
-  const pause = error => { output.textContent = '版本不兼容 / 同步已暂停 · 完整资源未就绪，请联网重新打开。记录、队列和原件未修改。'; output.dataset.releaseError = error.message; };
+  const pause = error => { if (root.WorkbenchOfflineSync) root.WorkbenchOfflineSync.protocol = 'incompatible'; root.offlineRunner?.stop(); output.textContent = '版本不兼容 / 同步已暂停 · 完整资源未就绪，请联网重新打开。记录、队列和原件未修改。'; output.dataset.releaseError = error.message; };
   try {
     if (!release || !/^[a-f0-9]{64}$/.test(release.id)) throw new Error('Missing release manifest');
     const verified = new Map();
@@ -29,6 +29,17 @@
     const show = async () => { const state = await root.WorkbenchOfflineSync.status(); output.textContent = state.status + ' · ' + state.pending + '项' + (state.reason ? ' · ' + state.reason : ''); };
     root.addEventListener('workbench-sync-status', show); await show(); root.offlineRunner.start();
     document.documentElement.dataset.releaseReady = release.id;
-    if ('serviceWorker' in navigator && (location.hostname === '127.0.0.1' || /^personal-workbench-v2-staging\.[a-z0-9-]+\.workers\.dev$/.test(location.hostname))) await navigator.serviceWorker.register(new URL('offline-sw.js', release.baseUrl), { scope: new URL('./', release.baseUrl).pathname, updateViaCache: 'none' });
+    if ('serviceWorker' in navigator && (location.hostname === '127.0.0.1' || /^personal-workbench-v2-staging\.[a-z0-9-]+\.workers\.dev$/.test(location.hostname))) {
+      const registration = await navigator.serviceWorker.register(new URL('offline-sw.js', release.baseUrl), { scope: new URL('./', release.baseUrl).pathname, updateViaCache: 'none' });
+      const watch = worker => {
+        if (!worker) return;
+        let ready = ['installed', 'activating', 'activated'].includes(worker.state);
+        worker.addEventListener('statechange', () => {
+          if (['installed', 'activating', 'activated'].includes(worker.state)) ready = true;
+          if (worker.state === 'redundant' && !ready) pause(new Error('Release update interrupted'));
+        });
+      };
+      registration.addEventListener('updatefound', () => watch(registration.installing)); watch(registration.installing);
+    }
   } catch (error) { root.offlineRunner?.stop(); pause(error); }
 })(globalThis);
