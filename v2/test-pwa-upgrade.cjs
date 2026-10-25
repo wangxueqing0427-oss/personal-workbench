@@ -37,6 +37,7 @@ async function main() {
   let context = await launch();
   const poll = async operation => { const until = Date.now() + 20000; while (Date.now() < until) { if (await operation()) return; await new Promise(resolve => setTimeout(resolve, 50)); } throw new Error('Isolated PWA transition timed out'); };
   const ready = page => page.waitForFunction(() => !!document.documentElement.dataset.releaseReady);
+  const cached = (page, manifest) => poll(() => page.evaluate(async ({ id, count }) => { const registration = await navigator.serviceWorker.getRegistration(); if (!registration?.active || registration.installing || registration.waiting || !(await caches.has('workbench-v2-release-' + id))) return false; return (await (await caches.open('workbench-v2-release-' + id)).keys()).length === count; }, { id: manifest.releaseId, count: Object.keys(manifest.assets).length - 1 }));
   const snapshot = page => page.evaluate(async () => new Promise((resolve, reject) => { const opening = indexedDB.open('personal-workbench-v2-demo'); opening.onsuccess = () => { const db = opening.result, transaction = db.transaction(['state', 'files'], 'readonly'), state = transaction.objectStore('state').getAll(), keys = transaction.objectStore('state').getAllKeys(), files = transaction.objectStore('files').getAll(); transaction.oncomplete = () => { db.close(); resolve({ state: state.result.map((value, index) => [keys.result[index], value]), files: files.result.map(file => ({ ...file, data: Array.from(new Uint8Array(file.data)) })) }); }; transaction.onabort = () => reject(transaction.error); }; }));
   async function seed(page) { await page.goto(origin + '/fixture'); await page.evaluate(async ({ token, key, origin, digest }) => {
     await WorkbenchBusinessStore.read(); const state = WorkbenchBusiness.empty(); state.revision = 0; state.notes.push({ id: 'pwa-sentinel', progress: 'synthetic PWA evidence' }); state.files.push({ id: 'pwa-original', name: 'synthetic.bin', size: 128, type: 'application/octet-stream' });
@@ -63,7 +64,7 @@ async function main() {
       mode = 'A'; blocked = 'business-store.js'; await page.goto(savedLaunch.start); await page.waitForFunction(() => !!document.getElementById('sync-status')?.dataset.releaseError); assert.match(await page.locator('#sync-status').innerText(), /同步已暂停/); assert.deepEqual(await snapshot(page), sentinel); assert.equal(writeAttempts, 0);
     });
     await check('release-A-keeps-existing-install-identity-and-completes-cache', async () => {
-      blocked = ''; await page.goto(savedLaunch.start); await ready(page); await poll(() => page.evaluate(async () => { const registration = await navigator.serviceWorker.getRegistration(); return !!registration?.active && !registration.installing; }));
+      blocked = ''; await page.goto(savedLaunch.start); await ready(page); await cached(page, manifestA);
       await page.goto(savedLaunch.start); await ready(page); await poll(() => page.evaluate(() => navigator.serviceWorker.controller !== null));
       const identity = await installed(page); assert.deepEqual(identity, savedLaunch); assert.equal(identity.manifestUrl, origin + '/staging.webmanifest'); assert.equal(await page.evaluate(() => WorkbenchReleaseAssets.id), manifestA.releaseId); assert.deepEqual(await snapshot(page), sentinel);
     });
@@ -81,6 +82,7 @@ async function main() {
     await check('same-installed-start-loads-B-after-successful-activation', async () => {
       blocked = ''; await page.evaluate(async () => { const registration = await navigator.serviceWorker.getRegistration(); await registration.update(); });
       await poll(() => page.evaluate(async () => { const registration = await navigator.serviceWorker.getRegistration(); return registration.active !== activeBeforePwaUpdate && !registration.installing; }));
+      await cached(page, manifestB);
       await page.goto(savedLaunch.start); await ready(page); assert.equal(await page.evaluate(() => WorkbenchReleaseAssets.id), manifestB.releaseId); assert.deepEqual(await installed(page), savedLaunch); assert.deepEqual(await snapshot(page), sentinel); assert.equal(writeAttempts, 0);
     });
     await check('A-B-and-legacy-caches-coexist-without-clearing', async () => {

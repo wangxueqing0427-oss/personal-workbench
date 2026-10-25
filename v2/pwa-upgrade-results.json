@@ -1,0 +1,61 @@
+{
+  "releaseA": {
+    "sourceCommit": "0c01906ec273b1e404000307f8ffc1fc7383d685",
+    "id": "f889af55d694ce7437d92409367ce6b24f56c342b362c439474c3712938a6947"
+  },
+  "releaseB": {
+    "sourceCommit": "11995fd05347f3fc51f2f1722f19445200cac79d",
+    "id": "1ec3556e17f87a14f40412e2f36febe0661b0c8c64a5189f516179c561cb228f"
+  },
+  "syntheticOnly": true,
+  "cloudRequests": 0,
+  "writeAttempts": 0,
+  "original": {
+    "bytes": 128,
+    "sha256": "5e60f2a8173b599956a940e32e265d7bd7353c7e86328c89e27c300111766a17"
+  },
+  "installedIdentity": {
+    "manifest": "/staging.webmanifest",
+    "id": "/business.html",
+    "start": "/business.html",
+    "scope": "/"
+  },
+  "passed": 8,
+  "failed": 0,
+  "blocked": 0,
+  "realIphoneInstalled": false,
+  "results": [
+    {
+      "name": "both-generated-manifests-have-stable-root-identity",
+      "status": "PASS"
+    },
+    {
+      "name": "legacy-root-installed-launch-survives-partial-upgrade",
+      "status": "PASS"
+    },
+    {
+      "name": "release-A-keeps-existing-install-identity-and-completes-cache",
+      "status": "PASS"
+    },
+    {
+      "name": "release-A-offline-installed-launch-and-reopen",
+      "status": "PASS"
+    },
+    {
+      "name": "failed-B-install-explicitly-pauses-A-without-writes",
+      "status": "PASS"
+    },
+    {
+      "name": "same-installed-start-loads-B-after-successful-activation",
+      "status": "PASS"
+    },
+    {
+      "name": "A-B-and-legacy-caches-coexist-without-clearing",
+      "status": "PASS"
+    },
+    {
+      "name": "whole-browser-offline-restart-launches-B-with-all-data",
+      "status": "PASS"
+    }
+  ]
+}
