@@ -51,7 +51,7 @@
       configure.onclick = async () => { try { await WorkbenchOfflineSync.configure({ url: endpoint.value, token: token.value, key: key.value }); token.value = ''; key.value = ''; await show(); } catch (error) { panel.append(text('p', error.message)); } };
       advanced.append(endpoint, token, key, configure);
     }
-    const retry = text('button', '重试失败同步'); retry.onclick = async () => { retry.disabled = true; await offlineRunner.run(); await show(); }; panel.append(retry);
+    const retry = text('button', '检查远端更新 / 重试同步'); retry.onclick = async () => { retry.disabled = true; await offlineRunner.run(true); await show(); }; panel.append(retry);
     const credential = document.createElement('input'); credential.type = 'password'; credential.autocomplete = 'off'; credential.placeholder = '新的隔离测试凭证（不修改加密密钥）';
     const login = text('button', '重新验证测试身份');
     login.onclick = async () => { try { await WorkbenchOfflineSync.reauthenticate(credential.value); credential.value = ''; login.textContent = '身份已验证'; } catch (error) { login.textContent = error.message; } };
