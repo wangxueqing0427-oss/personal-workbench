@@ -2,7 +2,7 @@
   "checkedDate": "2026-10-28",
   "sourceCommit": "814173aabc3b26cc29659e050c15ea0eed326c59",
   "sourceTrackedFiles": 326,
-  "unchangedSourceFiles": 316,
+  "unchangedSourceFiles": 315,
   "changedTestFiles": [
     "v2/probe-webkit-persistence.cjs",
     "v2/test-first-device.cjs",
@@ -17,7 +17,7 @@
   ],
   "unexpectedSourceChanges": [],
   "allProductionAndApplicationFilesByteIdentical": true,
-  "scannedTextFiles": 346,
+  "scannedTextFiles": 347,
   "credentialAndPrivatePathViolations": [],
   "genericPathExceptions": [
     {
@@ -38,6 +38,35 @@
     "failed": 0,
     "blocked": 0
   },
+  "cacheCompatibility": {
+    "passed": 11,
+    "failed": 0,
+    "blocked": 0,
+    "localServerWrites": 1,
+    "integrityEvidence": {
+      "sentinelOriginalBytes": 128,
+      "sentinelOriginalSha256": "4c1398e54d53e925cff04da532f4bbaf15f75b5981fc76c2072dfdc6491a9fb1",
+      "comparison": "Complete IndexedDB state, original bytes and metadata compared; queued sentinel and existing archive retained in incompatible cases; only explicit confirmation merges",
+      "cloudCredentialsUsed": false
+    }
+  },
+  "build": {
+    "sourceCommit": "aaa6e5abf466614d5c5ee88360abe4ee0a2851d2",
+    "verifiedAssets": 18,
+    "syntheticOnly": true
+  },
+  "historyBeforeEvidenceCommit": {
+    "commits": 1,
+    "legacyObjectAbsent": true,
+    "parentlessRoot": true
+  },
+  "commands": [
+    "node --check <each changed test>",
+    "node v2/test-remote-discovery.cjs",
+    "node v2/build-staging.cjs",
+    "node v2/test-release-compat.cjs",
+    "git diff --cached --check"
+  ],
   "cloudVersion": "BLOCKED: environment checkout is not exposed by available tools",
   "linuxExecution": "BLOCKED: no Linux execution environment attached",
   "oldPublicHistory": "UNRESOLVED: old branch retained, publicly accessible commit; candidate imports no old objects",
