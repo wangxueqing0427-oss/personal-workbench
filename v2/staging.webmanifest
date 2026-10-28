@@ -1,0 +1,10 @@
+{
+  "id": "/business.html",
+  "name": "个人工作台 V2 独立测试",
+  "short_name": "工作台测试",
+  "start_url": "/business.html",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f4f7fb",
+  "theme_color": "#176fc7"
+}

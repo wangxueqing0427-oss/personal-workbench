@@ -1,0 +1,20 @@
+{
+  "sourceCommit": "4986fd5771ee3db83de3c93a0c6147709d43703b",
+  "syntheticOnly": true,
+  "files": {
+    "business.html": "d60008b897ad69d5ee12ad976ddafbef599d941dbfc29ae479ad1271cb190ad3",
+    "business.css": "f9663d4a0a0df757cfc12ea70f1df3a3941dbdf5c1cf0aece89d97937194a08e",
+    "business-core.js": "f7f0df51525cb2f39346a8738abe2360ceff59ba38c76a23f2f73140c4363bdf",
+    "business-store.js": "b1b7d26e3787d3988270500d575680d11b218a0c1ff0b9ce29165cff4585ab8f",
+    "offline-sync.js": "95b2737b50314a72f97a28c4ed8b5dfc558b431b015455842de1926dc631e347",
+    "business-ui.js": "7a225fdd85b486de7d9ecf141db05121381875c61c7f3ffed6d0624d1de17d07",
+    "sync-panel.js": "29cea7aafac514c85e52036cdc8f264806286615ccfaab02e59690b1679fad22",
+    "device-pair.js": "eeff63087a85eb11d5f2618ef64362b7c772dec72cb2245f55a18221148d6f22",
+    "staging.webmanifest": "23a47306cbf5247e3ed16cb2692855b80dd514bf8b30c03c28d90be2fad2628d",
+    "staging-init.js": "437ac08d27a19c9980230d311d1696bfd756a8195d0732eaa6f983e8fe1496ef",
+    "offline-sw.js": "b3fdac6cc5199682353a5916e67d71e8cb321f9fc1b2579fd1c1910ade30a424",
+    "p0.html": "8ac9aee2b954f889650cbe05c692cca5f0bc3784be5cb1c1db35ff3b67b84607",
+    "p0-ui.js": "6eca667a20e1d9050438d623190591438af04cff5013ffa92e48cc018117fedf",
+    "safety-core.js": "ab7bfa231f56380af2871648044e3f6351142ecb5fb84cc3b373f05b7c5a5e3b"
+  }
+}

@@ -1,0 +1,63 @@
+{
+  "checkedAt": "2026-10-23T14:54:43.161Z",
+  "baselineCommit": "f8fb8ccf0bbd9eb9b5c792af3d270ad4ffa1e3f9",
+  "playwright": "1.62.1",
+  "suites": [
+    {
+      "name": "Edge browser-emulation persistent offline",
+      "status": "PASS",
+      "assertions": 25,
+      "evidence": "offline-test-results.json"
+    },
+    {
+      "name": "WebKit origin-stopped persistent offline control",
+      "status": "PASS",
+      "assertions": 25,
+      "evidence": "offline-webkit-origin-stopped-results.json"
+    },
+    {
+      "name": "WebKit original browser-emulation",
+      "status": "BLOCKED",
+      "assertions": 0,
+      "evidence": "offline-webkit-browser-emulation-results.json"
+    },
+    {
+      "name": "WebKit backup and isolated restore",
+      "status": "PASS",
+      "assertions": 56
+    },
+    {
+      "name": "WebKit business desktop/mobile",
+      "status": "PASS",
+      "assertions": 70,
+      "evidence": "phase2-webkit-results.json"
+    },
+    {
+      "name": "Local HTTP sync",
+      "status": "PASS",
+      "assertions": 18,
+      "evidence": "sync-http-results.json"
+    },
+    {
+      "name": "Worker SQLite/auth/CAS simulation",
+      "status": "PASS",
+      "assertions": 42
+    }
+  ],
+  "passedAssertions": 236,
+  "finalFailedSuites": 0,
+  "blockedSuites": 1,
+  "rawBlockedRunExitCode": 2,
+  "sharedCloudRequests": 0,
+  "productionAccessed": false,
+  "applicationRuntimeChanged": false,
+  "deployed": false,
+  "repeatIPhoneAcceptanceRequired": false,
+  "intermediateFailuresDisclosed": [
+    "Original Unicode profile failed even without app",
+    "ASCII profile plus original TEMP failed CacheStorage",
+    "Longer temporary directory combination failed; shorter paths worked",
+    "60-second origin-recovery wait failed; rerun with 120-second window passed"
+  ],
+  "probeEvidence": "webkit-persistence-probe-results.json"
+}

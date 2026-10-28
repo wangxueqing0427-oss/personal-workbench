@@ -1,0 +1,116 @@
+{
+  "checkedAt": "2026-10-23T14:53:13.054Z",
+  "passed": 25,
+  "failed": 0,
+  "engine": "webkit",
+  "outageMode": "origin-stopped",
+  "checks": [
+    {
+      "name": "离线事务保存记录原件及队列",
+      "status": "PASS"
+    },
+    {
+      "name": "关闭整个浏览器重开断网仍有记录",
+      "status": "PASS"
+    },
+    {
+      "name": "浏览器重启未同步任务保留",
+      "status": "PASS"
+    },
+    {
+      "name": "离线重开大附件保留",
+      "status": "PASS"
+    },
+    {
+      "name": "恢复联网自动尝试且完成同步",
+      "status": "PASS"
+    },
+    {
+      "name": "恢复网络自动同步全部持久任务，实际版本：5",
+      "status": "PASS"
+    },
+    {
+      "name": "多附件随同记录完整提交",
+      "status": "PASS"
+    },
+    {
+      "name": "三份原件长度及SHA-256一致",
+      "status": "PASS"
+    },
+    {
+      "name": "写入成功但响应丢失显示失败且队列保留",
+      "status": "PASS"
+    },
+    {
+      "name": "重新读取识别已成功包，不重复创建",
+      "status": "PASS"
+    },
+    {
+      "name": "备份和隔离恢复包含队列身份及原件",
+      "status": "PASS"
+    },
+    {
+      "name": "模拟存储失败事务整体回滚",
+      "status": "PASS"
+    },
+    {
+      "name": "失败事务不覆盖原业务记录",
+      "status": "PASS"
+    },
+    {
+      "name": "QuotaExceeded故障注入：业务原件队列一起回滚",
+      "status": "PASS"
+    },
+    {
+      "name": "另一设备旧基线不覆盖云端",
+      "status": "PASS"
+    },
+    {
+      "name": "双方快照持久留存供用户处理",
+      "status": "PASS"
+    },
+    {
+      "name": "核对草稿不覆盖本地或解除冲突",
+      "status": "PASS"
+    },
+    {
+      "name": "手机宽度实际点击核对界面",
+      "status": "PASS"
+    },
+    {
+      "name": "重新认证不改变密钥或基线，错误身份拒绝",
+      "status": "PASS"
+    },
+    {
+      "name": "核对后新增编辑阻止旧核对结果覆盖",
+      "status": "PASS"
+    },
+    {
+      "name": "显式合并保留两端记录和附件并安全同步",
+      "status": "PASS"
+    },
+    {
+      "name": "分片中断后已确认进度持久保留",
+      "status": "PASS"
+    },
+    {
+      "name": "重新打开后续传剩余分片成功",
+      "status": "PASS"
+    },
+    {
+      "name": "超同步容量保留任务且不提交部分附件",
+      "status": "PASS"
+    },
+    {
+      "name": "超容量原件继续保留在IndexedDB",
+      "status": "PASS"
+    }
+  ],
+  "browser": "webkit移动尺寸持久测试配置",
+  "profilePathAscii": true,
+  "cloudRequests": 0,
+  "productionConnected": false,
+  "iphoneTested": false,
+  "quotaTest": "QuotaExceeded及事务中断故障注入，不是实际设备磁盘耗尽",
+  "largestAttachmentBytes": 2097152
+}

@@ -1,0 +1,8 @@
+function lessonData(){const lessons=[{title:"把问题说清楚：目标+背景+限制",practice:"把一个模糊问题改写成：我想达成什么、现在有什么信息、有哪些限制？"},{title:"让 AI 先给清单，再给解释",practice:"要求 AI 先输出 3-5 个动作，再说明每个动作的原因。"},{title:"让 AI 做复盘，而不是只做总结",practice:"复盘时追问：下一步是什么？如果不做会有什么影响？"},{title:"用结构化字段管理重要信息",practice:"把医院、联系人、项目、截止时间分别写清楚，AI更容易持续跟进。"}];return lessons[new Date().getDate()%lessons.length]}
+function dailyLearningCard(){const lesson=lessonData();const done=state.learning?.completedDates?.includes(today());return `<section class="card"><div class="row"><div><h2>今日 AI 小课堂</h2><div class="small">每天学一个能马上用在工作台里的方法。</div></div><span class="tag ${done?"green":""}">${done?"已完成":"今日学习"}</span></div><h3>${esc(lesson.title)}</h3><p class="muted">练习：${esc(lesson.practice)}</p><button class="btn" onclick="completeLesson()">${done?"今天已学会":"标记今天学会"}</button></section>`}
+function dailyReviewCard(){return `<section class="card"><h2>今日复盘</h2><textarea id="dailyReviewText" class="field" rows="3" placeholder="今天完成了什么？遇到什么卡点？明天最重要的一步是什么？"></textarea><button class="btn secondary" onclick="saveDailyReview()">保存复盘</button></section>`}
+function completeLesson(){if(!state.learning)state.learning={completedDates:[],reviews:[]};if(!state.learning.completedDates.includes(today()))state.learning.completedDates.push(today());save();render()}
+function saveDailyReview(){const text=document.getElementById("dailyReviewText")?.value.trim();if(!text)return;if(!state.learning)state.learning={completedDates:[],reviews:[]};state.learning.reviews.unshift({id:`review-${Date.now()}`,date:today(),text});save();feedback.review="今日复盘已保存";render()}
+const homeV070=homeView;
+homeView=function(){return dailyLearningCard()+homeV070()+dailyReviewCard()}
+render()

@@ -1,0 +1,111 @@
+{
+  "checkedAt": "2026-10-23T09:33:49.425Z",
+  "readOnly": true,
+  "productionAccessed": false,
+  "serverWrites": 0,
+  "baselineRevision": 9,
+  "baselineEnvelopeHash": "c1045bbf50eb2b33c19dd927c9f55aea23d85876ab5ad8763e256882f6615ee3",
+  "currentRevision": 10,
+  "currentEnvelopeHash": "dcb39f9cbd73d763e74578582e2bff6085a603880c106c8e9f9fb582036dbfa4",
+  "committedAt": "2026-10-23T08:53:39.624Z",
+  "previousHash": "c1045bbf50eb2b33c19dd927c9f55aea23d85876ab5ad8763e256882f6615ee3",
+  "historicalVersions": 10,
+  "requests": [
+    {
+      "method": "GET",
+      "path": "/sync",
+      "status": 200,
+      "cfRay": "a4efbde42c73ccd3-LAX",
+      "serverDate": "Fri, 23 Oct 2026 09:33:43 GMT"
+    },
+    {
+      "method": "GET",
+      "path": "/sync/diagnostics",
+      "status": 200,
+      "cfRay": "a4efbdf08a9dccd3-LAX",
+      "serverDate": "Fri, 23 Oct 2026 09:33:44 GMT"
+    },
+    {
+      "method": "GET",
+      "path": "/sync/history/9",
+      "status": 200,
+      "cfRay": "a4efbdf328cbccd3-LAX",
+      "serverDate": "Fri, 23 Oct 2026 09:33:45 GMT"
+    },
+    {
+      "method": "GET",
+      "path": "/sync/history/10",
+      "status": 200,
+      "cfRay": "a4efbdfd3fa7ccd3-LAX",
+      "serverDate": "Fri, 23 Oct 2026 09:33:46 GMT"
+    },
+    {
+      "method": "GET",
+      "path": "/sync",
+      "status": 200,
+      "cfRay": "a4efbe076862ccd3-LAX",
+      "serverDate": "Fri, 23 Oct 2026 09:33:48 GMT"
+    }
+  ],
+  "comparison": {
+    "beforeRecords": 34,
+    "afterRecords": 35,
+    "unchangedOldRecords": 34,
+    "removed": [],
+    "changed": [],
+    "added": [
+      {
+        "collection": "notes",
+        "id": "4b033ae9-7400-4325-a26a-6be5bc976a6a",
+        "sha256": "3c320be7f6cf1ee097fcc55851de79c25c19065e126c6086beaeb00630c38551"
+      }
+    ],
+    "duplicateIds": [],
+    "targetRecordOccurrences": [
+      {
+        "collection": "notes",
+        "id": "4b033ae9-7400-4325-a26a-6be5bc976a6a",
+        "sha256": "3c320be7f6cf1ee097fcc55851de79c25c19065e126c6086beaeb00630c38551"
+      }
+    ],
+    "originals": [
+      {
+        "id": "f402a10c-5f64-4051-8fb9-78f057183d61",
+        "bytesBefore": 524288,
+        "bytesAfter": 524288,
+        "sha256Before": "afeaa3a39f2cedf8cc1844c06d2f2fd5cf016ce968f33ccbb31c364ce7e89e71",
+        "sha256After": "afeaa3a39f2cedf8cc1844c06d2f2fd5cf016ce968f33ccbb31c364ce7e89e71",
+        "unchanged": true
+      },
+      {
+        "id": "647db2da-bf1f-4416-827c-151d0eb36462",
+        "bytesBefore": 524288,
+        "bytesAfter": 524288,
+        "sha256Before": "afeaa3a39f2cedf8cc1844c06d2f2fd5cf016ce968f33ccbb31c364ce7e89e71",
+        "sha256After": "afeaa3a39f2cedf8cc1844c06d2f2fd5cf016ce968f33ccbb31c364ce7e89e71",
+        "unchanged": true
+      }
+    ],
+    "afterOriginals": 2
+  },
+  "checks": {
+    "currentRevisionTen": true,
+    "stableServerRead": true,
+    "diagnosticsAgree": true,
+    "oldServerHistoryMatchesSavedBaseline": true,
+    "committedHistoryMatchesCurrent": true,
+    "oneCommitAfterNine": true,
+    "originalThirtyFourUnchanged": true,
+    "exactlyOneNewRecord": true,
+    "targetPresentExactlyOnce": true,
+    "noDuplicateRecordIds": true,
+    "bothOriginalsIdentical": true
+  },
+  "passed": 11,
+  "failed": 0,
+  "limitations": [
+    "Current record occurrence and committed version history are verified; individual HTTP upload attempt count and physical device identity are not logged by this audit.",
+    "Phone close/reopen retention and offline behavior are user-observed physical-device evidence, not remotely observed.",
+    "No production release or PR merge; Windows WebKit persistent-profile test limitation remains."
+  ]
+}

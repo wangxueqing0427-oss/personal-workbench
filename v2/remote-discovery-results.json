@@ -1,0 +1,108 @@
+{
+  "scope": "loopback synthetic Chromium-family browser only; no shared cloud accessed",
+  "platform": "win32",
+  "channel": "msedge",
+  "summary": {
+    "passed": 12,
+    "failed": 0,
+    "blocked": 0
+  },
+  "results": [
+    {
+      "name": "Upload acknowledgement lost remains idempotent",
+      "input": "A commits synthetic record",
+      "steps": "Drop successful PUT response; retry original queued packet",
+      "expected": "Server advances once only, local queue clears on retry, record unique",
+      "actual": "Server advances once only, local queue clears on retry, record unique",
+      "status": "PASS"
+    },
+    {
+      "name": "A→B empty queue discovery and explicit merge",
+      "input": "Two synced synthetic devices",
+      "steps": "A adds record; B checks; previews and explicitly merges",
+      "expected": "Remote-only record downloaded once; local unchanged before confirmation; retained after merge",
+      "actual": "Remote-only record downloaded once; local unchanged before confirmation; retained after merge",
+      "status": "PASS"
+    },
+    {
+      "name": "Unchanged checks are read-only and throttled",
+      "input": "B at current remote revision",
+      "steps": "Check twice, including immediate automatic recheck; count IndexedDB writes",
+      "expected": "Only one diagnostics GET, no snapshot GET, zero puts/adds/deletes",
+      "actual": "Only one diagnostics GET, no snapshot GET, zero puts/adds/deletes",
+      "status": "PASS"
+    },
+    {
+      "name": "Dirty B and shared-project conflict",
+      "input": "A and B edit same project",
+      "steps": "B commits unsynced edit; A syncs edit; B runs",
+      "expected": "Both versions retained; no upload/overwrite by B",
+      "actual": "Both versions retained; no upload/overwrite by B",
+      "status": "PASS"
+    },
+    {
+      "name": "Concurrent local edit during download",
+      "input": "Empty B at check start",
+      "steps": "Commit B edit during snapshot response",
+      "expected": "No stale remote job staged; B edit and normal upload queue preserved",
+      "actual": "No stale remote job staged; B edit and normal upload queue preserved",
+      "status": "PASS"
+    },
+    {
+      "name": "Lost response and retry",
+      "input": "Remote addition with empty B",
+      "steps": "Drop full GET; retry twice",
+      "expected": "First attempt preserves local; retry stages only one pending copy",
+      "actual": "First attempt preserves local; retry stages only one pending copy",
+      "status": "PASS"
+    },
+    {
+      "name": "Version changes between diagnostics and download",
+      "input": "A updates twice during B check",
+      "steps": "Advance A after captured diagnostics response; retry B",
+      "expected": "Mismatch blocks stale staging, next check stages newest revision",
+      "actual": "Mismatch blocks stale staging, next check stages newest revision",
+      "status": "PASS"
+    },
+    {
+      "name": "Corrupt response rejected",
+      "input": "Valid cursor, tampered encrypted payload",
+      "steps": "Change tag before client receives snapshot",
+      "expected": "No staged snapshot or business write; original local preserved",
+      "actual": "No staged snapshot or business write; original local preserved",
+      "status": "PASS"
+    },
+    {
+      "name": "Rollback and same-version hash mismatch blocked",
+      "input": "B at confirmed cursor",
+      "steps": "Return older cursor then same revision with different hash",
+      "expected": "Both checks fail closed; no business writes or pending snapshot",
+      "actual": "Both checks fail closed; no business writes or pending snapshot",
+      "status": "PASS"
+    },
+    {
+      "name": "Concurrent empty-queue checks stage one copy",
+      "input": "B with remote addition",
+      "steps": "Two independent sync runners check simultaneously",
+      "expected": "Atomic transaction stages one pending job and one remote snapshot",
+      "actual": "Atomic transaction stages one pending job and one remote snapshot",
+      "status": "PASS"
+    },
+    {
+      "name": "Original integrity after confirmed receive",
+      "input": "A adds synthetic 512 KiB original",
+      "steps": "B discovers, explicitly confirms, reads original and metadata",
+      "expected": "Bytes, SHA-256, name, MIME, size and timestamp identical; no duplicate file references",
+      "actual": "Bytes, SHA-256, name, MIME, size and timestamp identical; no duplicate file references",
+      "status": "PASS"
+    },
+    {
+      "name": "Pending review survives whole-browser restart",
+      "input": "Fresh persistent synthetic B",
+      "steps": "Discover; close browser context; reopen same isolated profile",
+      "expected": "Same cursor, snapshot, job ID and local data survive; no duplicate request/job",
+      "actual": "Same cursor, snapshot, job ID and local data survive; no duplicate request/job",
+      "status": "PASS"
+    }
+  ]
+}

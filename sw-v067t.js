@@ -1,0 +1,5 @@
+const CACHE="personal-workbench-mobile-bridge-v098";
+const STABLE="./index.html?v=0980922";
+self.addEventListener("install",function(event){event.waitUntil(caches.open(CACHE).then(function(cache){return cache.add(STABLE).catch(function(){return null})}).then(function(){return self.skipWaiting()}))});
+self.addEventListener("activate",function(event){event.waitUntil(caches.keys().then(function(keys){return Promise.all(keys.filter(function(key){return key.indexOf("personal-workbench-")===0&&key!==CACHE}).map(function(key){return caches.delete(key)}))}).then(function(){return self.clients.claim()}))});
+self.addEventListener("fetch",function(event){if(event.request.method!=="GET")return;event.respondWith(fetch(event.request).then(function(response){if(response.ok){var copy=response.clone();caches.open(CACHE).then(function(cache){cache.put(event.request,copy)})}return response}).catch(function(){return caches.match(event.request).then(function(cached){return cached||caches.match(STABLE)})}))});

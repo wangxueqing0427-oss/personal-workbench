@@ -1,0 +1,140 @@
+{
+  "label": "inventory",
+  "inspectedAt": "2026-10-21T09:47:02.310Z",
+  "localCommit": "957856bb058114f9f769a4ecf1191a800419c692",
+  "reference": "957856b",
+  "assets": [
+    {
+      "name": "business.html",
+      "sha256": "d60008b897ad69d5ee12ad976ddafbef599d941dbfc29ae479ad1271cb190ad3",
+      "bytes": 1798,
+      "matchesLocal": true,
+      "matchesReference": true
+    },
+    {
+      "name": "business.css",
+      "sha256": "f9663d4a0a0df757cfc12ea70f1df3a3941dbdf5c1cf0aece89d97937194a08e",
+      "bytes": 4116,
+      "matchesLocal": true,
+      "matchesReference": true
+    },
+    {
+      "name": "business-core.js",
+      "sha256": "f7f0df51525cb2f39346a8738abe2360ceff59ba38c76a23f2f73140c4363bdf",
+      "bytes": 13427,
+      "matchesLocal": true,
+      "matchesReference": true
+    },
+    {
+      "name": "business-store.js",
+      "sha256": "b1b7d26e3787d3988270500d575680d11b218a0c1ff0b9ce29165cff4585ab8f",
+      "bytes": 9543,
+      "matchesLocal": true,
+      "matchesReference": true
+    },
+    {
+      "name": "offline-sync.js",
+      "sha256": "95b2737b50314a72f97a28c4ed8b5dfc558b431b015455842de1926dc631e347",
+      "bytes": 18786,
+      "matchesLocal": true,
+      "matchesReference": true
+    },
+    {
+      "name": "business-ui.js",
+      "sha256": "7a225fdd85b486de7d9ecf141db05121381875c61c7f3ffed6d0624d1de17d07",
+      "bytes": 21713,
+      "matchesLocal": true,
+      "matchesReference": true
+    },
+    {
+      "name": "sync-panel.js",
+      "sha256": "29cea7aafac514c85e52036cdc8f264806286615ccfaab02e59690b1679fad22",
+      "bytes": 9677,
+      "matchesLocal": true,
+      "matchesReference": true
+    },
+    {
+      "name": "device-pair.js",
+      "sha256": "eeff63087a85eb11d5f2618ef64362b7c772dec72cb2245f55a18221148d6f22",
+      "bytes": 2893,
+      "matchesLocal": true,
+      "matchesReference": true
+    },
+    {
+      "name": "staging.webmanifest",
+      "sha256": "23a47306cbf5247e3ed16cb2692855b80dd514bf8b30c03c28d90be2fad2628d",
+      "bytes": 249,
+      "matchesLocal": true,
+      "matchesReference": true
+    },
+    {
+      "name": "staging-init.js",
+      "sha256": "437ac08d27a19c9980230d311d1696bfd756a8195d0732eaa6f983e8fe1496ef",
+      "bytes": 1871,
+      "matchesLocal": true,
+      "matchesReference": true
+    },
+    {
+      "name": "offline-sw.js",
+      "sha256": "b3fdac6cc5199682353a5916e67d71e8cb321f9fc1b2579fd1c1910ade30a424",
+      "bytes": 1110,
+      "matchesLocal": true,
+      "matchesReference": true
+    },
+    {
+      "name": "p0.html",
+      "sha256": "8ac9aee2b954f889650cbe05c692cca5f0bc3784be5cb1c1db35ff3b67b84607",
+      "bytes": 2053,
+      "matchesLocal": true,
+      "matchesReference": true
+    },
+    {
+      "name": "p0-ui.js",
+      "sha256": "6eca667a20e1d9050438d623190591438af04cff5013ffa92e48cc018117fedf",
+      "bytes": 3183,
+      "matchesLocal": true,
+      "matchesReference": true
+    },
+    {
+      "name": "safety-core.js",
+      "sha256": "ab7bfa231f56380af2871648044e3f6351142ecb5fb84cc3b373f05b7c5a5e3b",
+      "bytes": 17771,
+      "matchesLocal": true,
+      "matchesReference": true
+    }
+  ],
+  "modules": [
+    {
+      "name": "staging-worker.js",
+      "sha256": "93360ceadef8a98e3644ce86ce8f8fdf5afb2a08cd3eb271409730bffc83d168",
+      "bytes": 13505
+    }
+  ],
+  "activeVersions": [
+    {
+      "version_id": "d4c54788-0c3e-44a8-a801-2fa066dafe5b",
+      "percentage": 100
+    }
+  ],
+  "cloud": {
+    "revision": 9,
+    "hash": "c1045bbf50eb2b33c19dd927c9f55aea23d85876ab5ad8763e256882f6615ee3",
+    "records": 34,
+    "originals": [
+      {
+        "id": "f402a10c-5f64-4051-8fb9-78f057183d61",
+        "bytes": 524288,
+        "sha256": "afeaa3a39f2cedf8cc1844c06d2f2fd5cf016ce968f33ccbb31c364ce7e89e71"
+      },
+      {
+        "id": "647db2da-bf1f-4416-827c-151d0eb36462",
+        "bytes": 524288,
+        "sha256": "afeaa3a39f2cedf8cc1844c06d2f2fd5cf016ce968f33ccbb31c364ce7e89e71"
+      }
+    ]
+  },
+  "readsOnly": true,
+  "encryptedBackupRetained": true,
+  "buildVerified": true,
+  "publishedSource": "957856bb058114f9f769a4ecf1191a800419c692"
+}

@@ -1,0 +1,12 @@
+{
+  "checkedAt": "2026-10-23T14:39:32.162Z",
+  "engine": "webkit",
+  "passed": 0,
+  "failed": 1,
+  "status": "FAIL",
+  "checks": [],
+  "error": "page.evaluate: NotReadableError: The I/O read operation failed.",
+  "cloudRequests": 0,
+  "productionConnected": false,
+  "iphoneTested": false
+}

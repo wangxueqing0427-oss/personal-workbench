@@ -1,0 +1,5 @@
+const CACHE="personal-workbench-v082t-daily-brief";
+const ASSETS=["v082t.html","app-v067t.js","app-v068t.js","app-v069t.js","app-v070t.js","app-v071t.js","app-v072t.js","app-v073t.js","app-v074t.js","app-v075t.js","app-v076t.js","app-v077t.js","app-v080t.js","app-v081t.js","app-v082t.js","style.css","manifest.json"];
+self.addEventListener("install",function(event){event.waitUntil(caches.open(CACHE).then(function(cache){return cache.addAll(ASSETS)}).then(function(){return self.skipWaiting()}))});
+self.addEventListener("activate",function(event){event.waitUntil(caches.keys().then(function(keys){return Promise.all(keys.filter(function(key){return key.startsWith("personal-workbench-")&&key!==CACHE}).map(function(key){return caches.delete(key)}))}).then(function(){return self.clients.claim()}))});
+self.addEventListener("fetch",function(event){event.respondWith(caches.match(event.request).then(function(cached){if(cached)return cached;return fetch(event.request).then(function(response){if(response.ok){var copy=response.clone();caches.open(CACHE).then(function(cache){cache.put(event.request,copy)})}return response})}))});

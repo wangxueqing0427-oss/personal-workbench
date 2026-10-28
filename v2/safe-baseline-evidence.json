@@ -1,0 +1,46 @@
+{
+  "checkedDate": "2026-10-28",
+  "sourceCommit": "814173aabc3b26cc29659e050c15ea0eed326c59",
+  "sourceTrackedFiles": 326,
+  "unchangedSourceFiles": 316,
+  "changedTestFiles": [
+    "v2/probe-webkit-persistence.cjs",
+    "v2/test-first-device.cjs",
+    "v2/test-issue1-remote.cjs",
+    "v2/test-mobile-pair.cjs",
+    "v2/test-offline.cjs",
+    "v2/test-phase2.cjs",
+    "v2/test-pwa-upgrade.cjs",
+    "v2/test-release-compat.cjs",
+    "v2/test-safety.cjs",
+    "v2/test-workerd.cjs"
+  ],
+  "unexpectedSourceChanges": [],
+  "allProductionAndApplicationFilesByteIdentical": true,
+  "scannedTextFiles": 346,
+  "credentialAndPrivatePathViolations": [],
+  "genericPathExceptions": [
+    {
+      "file": "vendor-pdf-worker-4.10.38.mjs",
+      "reason": "upstream PDF.js WASM generic web_user virtual filesystem, not personal host path"
+    }
+  ],
+  "fixtureIntegrity": {
+    "passed": 14,
+    "failed": 0
+  },
+  "syntax": {
+    "passed": 10,
+    "failed": 0
+  },
+  "remoteDiscovery": {
+    "passed": 12,
+    "failed": 0,
+    "blocked": 0
+  },
+  "cloudVersion": "BLOCKED: environment checkout is not exposed by available tools",
+  "linuxExecution": "BLOCKED: no Linux execution environment attached",
+  "oldPublicHistory": "UNRESOLVED: old branch retained, publicly accessible commit; candidate imports no old objects",
+  "sharedCloudRequests": 0,
+  "productionWrites": 0
+}

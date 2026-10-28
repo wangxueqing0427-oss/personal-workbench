@@ -1,0 +1,57 @@
+{
+  "passed": 26,
+  "failed": 0,
+  "engine": "edge",
+  "phoneAccess": false,
+  "cloudWrites": 0,
+  "cloudRevision": 9,
+  "capturedReplay": true,
+  "initialCounts": {
+    "localOnly": 6,
+    "cloudOnly": 34,
+    "differences": 0
+  },
+  "initialInventory": {
+    "readOnly": true,
+    "scope": {
+      "origin": "https://personal-workbench-v2-staging.wangxueqing0427.workers.dev",
+      "database": "personal-workbench-v2-demo",
+      "standalone": false,
+      "otherBrowserStoresInspected": false
+    },
+    "revision": 0,
+    "records": 6,
+    "references": 0,
+    "storedOriginals": 0,
+    "originals": [],
+    "cloud": {
+      "cached": true,
+      "revision": 9,
+      "records": 34,
+      "originals": [
+        {
+          "id": "f402a10c-5f64-4051-8fb9-78f057183d61",
+          "bytes": 524288,
+          "sha256": "afeaa3a39f2cedf8cc1844c06d2f2fd5cf016ce968f33ccbb31c364ce7e89e71"
+        },
+        {
+          "id": "647db2da-bf1f-4416-827c-151d0eb36462",
+          "bytes": 524288,
+          "sha256": "afeaa3a39f2cedf8cc1844c06d2f2fd5cf016ce968f33ccbb31c364ce7e89e71"
+        }
+      ],
+      "references": 2,
+      "missing": []
+    },
+    "sourceUnchanged": true
+  },
+  "inventoryFaultProbes": {
+    "orphanFound": true,
+    "missingDetected": true,
+    "ioNotCountedAsZero": true,
+    "catalogFailsClosed": true
+  },
+  "archiveIsolatedRestore": true,
+  "faultInjection": "original read + transaction write",
+  "duplicateMergeRejected": true
+}
