@@ -6,7 +6,7 @@ const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const BASELINE = '6c70c706ce9dec666040b20c41e68b825209be9c';
 const required = ['AGENTS.md', 'CURRENT.md', 'ROADMAP.md', 'docs/V2-DEVELOPMENT-OPERATING-PROTOCOL.md', 'docs/templates/V2-TASK-REPORT.md', '.github/workflows/v2-management-gate.yml', 'scripts/v2-management-check.cjs'];
-const allowed = file => ['AGENTS.md', 'CURRENT.md', 'ROADMAP.md', '.github/workflows/v2-management-gate.yml', 'scripts/v2-management-check.cjs'].includes(file) || /^docs\/[A-Za-z0-9_./-]+\.md$/.test(file);
+const allowed = file => ['AGENTS.md', 'CURRENT.md', 'ROADMAP.md', '.github/workflows/v2-management-gate.yml', 'scripts/v2-management-check.cjs', 'scripts/v2-automation.cjs'].includes(file) || /^docs\/[A-Za-z0-9_./-]+\.md$/.test(file);
 function issues(file, text) {
   const found = [];
   if (/(^|\/)(\.dev\.vars[^/]*|\.env(?:\.[^/]*)?|[^/]*\.(?:pem|pfx|p12|xlsx?|docx?|pdf|zip|sqlite|db))$/i.test(file)) found.push('sensitive-file-name');

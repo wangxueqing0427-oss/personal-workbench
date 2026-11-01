@@ -38,3 +38,24 @@ git diff --check
 - 用户已明确要求本轮提交和Draft PR，故仅交付新管理分支；不合并、不部署、不操作真实或合成云端数据。
 
 下一步：用户与ChatGPT审核本PR并决定是否合并到安全开发分支；Codex停止，后续仅执行获批准的单项P0。管理通过不等于试运行或生产批准。
+
+## 追加：复用清华流程的首批自动化（实际执行）
+
+参考已存在的开发流程升级规范、Playwright配置、汇总脚本及HTTPS/离线工作流，只借鉴隔离执行、双引擎取证、有界失败、自动报告；未复制其依赖或授权。
+
+新增 scripts/v2-automation.cjs：复用现有测试，在每次新建的忽略目录内复制受跟踪V2源码，不复制旧报告、凭据、数据库或构建目录。限制环境变量、单组180秒、每组一次；失败优先于BLOCKED，缺失报告不得PASS。自动生成JSON、Markdown和CI摘要，校验源码哈希及Git状态未变。管理PR工作流追加无需安装依赖的合成HTTP测试，无部署能力。
+
+实际命令：node scripts/v2-automation.cjs --profile smoke。来源118e0a288ce3ab03f6dec4f6682dfade01eb601d，运行器为当时未提交改动，哈希5c02e8438e3bfef78cf617240cecd86384eb88a376f7270a829a1c9d883d8bb5。后续仅调整FAIL优先于BLOCKED分类，不改测试业务逻辑。
+
+| 已复用测试 | 实际结果 |
+|---|---|
+| 合成HTTP同步 | PASS，18断言 |
+| Chromium远端发现 | PASS，12场景 |
+| Chromium备份恢复 | PASS，两个尺寸56断言 |
+| WebKit备份恢复 | PASS，两个尺寸56断言 |
+
+四组PASS、0 FAIL、0 BLOCKED；源码与Git状态未改变。原始证据：.tools/autonomy/945f5196-f2ef-4cff-93fb-7191df6dd14a/summary.json及各组日志。Chromium使用现有Edge通道；WebKit使用已有浏览器，不代表真实iPhone。未重新构建、未操作旧备份和共享云端。
+
+尚未实现/本批NOT RUN：统一HTTPS验收、PWA双release连续升级编排、持久离线重启专项、迁移专项、完整业务浏览器CI、自动AI修复服务、定时后台代理、生产发布。已有专项仍可复用，历史Windows WebKit BLOCKED不被本批结果覆盖。Cloudflare管理、Codex Cloud检出仍BLOCKED；没有重新授权或宣称已确认套餐/回滚。参考项目的Git预览也不能当作本项目已接通。
+
+下一唯一任务：ChatGPT独立审核本Draft PR的隔离运行器及证据。审核后再决定下一项P0，不自动扩大任务。

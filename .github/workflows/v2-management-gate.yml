@@ -8,6 +8,7 @@ on:
       - 'ROADMAP.md'
       - 'docs/**'
       - 'scripts/v2-management-check.cjs'
+      - 'scripts/v2-automation.cjs'
       - '.github/workflows/v2-management-gate.yml'
 permissions:
   contents: read
@@ -29,3 +30,6 @@ jobs:
         run: node scripts/v2-management-check.cjs --management-only
       - name: Exercise rejecting guards
         run: node scripts/v2-management-check.cjs --self-test
+      - name: Reuse local synthetic HTTP safety suite in isolation
+        if: always()
+        run: node scripts/v2-automation.cjs --profile ci-http

@@ -59,3 +59,6 @@
 ## 下一步唯一任务
 
 按 [ROADMAP](ROADMAP.md) P0-1 完成安全替代历史的交付方案审查与 Cloud 实际基线核验。待用户下一轮授权再实施；不得原样把含私人路径的旧历史当作新安全交付。不要重复实现已有远端发现功能或重跑无关测试。
+
+### 本轮自动化补充
+已实现 scripts/v2-automation.cjs 隔离编排及自动JSON/Markdown报告；本地四组PASS，HTTP18、远端发现12、双引擎备份恢复各56。无应用变更、无云端访问；详细证据见 docs/reports/V2-MANAGEMENT-20261101.md。PR工作流新增合成HTTP门禁；远端结果须另核实。下一项仅ChatGPT审核管理PR。
