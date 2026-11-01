@@ -1,5 +1,12 @@
 # personal-workbench 开发规则
 
+## 长期执行入口
+
+- 每个任务先读本文件、CURRENT、ROADMAP及 `docs/V2-DEVELOPMENT-OPERATING-PROTOCOL.md`，仅检查相关文件及依赖。历史报告不能当作当前部署证明。
+- 一个验收目标一个独立分支；未知变更保留，禁止reset/clean或混入未审查工作。安全候选不合并携带私人路径的旧历史。
+- 用 `docs/templates/V2-TASK-REPORT.md` 统一交接；分别记录源码SHA、构建来源SHA、线上版本。完成后停止，不扩展范围。
+- 管理变更运行 `node scripts/v2-management-check.cjs --management-only` 和 `--self-test`；通过不代表应用或发布通过。风险测试矩阵见协议。
+
 ## 目标与架构
 
 - 医疗业务个人工作台：医院、项目行动、合同资金、记录与原件。手机优先，优先免费方案。
