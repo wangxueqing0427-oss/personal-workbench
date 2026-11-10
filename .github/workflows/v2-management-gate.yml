@@ -1,0 +1,37 @@
+name: V2 management gate
+on:
+  pull_request:
+    branches: [dev/v2-safe-candidate-20261028]
+    paths:
+      - 'AGENTS.md'
+      - 'CURRENT.md'
+      - 'ROADMAP.md'
+      - 'docs/**'
+      - 'scripts/v2-management-check.cjs'
+      - 'scripts/v2-automation.cjs'
+      - '.github/workflows/v2-management-gate.yml'
+permissions:
+  contents: read
+concurrency:
+  group: v2-management-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  management:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check management scope and privacy
+        env:
+          WB_MANAGEMENT_BASE: ${{ github.event.pull_request.base.sha }}
+        run: node scripts/v2-management-check.cjs --management-only
+      - name: Exercise rejecting guards
+        run: node scripts/v2-management-check.cjs --self-test
+      - name: Exercise result classification
+        run: node scripts/v2-automation.cjs --self-test
+      - name: Reuse local synthetic HTTP safety suite in isolation
+        if: always()
+        run: node scripts/v2-automation.cjs --profile ci-http
