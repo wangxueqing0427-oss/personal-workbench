@@ -22,6 +22,62 @@ function redact(text, runDir) {
     .replace(/[A-Za-z]:[\\/]+Users[\\/][^\s'"),;]+/gi, '<private-path>')
     .replace(/\/(?:Users|home)\/(?!web_user\b)[^\s'"),;]+/g, '<private-path>');
 }
+function classify(result, suite, text) {
+  const fail = reason => ({ status: 'FAIL', reason });
+  if (result.error || result.signal || result.status !== 0) return fail('Suite process failure, assertion or timeout');
+  try {
+    if (suite.result) {
+      if (typeof text !== 'string') return fail('Missing report');
+      const data = JSON.parse(text);
+      if (!data || typeof data !== 'object' || Array.isArray(data)) return fail('Invalid report object');
+      if (suite.result === 'sync-http-results.json') {
+        if (data.coreAssertions !== 18 || data.productionConnected !== false || data.iphoneTested !== false || typeof data.environment !== 'string' || typeof data.findings !== 'string' || data.failed || data.blocked || (data.status && data.status !== 'PASS')) return fail('Invalid HTTP report fields');
+        return { status: 'PASS', summary: { assertions: 18 } };
+      }
+      const n = data.summary;
+      if (!n || !['passed', 'failed', 'blocked'].every(k => Number.isInteger(n[k]) && n[k] >= 0) || !Array.isArray(data.results) || data.results.length !== 12) return fail('Invalid report counts');
+      if (!data.results.every(r => r && ['PASS', 'FAIL', 'BLOCKED'].includes(r.status) && ['name', 'input', 'steps', 'expected', 'actual'].every(k => typeof r[k] === 'string' && r[k].length > 0))) return fail('Invalid scenario fields');
+      for (const [key, state] of [['passed', 'PASS'], ['failed', 'FAIL'], ['blocked', 'BLOCKED']]) if (n[key] !== data.results.filter(r => r.status === state).length) return fail('Inconsistent scenario counts');
+      if (n.failed || n.blocked || n.passed !== 12) return fail('Incomplete or failed discovery suite');
+      return { status: 'PASS', summary: n };
+    }
+    const rows = (result.stdout || '').split(/\r?\n/).filter(x => x.startsWith('{')).map(x => JSON.parse(x));
+    if (rows.length !== 2 || !rows.every((r, i) => r.assertions === 28 && r.contracts === 99 && r.businessProjects === 11 && r.browserFlow === 'export-validate-isolated-restore-refresh passed' && r.viewport?.width === [1280, 390][i] && r.viewport?.height === [800, 844][i])) return fail('Invalid backup viewport report');
+    return { status: 'PASS', summary: { assertions: 56, viewportReports: 2 } };
+  } catch { return fail('Malformed report JSON'); }
+}
+function browserPreflight(engine, probe = () => {
+  const p = require('playwright');
+  if (!(process.platform === 'win32' && engine === 'chromium') && !fs.existsSync(p[engine].executablePath())) throw Object.assign(Error('Browser binary unavailable'), { code: 'WB_BROWSER_MISSING' });
+  return require('playwright/package.json').version;
+}) {
+  try { return { status: 'READY', playwright: probe() }; }
+  catch (error) {
+    return error.code === 'WB_BROWSER_MISSING' || (error.code === 'MODULE_NOT_FOUND' && /playwright/.test(error.message))
+      ? { status: 'BLOCKED', reason: 'Existing Playwright/browser unavailable; no download attempted' }
+      : { status: 'FAIL', reason: 'Unexpected browser preflight error' };
+  }
+}
+function selfTest() {
+  const valid = JSON.stringify({ coreAssertions: 18, productionConnected: false, iphoneTested: false, environment: 'synthetic loopback', findings: 'completed' });
+  const cases = [
+    ['valid HTTP', {status:0}, valid, 'PASS'],
+    ['assertion failure', {status:1}, valid, 'FAIL'],
+    ['exit two is not environment proof', {status:2}, valid, 'FAIL'],
+    ['timeout', {status:null,error:{code:'ETIMEDOUT'}}, valid, 'FAIL'],
+    ['missing report', {status:0}, undefined, 'FAIL'],
+    ['broken JSON', {status:0}, '{', 'FAIL'],
+    ['missing fields', {status:0}, '{}', 'FAIL'],
+    ['invalid count', {status:0}, valid.replace('18','0'), 'FAIL'],
+    ['invalid type', {status:0}, '[]', 'FAIL'],
+    ['contradictory failure', {status:0}, valid.replace('"coreAssertions"','"failed":1,"coreAssertions"'), 'FAIL'],
+  ];
+  const results = cases.map(([name, result, report, expected]) => ({ name, status: classify(result, suites.http, report).status === expected ? 'PASS' : 'FAIL' }));
+  for (const [name, suite, result, report] of [['discovery invalid', suites.discovery, {status:0}, '{}'], ['backup malformed', suites['backup-webkit'], {status:0,stdout:'{bad'}, null]]) results.push({name,status:classify(result,suite,report).status === 'FAIL' ? 'PASS' : 'FAIL'});
+  for (const [label, code, expected] of [['missing browser','WB_BROWSER_MISSING','BLOCKED'], ['missing playwright','MODULE_NOT_FOUND','BLOCKED'], ['preflight programming error','EUNEXPECTED','FAIL']]) results.push({name:label,status:browserPreflight('webkit',()=>{throw Object.assign(Error(label),{code});}).status === expected ? 'PASS' : 'FAIL'});
+  console.log(JSON.stringify({results,passed:results.filter(r=>r.status==='PASS').length,failed:results.filter(r=>r.status==='FAIL').length,blocked:0},null,2));
+  process.exitCode=results.some(r=>r.status==='FAIL')?1:0;
+}
 async function main() {
   if (process.cwd() !== root || !profiles[profile]) throw Error('Run from repository root with --profile ci-http or smoke');
   const head = git('rev-parse', 'HEAD').trim();
@@ -46,36 +102,25 @@ async function main() {
     }
     const row = { name, engine: suite.engine || 'node-http', script: 'v2/' + suite.script, attempts: 0, status: 'BLOCKED' };
     if (suite.engine) {
-      try {
-        const p = require('playwright');
-        const edge = process.platform === 'win32' && suite.engine === 'chromium';
-        if (!edge && !fs.existsSync(p[suite.engine].executablePath())) throw Error('Browser binary unavailable');
-        row.playwright = require('playwright/package.json').version;
-      } catch { row.reason = 'Existing Playwright/browser unavailable; no download attempted'; summary.results.push(row); continue; }
+      const preflight = browserPreflight(suite.engine);
+      if (preflight.status !== 'READY') { row.status = preflight.status; row.reason = preflight.reason; summary.results.push(row); continue; }
+      row.playwright = preflight.playwright;
     }
     row.attempts = 1;
     const result = cp.spawnSync(process.execPath, [row.script], { cwd: work, env: { ...env, WB_BROWSER: suite.engine === 'webkit' ? 'webkit' : 'chromium' }, encoding: 'utf8', timeout: 180000, maxBuffer: 10e6 });
     fs.writeFileSync(path.join(directory, 'stdout.log'), redact(result.stdout || '', runDir));
     fs.writeFileSync(path.join(directory, 'stderr.log'), redact(result.stderr || '', runDir));
     row.exitCode = result.status;
-    row.status = result.status === 0 ? 'PASS' : result.status === 2 ? 'BLOCKED' : 'FAIL';
-    if (result.error) row.reason = result.error.code === 'ETIMEDOUT' ? 'Bounded suite timeout' : 'Suite execution error';
+    let reportText;
     if (suite.result) {
       const file = path.join(work, 'v2', suite.result);
-      if (!fs.existsSync(file)) { row.status = result.status === 0 ? 'FAIL' : row.status; row.reportMissing = true; }
-      else {
-        const data = JSON.parse(fs.readFileSync(file, 'utf8'));
-        fs.writeFileSync(path.join(directory, 'result.json'), redact(JSON.stringify(data, null, 2), runDir));
-        row.evidence = name + '/result.json'; row.summary = data.summary || { assertions: data.coreAssertions };
-        if (data.summary?.failed || data.failed || data.status === 'FAIL') row.status = 'FAIL';
-        if (row.status !== 'FAIL' && (data.summary?.blocked || data.blocked || data.status === 'BLOCKED')) row.status = 'BLOCKED';
+      if (fs.existsSync(file)) {
+        reportText = fs.readFileSync(file, 'utf8');
+        fs.writeFileSync(path.join(directory, 'result.json'), redact(reportText, runDir));
+        row.evidence = name + '/result.json';
       }
-    } else {
-      const lines = (result.stdout || '').split(/\r?\n/).filter(x => x.startsWith('{'));
-      const reports = lines.map(x => { try { return JSON.parse(x); } catch { return null; } }).filter(Boolean);
-      row.summary = { assertions: reports.reduce((n, x) => n + (x.assertions || 0), 0), viewportReports: reports.length };
-      if (reports.length !== 2 && row.status === 'PASS') { row.status = 'FAIL'; row.reason = 'Expected both existing viewport reports'; }
     }
+    Object.assign(row, classify(result, suite, reportText));
     summary.results.push(row);
     // No blind retry; Codex diagnoses actual failures before any separately recorded rerun.
   }
@@ -92,4 +137,5 @@ async function main() {
   console.log(JSON.stringify({ ...summary, evidenceDirectory: path.relative(root, runDir).replaceAll('\\', '/') }, null, 2));
   process.exitCode = summary.failed ? 1 : summary.blocked ? 2 : 0;
 }
-main().catch(() => { console.error(JSON.stringify({ status: 'BLOCKED', reason: 'Isolated runner could not safely start or finish; no deployment attempted' })); process.exitCode = 2; });
+if (process.argv.includes('--self-test')) selfTest();
+else main().catch(() => { console.error(JSON.stringify({ status: 'FAIL', reason: 'Runner/report processing failure; existing evidence preserved' })); process.exitCode = 1; });

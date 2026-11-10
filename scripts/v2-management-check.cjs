@@ -16,8 +16,32 @@ function issues(file, text) {
   return found;
 }
 function workflowIssues(text) {
+  text = text.replace(/\r\n/g, '\n');
   const bad = [];
-  for (const flag of ['pull_request_target:', 'workflow_dispatch:', 'push:', 'secrets.', 'wrangler ', 'contents: write', 'id-token: write']) if (text.includes(flag)) bad.push(flag);
+  // Fail closed for YAML constructs outside this deliberately narrow workflow subset.
+  if (/(?:^|\s)[&*!][A-Za-z0-9_]|<<\s*:/m.test(text)) bad.push('unsupported YAML alias/tag/merge');
+  if (/\bwrite(?:-all)?\b/i.test(text)) bad.push('write permission or capability');
+  if (/\bsecrets\s*[.\[]/i.test(text)) bad.push('secrets access');
+  for (const flag of ['pull_request_target:', 'workflow_dispatch:', 'push:', 'schedule:', 'secrets.', 'wrangler ']) if (text.includes(flag)) bad.push(flag);
+  const lines = text.split(/\r?\n/);
+  let inOn = false, inPermissions = false, permissionIndent = -1;
+  let seenOn = 0;
+  for (const line of lines) {
+    if (!line.trim() || line.trimStart().startsWith('#')) continue;
+    const indent = line.length - line.trimStart().length;
+    if (/^on:\s*$/.test(line)) { inOn = true; seenOn++; continue; }
+    if (/^["']?on["']?\s*:/.test(line) && !/^on:\s*$/.test(line)) bad.push('unsupported trigger syntax');
+    if (inOn && indent === 0) inOn = false;
+    if (inOn && indent <= 2 && !/^  pull_request:\s*$/.test(line)) bad.push('unapproved trigger');
+    if (inPermissions && indent <= permissionIndent) inPermissions = false;
+    if (/^\s*["']?permissions["']?\s*:/.test(line)) {
+      if (!/^\s*permissions:\s*$/.test(line)) bad.push('unsupported permissions syntax');
+      inPermissions = true; permissionIndent = indent; continue;
+    }
+    if (inPermissions && !/^\s+[a-z][a-z-]*:\s*(read|none)\s*$/.test(line)) bad.push('unapproved permission');
+    if (/\buses["']?\s*:/.test(line) && !/^\s*-?\s*uses:\s*[A-Za-z0-9_.-]+\/[A-Za-z0-9_./-]+@[a-f0-9]{40}\s*$/.test(line)) bad.push('action not pinned to full SHA');
+  }
+  if (seenOn !== 1) bad.push('exactly one supported on mapping required');
   for (const flag of ['pull_request:', 'branches: [dev/v2-safe-candidate-20261028]', 'contents: read', 'persist-credentials: false', 'timeout-minutes: 10', 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683']) if (!text.includes(flag)) bad.push('missing ' + flag);
   return bad;
 }
@@ -36,6 +60,18 @@ function selfTest() {
     ['reject privileged trigger', () => assert(workflowIssues(fs.readFileSync(required[5], 'utf8') + '\npull_request' + '_target:').length)],
     ['reject deployment step', () => assert(workflowIssues(fs.readFileSync(required[5], 'utf8') + '\nrun: wrangler' + ' deploy').length)],
   ];
+  const workflow = fs.readFileSync(required[5], 'utf8').replace(/\r\n/g, '\n');
+  for (const permission of ['actions', 'pull-requests', 'checks', 'deployments', 'packages', 'security-events']) checks.push(['reject ' + permission + ' write', () => assert(workflowIssues(workflow.replace('contents: read', permission + ': write')).length)]);
+  for (const trigger of ['push', 'schedule', 'workflow_dispatch', 'pull_request_target', 'repository_dispatch']) checks.push(['reject ' + trigger, () => assert(workflowIssues(workflow.replace('  pull_request:', '  ' + trigger + ':')).length)]);
+  for (const [name, from, to] of [
+    ['flow permission', 'permissions:\n  contents: read', 'permissions: {actions: write}'],
+    ['scalar permission', 'permissions:\n  contents: read', 'permissions: write-all'],
+    ['unpinned action', '@11bd71901bbe5b1630ceea73d27597364c9af683', '@v4'],
+    ['short action SHA', '@11bd71901bbe5b1630ceea73d27597364c9af683', '@11bd719'],
+    ['job permission', '    runs-on:', '    permissions:\n      pull-requests: write\n    runs-on:'],
+    ['bracket secrets', 'node scripts/v2-automation.cjs --profile ci-http', "echo ${{ secrets['unapproved'] }}"],
+    ['single space trigger', '  pull_request:', ' schedule:'],
+  ]) checks.push(['reject ' + name, () => assert(workflowIssues(workflow.replace(from,to)).length)]);
   const results = checks.map(([name, run]) => { try { run(); return { name, status: 'PASS' }; } catch { return { name, status: 'FAIL' }; } });
   const failed = results.filter(r => r.status === 'FAIL').length;
   console.log(JSON.stringify({ scope: 'management-guard-self-test', passed: results.length - failed, failed, blocked: 0, results, cloudRequests: 0 }, null, 2));
@@ -74,7 +110,8 @@ function main() {
     }
   }
   check('management local links', missing.length === 0, missing);
-  check('non-deploying least-privilege workflow', fs.existsSync(required[5]) && workflowIssues(fs.readFileSync(required[5], 'utf8')).length === 0);
+  const workflowFindings = files.filter(f => /^\.github\/workflows\/.*\.ya?ml$/.test(f) && fs.existsSync(f)).flatMap(file => workflowIssues(fs.readFileSync(file, 'utf8')).map(rule => ({file,rule})));
+  check('all workflows: non-deploying least-privilege and SHA pinned', fs.existsSync(required[5]) && workflowFindings.length === 0, workflowFindings);
   const failed = results.filter(r => r.status === 'FAIL').length;
   const inputs = Object.fromEntries(required.filter(f => fs.existsSync(f)).map(f => [f, crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex')]));
   console.log(JSON.stringify({ scope: 'management-only; not business or release acceptance', baseline: BASELINE, comparisonBase, sourceCommit: git('rev-parse', 'HEAD').trim(), passed: results.length - failed, failed, blocked: 0, results, changedFiles: changed, inputSha256: inputs, cloudRequests: 0, dataWrites: 0 }, null, 2));
