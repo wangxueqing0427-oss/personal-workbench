@@ -1,0 +1,33 @@
+name: V2 locked candidate packaging only
+on:
+  pull_request:
+    types: [opened]
+    branches: [dev/v2-safe-candidate-20261028]
+    paths: ['.github/workflows/v2-wrangler-dry-run.yml', 'ci/**']
+permissions:
+  contents: read
+jobs:
+  package:
+    if: github.repository == 'wangxueqing0427-oss/personal-workbench' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'ci/v2-wrangler-dry-run-20261110' && github.event.pull_request.base.sha == '6c70c706ce9dec666040b20c41e68b825209be9c'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24.22.1'
+      - name: Verify immutable candidate and run local packaging
+        run: node ci/v2-wrangler-dry-run.cjs
+      - name: Keep sanitized review evidence only
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: v2-packaging-evidence-${{ github.run_id }}
+          path: ${{ runner.temp }}/v2-ci-report/
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 9
