@@ -1,0 +1,18 @@
+{
+  "repository": "wangxueqing0427-oss/personal-workbench",
+  "applicationCommit": "6c70c706ce9dec666040b20c41e68b825209be9c",
+  "reviewBranch": "ci/v2-staging-release-review-20261111",
+  "worker": "personal-workbench-v2-staging",
+  "releaseId": "bac4f438ba39183f0ea216f737cbc7c53c902e949d139b82a880c4e2ec0eba4d",
+  "protectedOldVersion": "d4c54788-0c3e-44a8-a801-2fa066dafe5b",
+  "candidateResources": 18,
+  "rollbackResources": 14,
+  "workerSourceSha256": "592ebe372567bb8cbd85f4dc3a1678be8d9b6ac1da62522f6bbb1ed4edaab6ec",
+  "configSha256": "f3bfe906ed56df50ba30551be261785e90507ecdea1a9606343e5db162d13d7d",
+  "protectedSharedRevision": 10,
+  "protectedSharedPayloadHash": "dcb39f9cbd73d763e74578582e2bff6085a603880c106c8e9f9fb582036dbfa4",
+  "executionEnabled": false,
+  "defaultMode": "offline-review-only",
+  "separateReleaseAndRollbackApproval": true,
+  "preserveLiveIOHardStop": true
+}
