@@ -1,0 +1,112 @@
+{
+  "scope": "offline static review only; no application, bundling, restore or cloud tests",
+  "applicationCommit": "6c70c706ce9dec666040b20c41e68b825209be9c",
+  "reviewBranch": "ci/v2-staging-release-review-20261111",
+  "checks": [
+    {
+      "name": "exact application commit exists",
+      "status": "PASS"
+    },
+    {
+      "name": "current independent branch",
+      "status": "PASS"
+    },
+    {
+      "name": "only new allowlisted review files",
+      "status": "PASS"
+    },
+    {
+      "name": "no installed workflow added or edited",
+      "status": "PASS"
+    },
+    {
+      "name": "inactive template has no automatic trigger, credential reference or writer",
+      "status": "PASS"
+    },
+    {
+      "name": "fixed staging target and default write denial",
+      "status": "PASS"
+    },
+    {
+      "name": "no private local paths or credential material in added files",
+      "status": "PASS"
+    },
+    {
+      "name": "manual installation limitation is explicitly documented",
+      "status": "PASS"
+    }
+  ],
+  "selfTests": [
+    {
+      "name": "reject write permission",
+      "status": "PASS"
+    },
+    {
+      "name": "reject automatic push trigger",
+      "status": "PASS"
+    },
+    {
+      "name": "reject privileged PR event",
+      "status": "PASS"
+    },
+    {
+      "name": "reject credential expression",
+      "status": "PASS"
+    },
+    {
+      "name": "reject floating Action version",
+      "status": "PASS"
+    },
+    {
+      "name": "reject executable cloud command",
+      "status": "PASS"
+    },
+    {
+      "name": "reject removed default deny placeholder",
+      "status": "PASS"
+    },
+    {
+      "name": "reject unreviewed YAML additions",
+      "status": "PASS"
+    }
+  ],
+  "summary": {
+    "PASS": 16,
+    "FAIL": 0
+  },
+  "reviewedFiles": {
+    "ci/staging-release-review/README.md": {
+      "bytes": 5543,
+      "sha256": "d9f8f1dcf69d2603664700a2cd9d12ffbae3236ced7279d1020cf4651a184f13"
+    },
+    "ci/staging-release-review/audit.cjs": {
+      "bytes": 8402,
+      "sha256": "e494bac97e3d54e84c1485a1c27a2f777852b34b02add3e3a83f0c30a212d31c"
+    },
+    "ci/staging-release-review/channel-lock.json": {
+      "bytes": 895,
+      "sha256": "ba50cecda65f60d15b981e462c2900e8d79a237c6d502166c7229657a81b102e"
+    },
+    "ci/staging-release-review/workflow-dispatch.template.yml": {
+      "bytes": 1284,
+      "sha256": "d3e0dcce4c05052386444291b56e8aa7d53bb82919fd386a7b0c4d97bd706af4"
+    }
+  },
+  "liveGates": [
+    {
+      "name": "default-branch manual entry not installed",
+      "status": "BLOCKED"
+    },
+    {
+      "name": "exact-Worker authority and version-bound withdrawal asset proof",
+      "status": "BLOCKED"
+    },
+    {
+      "name": "reviewed live execution adapter",
+      "status": "BLOCKED"
+    }
+  ],
+  "networkRequests": 0,
+  "deployments": 0,
+  "rollbacks": 0
+}

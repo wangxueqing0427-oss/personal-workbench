@@ -1,0 +1,31 @@
+# NON-ACTIVE TEMPLATE. This file is deliberately outside .github/workflows/.
+# No publishing or withdrawal implementation is installed by this template.
+name: Staging manual review only - installation not approved
+on:
+  workflow_dispatch:
+    inputs:
+      purpose:
+        description: Offline review only; no cloud operation
+        required: true
+        type: choice
+        options: [offline-review-only]
+permissions:
+  contents: read
+jobs:
+  review:
+    if: github.repository == 'wangxueqing0427-oss/personal-workbench' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/ci/v2-staging-release-review-20261111'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          # MUST be separately replaced by an approved immutable review commit.
+          # The invalid placeholder intentionally prevents accidental execution.
+          ref: REVIEW_COMMIT_SHA_REQUIRED
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24.22.1'
+      - name: Offline source and template inspection only
+        run: node ci/staging-release-review/audit.cjs
