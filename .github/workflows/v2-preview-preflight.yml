@@ -1,0 +1,70 @@
+name: V2 preview isolated preflight
+on:
+  push:
+    branches:
+      - dev/v2-preview-isolated-20261111
+    paths:
+      - .github/workflows/v2-preview-preflight.yml
+      - v2/build-preview.cjs
+      - v2/wrangler.preview.jsonc
+permissions:
+  contents: read
+jobs:
+  build-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Fetch this public branch commit without credentials
+        shell: bash
+        env:
+          SHA: ${{ github.sha }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          git init repo
+          cd repo
+          git remote add origin "https://github.com/${REPOSITORY}.git"
+          git fetch --depth=1 origin "${SHA}"
+          git checkout --detach FETCH_HEAD
+      - name: Build and verify preview assets only
+        working-directory: repo
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check v2/build-preview.cjs
+          node v2/build-preview.cjs
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const crypto = require('node:crypto');
+          const root = 'v2/preview-public';
+          const config = JSON.parse(fs.readFileSync('v2/wrangler.preview.jsonc','utf8'));
+          const manifest = JSON.parse(fs.readFileSync(path.join(root,'build-info.json'),'utf8'));
+          const fail = message => { throw new Error(message); };
+          if (config.name !== 'personal-workbench-v2-preview') fail('Wrong Worker');
+          if (config.assets.directory !== './preview-public') fail('Wrong assets directory');
+          if (config.vars.TEST_ENVIRONMENT !== 'synthetic-only' || config.vars.TEST_DATASET !== 'mobile-preview-20261111') fail('Wrong test dataset');
+          if (config.durable_objects?.bindings?.length !== 1 || config.durable_objects.bindings[0].name !== 'TEST_SYNC' || config.durable_objects.bindings[0].class_name !== 'TestSync' || config.durable_objects.bindings[0].script_name) fail('Durable Object must be locally scoped');
+          if (config.migrations?.[0]?.tag !== 'v2-preview-sqlite-1') fail('Wrong migration');
+          if (manifest.syntheticOnly !== true || manifest.sourceClean !== true || manifest.sourceCommit !== process.env.GITHUB_SHA) fail('Wrong manifest source');
+          if (Object.keys(manifest.assets).length !== 18) fail('Expected exactly 18 generated assets');
+          for (const [name, spec] of Object.entries(manifest.assets)) {
+            const filename = path.resolve(root,name);
+            if (!filename.startsWith(path.resolve(root)+path.sep)) fail('Unsafe path');
+            const bytes = fs.readFileSync(filename);
+            if (bytes.length !== spec.bytes || crypto.createHash('sha256').update(bytes).digest('hex') !== spec.sha256) fail('Resource mismatch: '+name);
+            if (bytes.includes(Buffer.from('personal-workbench-v2-staging'))) fail('Preview references staging: '+name);
+          }
+          if (fs.readFileSync('v2/wrangler.preview.jsonc','utf8').includes('TEST_TOKEN')) fail('Never commit secrets');
+          console.log('PREVIEW_PREFLIGHT_PASS: 18 assets + hashes + distinct Worker/DO/dataset/host');
+          NODE
+      - name: Verify Wrangler package is deployable without deployment or credentials
+        working-directory: repo
+        shell: bash
+        env:
+          WRANGLER_SEND_METRICS: "false"
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.149.0 deploy --config v2/wrangler.preview.jsonc --dry-run --outdir v2/.tools/preview-dryrun
+          test -d v2/.tools/preview-dryrun
+          echo PREVIEW_WRANGLER_DRYRUN_PASS
