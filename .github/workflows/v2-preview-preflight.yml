@@ -5,6 +5,7 @@ on:
       - dev/v2-preview-isolated-20261111
     paths:
       - .github/workflows/v2-preview-preflight.yml
+      - .github/workflows/v2-preview-deploy.yml
       - v2/build-preview.cjs
       - v2/wrangler.preview.jsonc
 permissions:
