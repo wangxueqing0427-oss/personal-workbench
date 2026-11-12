@@ -38,7 +38,7 @@ jobs:
           test "$GITHUB_REPOSITORY" = "wangxueqing0427-oss/personal-workbench"
           test -n "$CLOUDFLARE_ACCOUNT_ID"
           test -n "$CLOUDFLARE_API_TOKEN"
-          node -e "const c=require('./v2/wrangler.preview.jsonc'); if(c.name!=='personal-workbench-v2-preview'||c.vars.TEST_ENVIRONMENT!=='synthetic-only'||c.vars.TEST_DATASET!=='mobile-preview-20261111'||c.assets.directory!=='./preview-public'||c.durable_objects.bindings.length!==1||c.durable_objects.bindings[0].name!=='TEST_SYNC'||c.durable_objects.bindings[0].class_name!=='TestSync'||c.durable_objects.bindings[0].script_name) process.exit(1)"
+          node -e "const fs=require('node:fs'); const c=JSON.parse(fs.readFileSync('./v2/wrangler.preview.jsonc','utf8')); if(c.name!=='personal-workbench-v2-preview'||c.vars.TEST_ENVIRONMENT!=='synthetic-only'||c.vars.TEST_DATASET!=='mobile-preview-20261111'||c.assets.directory!=='./preview-public'||c.durable_objects.bindings.length!==1||c.durable_objects.bindings[0].name!=='TEST_SYNC'||c.durable_objects.bindings[0].class_name!=='TestSync'||c.durable_objects.bindings[0].script_name) process.exit(1)"
       - name: Build immutable preview assets
         shell: bash
         run: |
