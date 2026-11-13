@@ -141,7 +141,7 @@ async function main(){
     const cProof=await thirdPhone.evaluate(()=>__candidate.proof('GET','/sync',{hello:'world'}));
     const cApproved=await ownerPage.evaluate(proof=>__owner.verify(proof),cProof);
     check(cApproved.authorized&&cApproved.deviceId===cReq.request.deviceId,
-      'distinct authorized device proof accepted by same owner's roster');
+      "distinct authorized device proof accepted by the owner roster");
     const clockDenied=await ownerPage.evaluate(async proof=>{
       __owner.setTestClock(()=>Date.now()+60000);
       let denied=false;try{await __owner.verify(proof);}catch{denied=true;}
