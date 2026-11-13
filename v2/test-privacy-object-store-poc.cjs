@@ -285,14 +285,15 @@ async function main(){
       await new Promise((ok,bad)=>{
         const tx=db.transaction('objects','readwrite'),store=tx.objectStore('objects');
         const keys=store.getAllKeys(),values=store.getAll();
-        let applied=false;
+        let keysReady=false,valuesReady=false;
         const attempt=()=>{
-          if(applied||!keys.result||!values.result)return;
-          applied=true;
+          if(!keysReady||!valuesReady)return;
           const hospitals=keys.result.filter(key=>key.startsWith('hospitals:'));
+          if(hospitals.length<2)throw Error('Missing synthetic hospital fixture');
           store.put(values.result[keys.result.indexOf(hospitals[1])],hospitals[0]);
         };
-        keys.onsuccess=attempt;values.onsuccess=attempt;
+        keys.onsuccess=()=>{keysReady=true;attempt();};
+        values.onsuccess=()=>{valuesReady=true;attempt();};
         tx.oncomplete=ok;tx.onabort=tx.onerror=()=>bad(tx.error);
       });
       db.close();
