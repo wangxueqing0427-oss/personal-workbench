@@ -51,6 +51,14 @@
 - [最终Chromium+WebKit自动化记录](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43390258735)：Chromium135项、WebKit135项，合计270项通过、0失败（含之前全部兼容回归）；[独立预览构建门禁](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43390281569)绿色，未部署该实验模块。详细审计见 `v2/DELTA-JOURNAL-REVIEW-2026-11-13.md`。
 - **仍缺的能力**：回放会在内存重建每条旧版本完整状态，需要检查点和按需解压；单个医院/项目的按需查询优化；云端身份、双设备加密增量同步和冲突恢复；目标iPhone平台生物识别/密钥保管；正式版迁移与用户终验。
 
+## 双独立浏览器端到端加密同步原型（新进展）
+
+- 新增仅本机合成试验专用的 `privacy-e2e-cloud-poc.js`。两台隔离的移动端模拟浏览器，使用各自的 IndexedDB 和逐对象加密库，通过一个本机模拟 Worker 协议的 HTTP 服务交换**二次 AES-GCM 加密的完整归档**。本机增量日志与云端传输仍是两层不同的技术：**当前云端上传的是完整密文归档，并非每次只上传变化对象**。
+- 模拟服务按原 Worker 的 `expectedRevision / expectedHash / payload.hash` CAS 规则和密文分片 manifest 工作，服务器只存不透明密文和不可变历史；客户端从服务读取后先验哈希及密文，再恢复至新数据库。任何冲突先保留本地和远端的独立副本，不自动覆盖。
+- 通过双设备断网补传、两个设备分别增加医院后显式批准安全合并、同一医院双方更改时拒绝自动合并、已完成上传但ACK丢失的幂等重试、上传过程中网络断开重新发送密文分片、恢复早期历史版本及不安全令牌/远端哈希拒绝。
+- [最新完整 Chromium+WebKit 复测](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43397336843)：每引擎169项通过，**共338项通过、0失败**（含以前所有兼容回归），双端云端模拟专项各34项。模拟云端6个历史版本，122次分片上传及2次重复分片确认；[公开预览构建隔离预检](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43396918957)通过，没有部署这些实验模块。
+- **正式交付仍有重要缺口**：尚未连接真实Cloudflare Worker测试身份、未验证真正 iPhone Face ID/PWA、没有安全的设备配对和密钥分发、没有生产可用的原件增量云传输及同一业务对象的人工冲突解决界面。技术审核见 `v2/LOCAL-E2E-CLOUD-REVIEW-2026-11-13.md`。
+
 ## 零损坏迁移次序
 
 - 只读审计旧版 V1.5.7 / 现有 V2 预览的记录和本地文件来源，先列明已检查的**设备 / 域名 / Safari / PWA**范围，不能拿一个浏览器本地数据代替全设备。
