@@ -15,13 +15,15 @@ on:
       - v2/test-privacy-sharded-store-poc.cjs
       - v2/privacy-object-store-poc.js
       - v2/test-privacy-object-store-poc.cjs
+      - v2/privacy-delta-journal-poc.js
+      - v2/test-privacy-delta-journal-poc.cjs
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
   isolated-local-encryption:
     runs-on: ubuntu-24.04
-    timeout-minutes: 28
+    timeout-minutes: 36
     strategy:
       fail-fast: false
       matrix:
@@ -48,7 +50,9 @@ jobs:
           node --check v2/test-privacy-sharded-store-poc.cjs
           node --check v2/privacy-object-store-poc.js
           node --check v2/test-privacy-object-store-poc.cjs
-          ! grep -E 'personal-workbench-v2-(staging|preview)\.|CLOUDFLARE_API_TOKEN|wrangler deploy' v2/privacy-crypto-poc.js v2/test-privacy-crypto-poc.cjs v2/privacy-shadow-poc.js v2/test-privacy-shadow-poc.cjs v2/privacy-business-adapter-poc.js v2/test-privacy-business-adapter-poc.cjs v2/privacy-sharded-store-poc.js v2/test-privacy-sharded-store-poc.cjs v2/privacy-object-store-poc.js v2/test-privacy-object-store-poc.cjs
+          node --check v2/privacy-delta-journal-poc.js
+          node --check v2/test-privacy-delta-journal-poc.cjs
+          ! grep -E 'personal-workbench-v2-(staging|preview)\.|CLOUDFLARE_API_TOKEN|wrangler deploy' v2/privacy-crypto-poc.js v2/test-privacy-crypto-poc.cjs v2/privacy-shadow-poc.js v2/test-privacy-shadow-poc.cjs v2/privacy-business-adapter-poc.js v2/test-privacy-business-adapter-poc.cjs v2/privacy-sharded-store-poc.js v2/test-privacy-sharded-store-poc.cjs v2/privacy-object-store-poc.js v2/test-privacy-object-store-poc.cjs v2/privacy-delta-journal-poc.js v2/test-privacy-delta-journal-poc.cjs
       - name: Install pinned isolated browser tools in temporary CI folder
         shell: bash
         run: |
@@ -64,3 +68,4 @@ jobs:
           node v2/test-privacy-business-adapter-poc.cjs
           node v2/test-privacy-sharded-store-poc.cjs
           node v2/test-privacy-object-store-poc.cjs
+          node v2/test-privacy-delta-journal-poc.cjs
