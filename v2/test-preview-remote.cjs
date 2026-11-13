@@ -55,6 +55,18 @@ async function main() {
     await page.waitForFunction(expected => document.documentElement.dataset.releaseReady === expected, manifest.releaseId, { timeout: 60000 });
     check(await page.locator('h1').innerText() === '个人工作台', 'verified release initializes user interface');
     check(await page.locator('main h2').first().innerText() === '今天先办重要的事', 'home dashboard renders');
+    if(process.env.PREVIEW_EXPECTED_SHA) {
+      check(await page.locator('.hero-metrics > div').count() === 4 &&
+        await page.locator('.work-actions [data-follow-tomorrow]').count() > 0,
+        'deployed mobile dashboard shows four summary metrics and one-tap follow-up proposals');
+      await page.locator('.work-actions [data-follow-tomorrow]').first().click();
+      check(await page.locator('form[data-form="quick-project"]').isVisible() &&
+        await page.locator('form[data-form="quick-project"] input[name="followupDate"]').inputValue() !== '',
+        'deployed tomorrow button opens a confirmation form without silently saving');
+      await page.locator('[data-back="project"]').click();
+      check(await page.locator('.focus-box').count() === 1,
+        'canceling tomorrow edit returns to the same project details');
+    }
     if (process.env.PREVIEW_REQUIRE_LOCAL_LABEL === 'true') {
       await page.waitForFunction(() => document.querySelector('#sync-status')?.textContent.includes('本机演示模式'), null, { timeout: 10000 });
       check((await page.locator('#sync-status').innerText()).includes('未接入测试云端'), 'unconfigured preview explicitly labels local-only data, not cloud backup');
@@ -110,6 +122,10 @@ async function main() {
     check(await page.getByRole('heading', { name: '拍照 / 上传原件' }).isVisible(), 'file/photo screen opens');
     const sample = Buffer.from('SYNTHETIC_PREVIEW_FILE_' + marker);
     await page.locator('[data-form="file"] input[name="file"]').setInputFiles({ name: 'synthetic-preview.txt', mimeType: 'text/plain', buffer: sample });
+    if(process.env.PREVIEW_EXPECTED_SHA) {
+      await page.locator('form[data-form="file"] select[name="projectId"]').selectOption({index:1});
+      await page.locator('form[data-form="file"] textarea[name="remark"]').fill('合成线上验收：报价单已拍照，待设备科回电');
+    }
     await page.locator('[data-form="file"] button.primary').click();
     await page.locator('button[data-download]').last().waitFor();
     const filePreserved = await page.evaluate(async () => {
@@ -120,6 +136,20 @@ async function main() {
       return !!original && original.size === entry.size && (await original.text()).startsWith('SYNTHETIC_PREVIEW_FILE_');
     });
     check(filePreserved, 'synthetic attachment bytes persisted locally');
+    if(process.env.PREVIEW_EXPECTED_SHA) {
+      const linked=await page.evaluate(async()=>{
+        const st=await WorkbenchBusinessStore.read();
+        const file=st.files.find(item=>item.name==='synthetic-preview.txt');
+        const project=st.projects.find(item=>item.id===file.projectId);
+        const note=st.notes.find(item=>item.fileId===file.id);
+        return {remark:file.remark,hasProject:!!project,hasNote:!!note,
+          timeline:!!project?.timeline.some(item=>item.fileId===file.id),
+          sameId:project?.timeline.find(item=>item.fileId===file.id)?.id===note?.id};
+      });
+      check(linked.hasProject&&linked.hasNote&&linked.timeline&&linked.sameId &&
+        linked.remark==='合成线上验收：报价单已拍照，待设备科回电',
+        'deployed original, remark and linked project timeline are stored atomically');
+    }
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.waitForFunction(expected => document.documentElement.dataset.releaseReady === expected, manifest.releaseId, { timeout: 60000 });
     check(await page.evaluate(async () => (await WorkbenchBusinessStore.read()).files.some(file => file.name === 'synthetic-preview.txt')), 'attachment metadata survives reload');
