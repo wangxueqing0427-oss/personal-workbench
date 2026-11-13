@@ -51,7 +51,7 @@ jobs:
           const root='v2/preview-public';
           const m=JSON.parse(fs.readFileSync(path.join(root,'build-info.json'),'utf8'));
           if(m.sourceCommit!==process.env.GITHUB_SHA||m.sourceClean!==true||m.syntheticOnly!==true) throw new Error('Preview source/clean/synthetic gate failed');
-          if(Object.keys(m.assets).length!==18) throw new Error('Expected 18 preview assets');
+          if(Object.keys(m.assets).length!==19) throw new Error('Expected 19 preview assets');
           for(const [name,spec] of Object.entries(m.assets)){
             const file=path.resolve(root,name);
             if(!file.startsWith(path.resolve(root)+path.sep)) throw new Error('Unsafe asset path');
@@ -59,6 +59,9 @@ jobs:
             if(bytes.length!==spec.bytes||crypto.createHash('sha256').update(bytes).digest('hex')!==spec.sha256) throw new Error('Asset hash mismatch: '+name);
             if(bytes.includes(Buffer.from('personal-workbench-v2-staging'))) throw new Error('Staging hostname found in preview asset: '+name);
           }
+          if(!Object.keys(m.assets).some(name=>name.endsWith('/preview-privacy.js'))) throw Error('Missing preview-only privacy gate');
+          if(!fs.readFileSync(path.join(root,'business.html'),'utf8').includes('preview-privacy-shield')) throw Error('Missing startup privacy shield');
+          if(!fs.readFileSync(path.join(root,'p0.html'),'utf8').includes('preview-privacy-shield')) throw Error('Missing backup privacy shield');
           console.log('PREVIEW_ASSET_GATE_PASS');
           NODE
       - name: Deploy only the pre-created isolated Worker
