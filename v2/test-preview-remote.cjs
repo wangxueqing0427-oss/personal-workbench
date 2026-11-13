@@ -193,6 +193,9 @@ async function main() {
       const manage = page.locator('dialog.privacy-manage');
       await manage.locator('input[data-preview-pin="设置6至12位数字PIN"]').fill(pin);
       await manage.locator('input[data-preview-pin="重复输入PIN"]').fill(pin);
+      const firstRecovery = (await manage.locator('#preview-privacy-recovery-code').innerText()).trim();
+      check(/^[a-f0-9]{32}$/.test(firstRecovery), 'synthetic recovery code generated with full 128-bit entropy format');
+      await manage.locator('#preview-recovery-ack').check();
       await manage.getByRole('button', { name: '启用本机PIN遮挡' }).click();
       await page.locator('#privacy-layer').waitFor({ timeout: 15000 });
       check(!await page.locator('main').isVisible(), 'protected business UI is hidden immediately after PIN enrollment');
@@ -202,6 +205,7 @@ async function main() {
         return { digest: config.digest, salt: config.salt, raw };
       });
       check(configCheck.digest.length === 64 && configCheck.salt.length === 32 && !configCheck.raw.includes(pin), 'PIN is stored as salted derived verifier, not plaintext');
+      check(!configCheck.raw.includes(firstRecovery) && JSON.parse(configCheck.raw).recoveryDigest.length === 64, 'recovery code is never stored in plaintext');
       await page.reload({ waitUntil: 'domcontentloaded' });
       await page.locator('#privacy-layer').waitFor({ timeout: 30000 });
       check(!await page.locator('main').isVisible(), 'reload fails closed before showing business content');
@@ -273,6 +277,26 @@ async function main() {
       await disable.waitFor({ state: 'detached' });
       check(await page.evaluate(() => !localStorage.getItem('personal-workbench-v2-preview-privacy-gate-v1')), 'correct PIN can safely disable optional preview gate');
       check(await page.evaluate(async () => (await WorkbenchBusinessStore.read()).files.some(item => item.name === 'synthetic-preview.txt')), 'disabling PIN does not delete or change local originals');
+
+      // Recovery is deliberately tested separately from normal PIN unlock/disable.
+      await page.locator('#preview-privacy-settings').click();
+      const secondEnrollment = page.locator('dialog.privacy-manage');
+      await secondEnrollment.locator('input[data-preview-pin="设置6至12位数字PIN"]').fill(pin);
+      await secondEnrollment.locator('input[data-preview-pin="重复输入PIN"]').fill(pin);
+      const recoveryCode = (await secondEnrollment.locator('#preview-privacy-recovery-code').innerText()).trim();
+      await secondEnrollment.locator('#preview-recovery-ack').check();
+      await secondEnrollment.getByRole('button', { name: '启用本机PIN遮挡' }).click();
+      await page.locator('#privacy-layer').waitFor();
+      await page.locator('#privacy-layer summary').click();
+      await page.locator('#preview-privacy-recovery-input').fill('0'.repeat(32));
+      await page.getByRole('button', { name: '用恢复码解锁并关闭PIN遮挡' }).click();
+      await page.locator('#privacy-layer').getByText('恢复码无效').waitFor();
+      check(!await page.locator('main').isVisible(), 'incorrect recovery code cannot bypass privacy cover');
+      await page.locator('#preview-privacy-recovery-input').fill(recoveryCode);
+      await page.getByRole('button', { name: '用恢复码解锁并关闭PIN遮挡' }).click();
+      await page.locator('#privacy-layer').waitFor({ state: 'detached' });
+      check(await page.evaluate(() => !localStorage.getItem('personal-workbench-v2-preview-privacy-gate-v1')), 'correct one-time recovery code restores UI access and clears PIN cover only');
+      check(await page.evaluate(async () => (await WorkbenchBusinessStore.read()).files.some(item => item.name === 'synthetic-preview.txt')), 'PIN recovery does not alter stored original file records');
     }
     check(errors.length === 0, 'no page exceptions or external resource access: ' + errors.join('; '));
     console.log(JSON.stringify({ engine, passed, failures: 0, releaseId: manifest.releaseId, sourceCommit: manifest.sourceCommit }));
