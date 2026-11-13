@@ -23,7 +23,7 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PREVIEW_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      PREVIEW_TEST_TOKEN_FILE: ${{ runner.temp }}/preview-test-token
+      PREVIEW_TEST_TOKEN_FILE: /tmp/preview-test-token
       WRANGLER_SEND_METRICS: "false"
     steps:
       - name: Checkout independent preview branch
@@ -40,7 +40,7 @@ jobs:
           test "$GITHUB_REF" = "refs/heads/dev/v2-preview-isolated-20261111"
           test -n "$CLOUDFLARE_ACCOUNT_ID"
           test -n "$CLOUDFLARE_API_TOKEN"
-          node -e "const c=require('./v2/wrangler.preview.jsonc');if(c.name!=='personal-workbench-v2-preview'||c.vars.TEST_ENVIRONMENT!=='synthetic-only'||c.vars.TEST_DATASET!=='mobile-preview-20261111'||c.durable_objects.bindings[0].script_name)process.exit(1)"
+          node -e "const fs=require('fs');const c=JSON.parse(fs.readFileSync('./v2/wrangler.preview.jsonc','utf8'));if(c.name!=='personal-workbench-v2-preview'||c.vars.TEST_ENVIRONMENT!=='synthetic-only'||c.vars.TEST_DATASET!=='mobile-preview-20261111'||c.durable_objects.bindings[0].script_name)process.exit(1)"
           npx --yes wrangler@4.149.0 secret list --name personal-workbench-v2-preview --config v2/wrangler.preview.jsonc --format json > "$RUNNER_TEMP/preview-prior-secrets.json"
           node -e "const fs=require('fs');const values=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/preview-prior-secrets.json','utf8'));if(!Array.isArray(values)||values.some(x=>x.name==='TEST_TOKEN'))throw Error('Preview TEST_TOKEN already exists; no credentials changed')"
       - name: Prepare a temporary synthetic-only secret
