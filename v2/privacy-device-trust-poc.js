@@ -22,7 +22,7 @@ const fingerprint=async jwk=>{if(!jwk||jwk.kty!=='EC'||jwk.crv!=='P-256'||!jwk.x
 const sign=async(key,obj)=>b64(new Uint8Array(await crypto.subtle.sign({name:'ECDSA',hash:'SHA-256'},key,enc.encode(JSON.stringify(obj)))));
 async function signature(key,data,s){try{return await crypto.subtle.verify({name:'ECDSA',hash:'SHA-256'},key,from64(s),enc.encode(JSON.stringify(data)));}catch{return false;}}
 async function importPublic(jwk,usage){await fingerprint(jwk);return crypto.subtle.importKey('jwk',jwk,
-  usage==='verify'?{name:'ECDSA',namedCurve:'P-256'}:{name:'ECDH',namedCurve:'P-256'},false,[usage]);}
+  usage==='verify'?{name:'ECDSA',namedCurve:'P-256'}:{name:'ECDH',namedCurve:'P-256'},false,usage==='verify'?['verify']:[]);}
 async function derivePair(privateKey,other,salt,info){
   const remote=await importPublic(other,'');
   const bits=await crypto.subtle.deriveBits({name:'ECDH',public:remote},privateKey,256);
