@@ -115,6 +115,12 @@ async function main(){
       globalThis.__cloudStore=store;
       globalThis.__syntheticFetch=async(target,init)=>{
         if(globalThis.__cloudOffline)throw TypeError('Simulated airplane-mode networking');
+        if(globalThis.__failPartIndex!==undefined && init?.method==='PUT' &&
+          new URL(target).pathname.endsWith('/'+globalThis.__failPartIndex) &&
+          new URL(target).pathname.startsWith('/sync/uploads/')){
+          delete globalThis.__failPartIndex;
+          throw TypeError('Simulated brief interruption before encrypted part upload');
+        }
         const reply=await fetch(target,init);
         if(globalThis.__dropAck&&init?.method==='PUT'&&new URL(target).pathname==='/sync'){
           globalThis.__dropAck=false;
@@ -259,6 +265,29 @@ async function main(){
       'lost final upload acknowledgement cannot duplicate remote revision on retry');
     check(history.size===5&&uploadCommits===5&&idempotent.afterFailure.queue===6,
       'cloud retains five immutable historical revisions and local journal remains intact');
+    const chunkResume=await runOn(A.page,async()=>{
+      const store=__cloudClient.getStore(),before=await store.read();
+      const changed=WorkbenchBusiness.upsertHospital(before,{name:'SYNTHETIC RETRY INTERRUPTED CHUNK UPLOAD'}).state;
+      await store.commit(changed,before.revision);
+      globalThis.__failPartIndex=2;
+      let interrupted=false;
+      try{await __cloudClient.tick();}catch{interrupted=true;}
+      const queue=await store.queueData(),stillLocal=(await store.read()).hospitals.length;
+      const confirmed=await __cloudClient.tick();
+      return {interrupted,queue:queue.jobs.length,stillLocal,confirmed};
+    });
+    check(chunkResume.interrupted&&chunkResume.queue===7&&chunkResume.stillLocal===5&&cloud.revision===6,
+      'interrupted multipart upload leaves local journal and records intact, then completes after retry');
+    check(chunkResume.confirmed.status==='uploaded'&&duplicateParts>=2&&uploadCommits===6&&history.size===6,
+      'repeated encrypted chunks are idempotent and one retry creates exactly one remote version');
+    const lateHistory=await runOn(A.page,async()=>{
+      const prior=await __cloudClient.inspectHistory(5);
+      const state=await prior.store.read(),original=await prior.store.readFile(state.files[0].id);
+      prior.store.close();
+      return {hospitals:state.hospitals.length,bytes:original.size};
+    });
+    check(lateHistory.hospitals===4&&lateHistory.bytes===512*1024+21,
+      'retrying newer multipart updates never destroys older encrypted cloud history');
     const badHash=await runOn(A.page,async params=>{
       const store=__cloudClient.getStore();
       const original=await store.read(),baseRev=__cloudClient.cursor().remoteRevision;
@@ -276,7 +305,7 @@ async function main(){
       let refused=false;try{await fraud.tick();}catch{refused=true;}
       return {refused,stateUnchanged:JSON.stringify(original)===JSON.stringify(await store.read()),baseRev};
     },{phrase,token,key:transportKey});
-    check(badHash.refused&&badHash.stateUnchanged&&badHash.baseRev===5,
+    check(badHash.refused&&badHash.stateUnchanged&&badHash.baseRev===6,
       'tampered cloud envelope hash fails closed and local data is unchanged');
     const wrongKey=await runOn(A.page,async params=>{
       const strange=await WorkbenchE2ECloudPOC.createClient({store:null,phrase:params.phrase,token:params.token,
@@ -285,6 +314,16 @@ async function main(){
       return {refused,noLocalVault:strange.getStore()===null};
     },{phrase,token,bad:crypto.randomBytes(32).toString('base64')});
     check(wrongKey.refused&&wrongKey.noLocalVault,'wrong transport key cannot decrypt server payload or overwrite local vault');
+    const deniedCredential=await runOn(A.page,async params=>{
+      const store=__cloudClient.getStore(),original=await store.read();
+      const impostor=await WorkbenchE2ECloudPOC.createClient({
+        store,phrase:params.phrase,token:'SYNTHETIC-ONLY-'+'0'.repeat(48),
+        transportKey:Uint8Array.from(atob(params.key),x=>x.charCodeAt(0)),endpoint:location.origin+'/sync'});
+      let rejected=false;
+      try{await impostor.tick();}catch(error){rejected=/身份失效/.test(error.message);}
+      return rejected&&JSON.stringify(original)===JSON.stringify(await store.read());
+    },{phrase,key:transportKey});
+    check(deniedCredential,'incorrect synthetic bearer credential cannot read encrypted remote or alter local records');
     const foreign=await runOn(A.page,async params=>{
       let refused=false;
       try{await WorkbenchE2ECloudPOC.createClient({store:null,phrase:params.phrase,token:params.token,
