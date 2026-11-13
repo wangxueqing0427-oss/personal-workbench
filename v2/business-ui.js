@@ -10,7 +10,7 @@
   const options = (values, current) => values.map(value => `<option${value === current ? ' selected' : ''}>${escape(value)}</option>`).join('');
   const field = (name, label, value = '', type = 'text') => `<label>${label}<input name="${name}" type="${type}" value="${escape(value)}"></label>`;
   let state, route = 'home', selection = '', suggestion = null, busy = false;
-  let searchQuery = '', searchStatus = '全部';
+  let searchQuery = '', searchStatus = '全部', quickTomorrow = false;
   function message(value) { notice.textContent = value; }
   async function save(next, file) {
     if (!compatible()) throw new Error('版本不兼容 / 同步已暂停');
@@ -33,7 +33,7 @@
       const hospital=state.hospitals.find(item=>item.id===project.hospitalId);
       const date=project.followupDate?escape(project.followupDate):'日期待定';
       const main=`<button class="project-button" data-project="${escape(project.id)}"><span class="project-title">${escape(project.name)}</span><span class="project-subtitle">${escape(hospital?.name||'未关联医院')} · ${escape(project.kind)}</span><span class="project-summary">${escape(project.nextAction||'尚未填写下一步')}</span><span class="project-foot">${statusTag(project.status)}<span class="project-date">${date}</span></span></button>`;
-      return `<div class="work-item">${main}${actions?`<div class="work-actions"><button type="button" data-quick-project="${escape(project.id)}">更新跟进</button><button type="button" data-note-project="${escape(project.id)}">记录进展</button><button type="button" data-files-project="${escape(project.id)}">上传资料</button></div>`:''}</div>`;
+      return `<div class="work-item">${main}${actions?`<div class="work-actions"><button type="button" data-quick-project="${escape(project.id)}">更新跟进</button><button type="button" data-follow-tomorrow="${escape(project.id)}">明天跟进</button><button type="button" data-note-project="${escape(project.id)}">记录进展</button><button type="button" data-files-project="${escape(project.id)}">拍照上传</button></div>`:''}</div>`;
     }).join('') : '<div class="empty-state"><span aria-hidden="true">✓</span><p>目前没有需要处理的事项</p><small>新进展可以随时从下方快捷入口记录</small></div>';
   }
   function home() {
@@ -79,7 +79,7 @@
   function quickProjectForm() {
     const project=state.projects.find(item=>item.id===selection);
     if(!project)return '<section class="card">项目不存在，请返回医院列表。</section>';
-    return `<form class="card quick-edit" data-form="quick-project"><button type="button" data-back="project" class="back-link">← 返回项目</button><p class="eyebrow">QUICK UPDATE</p><h2>快速更新跟进</h2><p class="muted">${escape(project.name)}</p><div class="form-grid"><label>当前状态<select name="status">${options(core.statuses,project.status)}</select></label>${field('followupDate','下次跟进日期',project.followupDate,'date')}${field('nextAction','下一步行动',project.nextAction)}${field('waitingOn','等待谁',project.waitingOn)}</div><label>本次沟通进展（选填）<textarea name="progress" placeholder="如：已联系设备科，待确认报价单"></textarea></label><button class="primary">保存本次更新</button></form>`;
+    return `<form class="card quick-edit" data-form="quick-project"><button type="button" data-back="project" class="back-link">← 返回项目</button><p class="eyebrow">QUICK UPDATE</p><h2>快速更新跟进</h2><p class="muted">${escape(project.name)}${quickTomorrow?' · 日期已预填为明天，确认保存后生效':''}</p><div class="form-grid"><label>当前状态<select name="status">${options(core.statuses,project.status)}</select></label>${field('followupDate','下次跟进日期',quickTomorrow?core.addDays(today(),1):project.followupDate,'date')}${field('nextAction','下一步行动',project.nextAction)}${field('waitingOn','等待谁',project.waitingOn)}</div><label>本次沟通进展（选填）<textarea name="progress" placeholder="如：已联系设备科，待确认报价单"></textarea></label><button class="primary">保存本次更新</button></form>`;
   }
   function projectDetail() {
     const project=state.projects.find(item=>item.id===selection);
@@ -87,7 +87,7 @@
     const hospital=state.hospitals.find(item=>item.id===project.hospitalId);
     const finance=project.financials?`<section class="card">${sectionHead('FINANCIALS','合同与回款')}<div class="finance-strip"><span>合同 <strong>¥${escape(project.financials.contractAmount)}</strong></span><span>已收 <strong>¥${escape(project.financials.receivedAmount)}</strong></span><span>未收 <strong>¥${escape(project.financials.unpaidAmount)}</strong></span></div></section>`:'';
     const details=Object.entries(project.details||{}).filter(([,value])=>value).map(([name,value])=>`<div class="info-row"><span>${escape(({device:'设备',brand:'品牌',model:'型号',salesStage:'销售进度',contractStart:'合同开始',contractEnd:'合同结束',bidDate:'招标',renewalDate:'续约',quoteDate:'报价'})[name]||name)}</span><strong>${escape(value)}</strong></div>`).join('')||'<p class="muted">暂无设备或节点记录</p>';
-    const timeline=[...project.timeline].reverse().map(item=>`<div class="timeline"><small>${escape(item.occurredOn||item.createdAt||'')}</small><p>${escape(item.text)}</p></div>`).join('')||'<div class="empty-state"><p>还没有跟进记录</p><small>点击“记录进展”，第一次沟通就能留下完整时间线</small></div>';
+    const timeline=[...project.timeline].reverse().map(item=>`<div class="timeline"><small>${escape(item.occurredOn||item.createdAt||'')}</small><p>${escape(item.text)}</p>${item.fileId?`<div class="timeline-file">${fileButtons([item.fileId])}</div>`:''}</div>`).join('')||'<div class="empty-state"><p>还没有跟进记录</p><small>点击“记录进展”，第一次沟通就能留下完整时间线</small></div>';
     return `<section class="card detail-head"><button data-back="hospitals" class="back-link">← 医院业务</button><p class="eyebrow">PROJECT DETAILS</p><h2>${escape(project.name)}</h2><p class="muted">${escape(hospital?.name||'未关联医院')} · ${escape(project.kind)}</p>${statusTag(project.status)}<div class="focus-box"><span class="field-label">下一步行动</span><strong>${escape(project.nextAction||'还没有设置下一步')}</strong><div class="focus-meta"><span>等待：${escape(project.waitingOn||'无')}</span><span>跟进：${escape(project.followupDate||'未设置')}</span></div></div><div class="detail-actions"><button class="primary" data-quick-project="${escape(project.id)}">更新状态 / 日期</button><button data-note-project="${escape(project.id)}">＋ 记录进展</button><button data-files-project="${escape(project.id)}">上传资料</button><button data-edit-project="${escape(project.id)}">编辑设备节点</button></div><p class="muted">负责人：${escape(project.owner||'未填写')}</p></section>${finance}<section class="card">${sectionHead('EQUIPMENT','设备与节点')}${details}</section><section class="card">${sectionHead('FILES','项目资料',`${project.fileIds.length} 份`)}${fileButtons(project.fileIds)||'<p class="muted">暂无资料</p>'}<button data-files-project="${escape(project.id)}">关联合同 / 报价 / 照片</button></section><section class="card">${sectionHead('ACTIVITY','跟进时间线')}${timeline}</section>`;
   }
   function note() {
@@ -110,7 +110,7 @@
   function files() {
     const order = state.orders.find(item => item.id === selection);
     const linkedProjectId = order?.projectId || selection;
-    return `<form class="card" data-form="file"><h2>拍照 / 上传原件</h2><p>仅使用合成测试文件。原件先保存在本机；接入测试身份后，加密同步至独立测试服务器。</p>${order ? `<p class="muted">关联耗材订单：${escape(order.product)}（自动归入该订单所属项目）</p>` : ''}<label>关联项目<select name="projectId"><option value="">暂存文件收件箱</option>${state.projects.map(item => `<option value="${escape(item.id)}"${linkedProjectId === item.id ? ' selected' : ''}>${escape(state.hospitals.find(hospital => hospital.id === item.hospitalId)?.name)} · ${escape(item.name)}</option>`).join('')}</select></label><label>选择已有文件<input name="file" type="file"></label><label>打开手机相机拍照<input name="photo" type="file" accept="image/*" capture="environment"></label><p class="muted">二选一即可，后选的文件会替换前一次选择。原件保存失败时不会新增关联记录。</p><button class="primary">保存原件和关联</button></form><section class="card"><h3>文件收件箱</h3>${fileButtons(state.files.map(item => item.id)) || '<p>暂无文件</p>'}</section>`;
+    return `<form class="card" data-form="file"><h2>拍照 / 上传原件</h2><p>仅使用合成测试文件。原件先保存在本机；接入测试身份后，加密同步至独立测试服务器。</p>${order ? `<p class="muted">关联耗材订单：${escape(order.product)}（自动归入该订单所属项目）</p>` : ''}<label>关联项目<select name="projectId"><option value="">暂存文件收件箱</option>${state.projects.map(item => `<option value="${escape(item.id)}"${linkedProjectId === item.id ? ' selected' : ''}>${escape(state.hospitals.find(hospital => hospital.id === item.hospitalId)?.name)} · ${escape(item.name)}</option>`).join('')}</select></label><label>选择已有文件<input name="file" type="file"></label><label>打开手机相机拍照<input name="photo" type="file" accept="image/*" capture="environment"></label><label>本次资料的沟通备注（选填）<textarea name="remark" maxlength="1000" placeholder="例如：设备科已接收报价单，下周二电话确认。"></textarea></label><p class="muted">备注会与这份原件一起保存，并自动进入关联项目时间线；未选择项目则保留在收件箱。二选一即可，原件失败时备注也不会单独写入。</p><button class="primary">保存原件和关联</button></form><section class="card"><h3>文件收件箱</h3>${fileButtons(state.files.map(item => item.id)) || '<p>暂无文件</p>'}</section>`;
   }
   function more() { return `<section class="card"><h2>更多</h2><p>V2.0 手机验收测试版。仅合成数据，独立加密同步。</p><button data-route="files">文件与拍照</button> <button data-route="inbox">记录收件箱</button><p>完整备份及隔离恢复已自动测试；未开放生产资料接入。</p><p class="muted">iPhone真实Safari/PWA、供应链批次追溯和旧版文件迁移仍需后续验收。</p></section>`; }
   function render() {
@@ -121,14 +121,15 @@
   document.addEventListener('click', async event => {
     const button = event.target.closest('button'); if (!button || busy) return;
     try {
-      if (button.dataset.route) { route = button.dataset.route; selection = ''; suggestion = null; render(); window.scrollTo(0, 0); }
-      else if (button.dataset.back) { route = button.dataset.back; selection = ''; render(); }
+      if (button.dataset.route) { route = button.dataset.route; selection = ''; suggestion = null; quickTomorrow = false; render(); window.scrollTo(0, 0); }
+      else if (button.dataset.back) { route = button.dataset.back; quickTomorrow = false; if (route !== 'project') selection = ''; render(); }
       else if (button.hasAttribute('data-clear-search')) { searchQuery = ''; searchStatus = '全部'; render(); }
       else if (button.hasAttribute('data-edit-hospital')) { selection = button.dataset.editHospital; route = 'hospital-form'; render(); }
       else if (button.dataset.hospital) { selection = button.dataset.hospital; route = 'hospitals'; render(); }
       else if (button.dataset.project) { selection = button.dataset.project; route = 'project'; render(); }
       else if (button.dataset.newProject || button.dataset.editProject) { selection = button.dataset.newProject || button.dataset.editProject; route = 'project-form'; render(); }
-      else if (button.dataset.quickProject) { selection = button.dataset.quickProject; route = 'quick-project'; render(); }
+      else if (button.dataset.followTomorrow) { selection = button.dataset.followTomorrow; quickTomorrow = true; route = 'quick-project'; render(); }
+      else if (button.dataset.quickProject) { selection = button.dataset.quickProject; quickTomorrow = false; route = 'quick-project'; render(); }
       else if (button.dataset.noteProject) { selection = button.dataset.noteProject; route = 'note'; suggestion = null; render(); }
       else if (button.dataset.filesProject || button.dataset.filesOrder) { selection = button.dataset.filesProject || button.dataset.filesOrder; route = 'files'; render(); }
       else if (button.hasAttribute('data-cancel-note')) { suggestion = null; render(); }
@@ -186,7 +187,7 @@
           changed.timeline.push({id,text:progress,occurredOn:today(),sourceText:progress});
           merged.notes.push({id,progress,projectId:selection,savedOn:today(),createdOn:today(),disposition:'项目时间线',source:'快捷跟进'});
         }
-        await save(merged);route='project';
+        await save(merged);route='project';quickTomorrow = false;
       }
       if (form.dataset.form === 'order') await save(core.saveOrder(state, values));
       if (form.dataset.form === 'stage') { const order = state.orders.find(item => item.id === form.dataset.id); await save(core.advanceOrder(state, order.id, core.stages[core.stages.indexOf(order.stage) + 1], today(), values)); }
@@ -199,9 +200,21 @@
         const projectId = order?.projectId || values.projectId;
         const project = projectId ? next.projects.find(item => item.id === projectId) : null;
         if (projectId && !project) throw new Error('关联项目已经不存在，请重新选择，原件未写入');
-        next.files.push({ id, name: file.name, size: file.size, type: file.type, projectId, createdOn: today() });
+        const remark=String(values.remark||'').trim();
+        if(remark.length>1000)throw new Error('备注不能超过1000字，原件尚未保存');
+        next.files.push({ id, name: file.name, size: file.size, type: file.type, projectId, createdOn: today(), remark });
         if (project) project.fileIds.push(id);
         if (order) order.fileIds.push(id);
+        if (remark) {
+          const noteId=crypto.randomUUID(),date=today();
+          next.notes.push({id:noteId,progress:remark,projectId:project?.id||'',fileId:id,
+            savedOn:date,createdOn:date,disposition:project?'项目时间线':'收件箱',
+            source:'原件上传备注'});
+          if(project) {
+            project.timeline.push({id:noteId,text:remark,occurredOn:date,sourceText:remark,fileId:id});
+            project.updatedOn=date;
+          }
+        }
         await save(next, { id, value: file });
       }
       render();
