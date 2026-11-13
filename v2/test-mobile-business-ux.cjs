@@ -241,6 +241,7 @@ async function main(){
    check(!verified.names.includes('not-selected.jpg')&&verified.jobs>1,
      'stale camera selection is never accidentally uploaded and pending offline jobs remain');
    await page.locator('nav button[data-route="hospitals"]').click();
+   await page.locator('[data-hospital]').first().click();
    await page.locator('[data-project]').first().click();
    const photoTimeline=await page.getByText('合成拍照沟通：请设备科确认过滤器采购申请');
    check(await photoTimeline.isVisible()&&await page.locator('.timeline-file [data-download]').count()>=1,
