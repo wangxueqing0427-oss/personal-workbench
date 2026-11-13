@@ -25,6 +25,14 @@
 - **预览分支与 `main` 当前无法通过GitHub compare建立共同祖先**（compare API返回404）；后续若需正式集成，必须另做无破坏的版本映射、备份核对和并行运行方案，不得擅自强行合并。
 - 用户此前生成的 Cloudflare 专用部署令牌设置为7天有效；约2026-11-20前后到期，过期后后续云端部署需用户通过官方界面重新授权，**当前无需参与**。
 
+## 最新闭环核验结果（2026-11-13）
+
+- 独立预览 Worker 最终发布：[部署 + 线上逐版本验收 43363901554](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43363901554)。GitHub 工作流成功，Worker 版本 `553206e4-0dfd-47ba-b6e9-5ca850439bac`，线上源码标记与实际发布 SHA `9cffa2ed2becf7f7b3908260e8c6811d1baa23bd` 完全一致。
+- 真实部署后手机浏览器模拟：**Chromium 116 PASS / 0 FAIL**，**WebKit 112 PASS / 0 FAIL**，合计228项通过；包含 19个 SHA-256 校验的资源、PIN设置/多次输入错误锁定、模拟后台切换、模拟90秒闲置锁定、根页面与版本化备份入口遮挡、PIN解锁/安全关闭、恢复码错误拒绝/正确恢复以及原始文件不变。
+- [单独的双设备真实云端回归 43364191816](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43364191816)：真实 Cloudflare API 35 PASS + 双 Chromium 独立浏览器业务流程32 PASS，合计67项通过，临时云端测试密钥已删除且撤销检查成功。
+- 两次独立绿色工作流中的最新有效自动检查**累计295项通过、0项失败**（228 + 67；不是295个完全独立业务场景）。先前几次红色工作流系脚本选择器与测试时序问题，均保留可追溯记录；此处只计算最终绿色运行结果。
+- **仍是仅合成测试**，未完成真实 iPhone 终验、Face ID、客户端静态加密、长期同步身份及真实资料迁移的安全审查。生产用隐私架构见 `v2/PRODUCTION-PRIVACY-DESIGN.md`。
+
 ## 当前证据（核验口径）
 
 - 上一轮真实云端双设备测试 [43363091629](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43363091629)：接口35 PASS + 2浏览器 UI30 PASS，自动撤销临时 TEST_TOKEN，原工作台资料未触达。
