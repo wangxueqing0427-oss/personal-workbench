@@ -10,6 +10,7 @@
   const options = (values, current) => values.map(value => `<option${value === current ? ' selected' : ''}>${escape(value)}</option>`).join('');
   const field = (name, label, value = '', type = 'text') => `<label>${label}<input name="${name}" type="${type}" value="${escape(value)}"></label>`;
   let state, route = 'home', selection = '', suggestion = null, busy = false;
+  let searchQuery = '', searchStatus = '全部';
   function message(value) { notice.textContent = value; }
   async function save(next, file) {
     if (!compatible()) throw new Error('版本不兼容 / 同步已暂停');
@@ -33,13 +34,25 @@
     const future = view.week.filter(item => item.followupDate > today());
     return `<section class="card"><h2>今天先办重要的事</h2><div class="grid"><button class="primary" data-route="note">随手记录</button><button data-route="hospitals">医院与项目</button><button data-route="files">拍照 / 上传</button><button data-route="supplies">耗材业务</button></div></section>` + [['今天要办', view.today], ['已逾期', view.overdue], ['等待反馈', view.waiting]].filter(([name, items]) => name === '今天要办' || items.length).map(([name, items]) => `<section class="card"><h2>${name} <small>${items.length}</small></h2>${projectButtons(items)}</section>`).join('') + (future.length || view.nodes.length ? `<section class="card"><h2>未来7天节点</h2>${projectButtons(future)}${view.nodes.map(node => `<p>${escape(node.project.name)} · ${escape(({ bidDate: '招标', contractEnd: '合同到期', renewalDate: '续约', quoteDate: '报价' })[node.field])} · ${escape(node.date)}</p>`).join('')}</section>` : '') + `<details class="card"><summary>最近跟进 / 长时间未跟进</summary>${projectButtons(view.recent)}<h3>超过14天未跟进</h3>${projectButtons(view.stale)}</details>`;
   }
+  function hospitalSearchResults() {
+    const found = core.searchBusiness(state, searchQuery, searchStatus);
+    const showProjects = Boolean(searchQuery.trim()) || searchStatus !== '全部';
+    const hospitalCards = found.hospitals.map(item => `<button class="project-button" data-hospital="${escape(item.id)}"><strong>${escape(item.name)}</strong><p>${item.departments.length} 个科室 · ${state.projects.filter(project => project.hospitalId === item.id).length} 个项目${item.contacts.length ? ' · ' + item.contacts.length + ' 位联系人' : ''}</p></button>`).join('');
+    const projectCards = showProjects ? projectButtons(found.projects) : '';
+    const label = `筛选结果：${found.hospitals.length} 家医院${showProjects ? ' · ' + found.projects.length + ' 个项目' : ''}`;
+    return `<p class="muted" data-search-count>${label}</p>${hospitalCards || '<p class="muted">没有符合条件的医院</p>'}${showProjects ? `<h3>相关业务项目</h3>${projectCards}` : ''}`;
+  }
+  function updateHospitalSearch() {
+    const container = document.getElementById('business-search-results');
+    if (container) container.innerHTML = hospitalSearchResults();
+  }
   function hospitals() {
     if (selection) {
       const hospital = state.hospitals.find(item => item.id === selection);
       if (!hospital) { selection = ''; return hospitals(); }
-      return `<section class="card"><button data-back="hospitals">← 医院列表</button><h2>${escape(hospital.name)}</h2><p>科室：${escape(hospital.departments.join('、') || '待完善')}</p>${hospital.contacts.map(item => `<p>${escape(item.department)} · ${escape(item.name)} · ${escape(item.phone)}</p>`).join('')}<button data-edit-hospital="${escape(hospital.id)}">补充科室 / 联系人</button> <button class="primary" data-new-project="${escape(hospital.id)}">新建项目</button><h3>合同与业务项目</h3>${projectButtons(state.projects.filter(item => item.hospitalId === hospital.id))}</section>`;
+      return `<section class="card"><button data-back="hospitals">← 医院列表</button><h2>${escape(hospital.name)}</h2><p>科室：${escape(hospital.departments.join('、') || '待完善')}</p>${hospital.contacts.map(item => `<p>${escape(item.department)} · ${escape(item.name)} · ${escape(item.phone)}</p>`).join('')}<button data-edit-hospital="${escape(hospital.id)}">编辑医院 / 科室 / 联系人</button> <button class="primary" data-new-project="${escape(hospital.id)}">新建项目</button><h3>合同与业务项目</h3>${projectButtons(state.projects.filter(item => item.hospitalId === hospital.id))}</section>`;
     }
-    return `<section class="card"><h2>医院业务档案</h2><button data-edit-hospital="">＋ 医院 / 联系人</button>${state.hospitals.map(item => `<button class="project-button" data-hospital="${escape(item.id)}"><strong>${escape(item.name)}</strong><p>${item.departments.length} 个科室 · ${state.projects.filter(project => project.hospitalId === item.id).length} 个项目</p></button>`).join('')}</section>`;
+    return `<section class="card"><h2>医院业务档案</h2><button data-edit-hospital="">＋ 医院 / 联系人</button><div class="search-controls"><label>搜索医院、项目、设备或联系人<input id="business-search" type="search" autocomplete="off" placeholder="输入医院名、设备、项目、电话…" value="${escape(searchQuery)}"></label><label>项目状态<select id="business-status-filter">${options(['全部', ...core.statuses], searchStatus)}</select></label><button type="button" data-clear-search>清空筛选</button></div><div id="business-search-results" aria-live="polite">${hospitalSearchResults()}</div></section>`;
   }
   function hospitalForm() {
     const hospital = state.hospitals.find(item => item.id === selection);
@@ -65,7 +78,9 @@
   }
   function fileButtons(ids) { return ids.map(id => { const file = state.files.find(item => item.id === id); return file ? `<button data-download="${escape(id)}">查看 / 下载 ${escape(file.name)}</button>${/^image\/(png|jpeg|webp|gif)$/.test(file.type || '') ? `<button data-preview="${escape(id)}">预览图片 ${escape(file.name)}</button>` : ''}` : `<p class="warning">资料 ${escape(id)} 未导入，原关联仍保留</p>`; }).join(''); }
   function files() {
-    return `<form class="card" data-form="file"><h2>拍照 / 上传原件</h2><p>仅使用合成测试文件。原件先保存在本机；接入测试身份后，加密同步至独立测试服务器。</p><label>关联项目<select name="projectId"><option value="">暂存文件收件箱</option>${state.projects.map(item => `<option value="${escape(item.id)}"${selection === item.id ? ' selected' : ''}>${escape(item.name)}</option>`).join('')}</select></label><label>文件<input name="file" type="file"></label><label>手机拍照<input name="photo" type="file" accept="image/*" capture="environment"></label><button class="primary">保存原件和关联</button></form><section class="card"><h3>文件收件箱</h3>${fileButtons(state.files.map(item => item.id)) || '<p>暂无文件</p>'}</section>`;
+    const order = state.orders.find(item => item.id === selection);
+    const linkedProjectId = order?.projectId || selection;
+    return `<form class="card" data-form="file"><h2>拍照 / 上传原件</h2><p>仅使用合成测试文件。原件先保存在本机；接入测试身份后，加密同步至独立测试服务器。</p>${order ? `<p class="muted">关联耗材订单：${escape(order.product)}（自动归入该订单所属项目）</p>` : ''}<label>关联项目<select name="projectId"><option value="">暂存文件收件箱</option>${state.projects.map(item => `<option value="${escape(item.id)}"${linkedProjectId === item.id ? ' selected' : ''}>${escape(state.hospitals.find(hospital => hospital.id === item.hospitalId)?.name)} · ${escape(item.name)}</option>`).join('')}</select></label><label>选择已有文件<input name="file" type="file"></label><label>打开手机相机拍照<input name="photo" type="file" accept="image/*" capture="environment"></label><p class="muted">二选一即可，后选的文件会替换前一次选择。原件保存失败时不会新增关联记录。</p><button class="primary">保存原件和关联</button></form><section class="card"><h3>文件收件箱</h3>${fileButtons(state.files.map(item => item.id)) || '<p>暂无文件</p>'}</section>`;
   }
   function more() { return `<section class="card"><h2>更多</h2><p>V2.0 手机验收测试版。仅合成数据，独立加密同步。</p><button data-route="files">文件与拍照</button> <button data-route="inbox">记录收件箱</button><p>完整备份及隔离恢复已自动测试；未开放生产资料接入。</p><p class="muted">iPhone真实Safari/PWA、供应链批次追溯和旧版文件迁移仍需后续验收。</p></section>`; }
   function render() {
@@ -78,6 +93,7 @@
     try {
       if (button.dataset.route) { route = button.dataset.route; selection = ''; suggestion = null; render(); window.scrollTo(0, 0); }
       else if (button.dataset.back) { route = button.dataset.back; selection = ''; render(); }
+      else if (button.hasAttribute('data-clear-search')) { searchQuery = ''; searchStatus = '全部'; render(); }
       else if (button.hasAttribute('data-edit-hospital')) { selection = button.dataset.editHospital; route = 'hospital-form'; render(); }
       else if (button.dataset.hospital) { selection = button.dataset.hospital; route = 'hospitals'; render(); }
       else if (button.dataset.project) { selection = button.dataset.project; route = 'project'; render(); }
@@ -98,6 +114,23 @@
       }
     } catch (error) { message(error.message); }
   });
+  document.addEventListener('input', event => {
+    if (event.target.id === 'business-search') {
+      searchQuery = event.target.value;
+      updateHospitalSearch();
+    }
+  });
+  document.addEventListener('change', event => {
+    if (event.target.id === 'business-status-filter') {
+      searchStatus = event.target.value;
+      updateHospitalSearch();
+    }
+    if (event.target.matches('form[data-form="file"] input[type="file"]') && event.target.files?.length) {
+      const other = event.target.name === 'file' ? 'photo' : 'file';
+      const otherInput = event.target.form?.elements.namedItem(other);
+      if (otherInput) otherInput.value = '';
+    }
+  });
   document.addEventListener('submit', async event => {
     const form = event.target; if (!form.dataset.form) return; event.preventDefault(); if (busy) return;
     busy = true; const values = Object.fromEntries(new FormData(form));
@@ -113,10 +146,14 @@
       if (form.dataset.form === 'file') {
         const file = values.file?.size ? values.file : values.photo; if (!file?.size) throw new Error('请选择文件或拍照');
         if (file.size > 20 * 1024 * 1024) throw new Error('开发测试单文件限制20MB，请保留原件并使用较小测试文件');
-        const next = structuredClone(state), id = crypto.randomUUID(), projectId = values.projectId;
+        const next = structuredClone(state), id = crypto.randomUUID();
+        const order = next.orders.find(item => item.id === selection);
+        const projectId = order?.projectId || values.projectId;
+        const project = projectId ? next.projects.find(item => item.id === projectId) : null;
+        if (projectId && !project) throw new Error('关联项目已经不存在，请重新选择，原件未写入');
         next.files.push({ id, name: file.name, size: file.size, type: file.type, projectId, createdOn: today() });
-        if (projectId) next.projects.find(item => item.id === projectId).fileIds.push(id);
-        const order = next.orders.find(item => item.id === selection); if (order) order.fileIds.push(id);
+        if (project) project.fileIds.push(id);
+        if (order) order.fileIds.push(id);
         await save(next, { id, value: file });
       }
       render();
