@@ -23,6 +23,13 @@
 - 自动化 Chromium 和 WebKit 验证：本轮 `66 PASS / 0 FAIL`，参见 [GitHub Actions](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43379683018)。额外攻击用例测试证明异编号密文调包无法解密；旧备份在密钥更新后仍保留旧恢复密码的访问能力，设计中要单独对用户说明。
 - 这项 PoC 证明密码派生和本地密文存储可以走通，但**没有实现 Face ID 解密密钥、尚未替换正式 `WorkbenchBusinessStore`、未读取任何用户手机上的原 V1 数据**；不能据此开放正式业务。
 
+## 新增：原业务界面接入加密存储接口验证（合成数据）
+
+- 已编写独立实验适配器 `privacy-business-adapter-poc.js`，直接连接现有 `business-ui.js` 和 `business-core.js`，不修改业务功能源文件。医院数据、附件原件和待同步队列统一封装为一次 AES-GCM 加密且 CAS 的快照，证明基本的事务原子性。
+- [最新自动测试记录](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43381628535)：Chromium **53/53**、WebKit **53/53**，共106项通过。原始业务界面新增医院、保存合成附件、文件字节完整性、备份恢复、冲突写入和异常回滚均有测试证据。
+- **不发布这个适配器到已有 Worker**：目前只是单行快照试验，单文件2MiB、合成原件累计4MiB且每次编辑都需要重新加密全量数据。正式版必须改成分对象/分块加密并保持跨记录、队列与原件的事务一致性；并且完整接入加密同步及系统身份密钥方案。
+- 独立审查详见 `v2/ENCRYPTED-BUSINESS-ADAPTER-REVIEW-2026-11-13.md`；实验代码没有读取真实设备或旧库数据，不等于可迁移或可上线。
+
 ## 零损坏迁移次序
 
 - 只读审计旧版 V1.5.7 / 现有 V2 预览的记录和本地文件来源，先列明已检查的**设备 / 域名 / Safari / PWA**范围，不能拿一个浏览器本地数据代替全设备。
