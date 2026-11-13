@@ -1,6 +1,7 @@
 'use strict';
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
+const fs = require('node:fs/promises');
 const { chromium, webkit } = require('playwright');
 
 const origin = 'https://personal-workbench-v2-preview.wangxueqing0427.workers.dev';
@@ -102,6 +103,67 @@ async function main() {
     check(await page.evaluate(async () => (await WorkbenchBusinessStore.read()).files.some(file => file.name === 'synthetic-preview.txt')), 'attachment metadata survives reload');
     await page.locator('nav button[data-route="home"]').click();
     check(await page.getByRole('heading', { name: '今天先办重要的事' }).isVisible(), 'reloaded home dashboard works');
+
+    // Exercise the actual deployed P0 UI: encrypted download, tamper rejection, verify,
+    // restore into a new isolated database, and proof that current records/files were untouched.
+    const beforeBackup = await page.evaluate(async () => {
+      const current = await WorkbenchBusinessStore.read();
+      const file = current.files.find(entry => entry.name === 'synthetic-preview.txt');
+      return { revision: current.revision, notes: current.notes.length, fileId: file.id, bytes: Array.from(new Uint8Array(await (await WorkbenchBusinessStore.readFile(file.id)).arrayBuffer())) };
+    });
+    const backupPage = await context.newPage();
+    backupPage.on('pageerror', error => errors.push('Backup page: ' + error.message));
+    backupPage.on('request', request => {
+      const url = request.url();
+      if (!url.startsWith(origin + '/') && !url.startsWith('blob:') && !url.startsWith('data:')) errors.push('Backup external request: ' + url);
+    });
+    try {
+      const response = await backupPage.goto(origin + '/p0.html', { waitUntil: 'domcontentloaded', timeout: 45000 });
+      check(response.status() === 200 && await backupPage.getByRole('heading', { name: 'V2.0 · P0 数据安全测试' }).isVisible(), 'deployed P0 backup and isolated restore UI available');
+      await backupPage.waitForFunction(() => !!window.WorkbenchSafety, null, { timeout: 30000 });
+      const password = 'synthetic-test-' + crypto.randomUUID();
+      await backupPage.locator('#password').fill(password);
+      const [download] = await Promise.all([
+        backupPage.waitForEvent('download', { timeout: 60000 }),
+        backupPage.locator('#export').click()
+      ]);
+      check(download.suggestedFilename().endsWith('.json'), 'backup download presents encrypted JSON file');
+      const backupBytes = await fs.readFile(await download.path());
+      const encrypted = JSON.parse(backupBytes.toString('utf8'));
+      check(backupBytes.length > 200 && !backupBytes.includes(Buffer.from(marker)), 'backup payload is encrypted, not readable cleartext');
+      const inspect = await backupPage.evaluate(async archive => {
+        const verified = await WorkbenchSafety.decryptBackup(archive.data, archive.password);
+        return verified.manifest;
+      }, { data: encrypted, password });
+      check(inspect.files >= 1 && inspect.fileBytes >= sample.length && inspect.records >= 2, 'encrypted archive contains the full synthetic original and records');
+      const tampered = structuredClone(encrypted);
+      const altered = tampered.ciphertext || tampered.data || tampered.encrypted;
+      if (typeof altered !== 'string' || altered.length < 8) throw new Error('Unexpected encrypted envelope shape');
+      const middle = Math.floor(altered.length / 2);
+      const modified = altered.slice(0, middle) + (altered[middle] === 'a' ? 'b' : 'a') + altered.slice(middle + 1);
+      if (tampered.ciphertext) tampered.ciphertext = modified;
+      else if (tampered.data) tampered.data = modified;
+      else tampered.encrypted = modified;
+      await backupPage.locator('#file').setInputFiles({ name: 'corrupted-preview.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(tampered)) });
+      await backupPage.locator('#validate').click();
+      await backupPage.waitForFunction(() => document.querySelector('#status').textContent.includes('未完成：'), null, { timeout: 45000 });
+      check(await backupPage.locator('#restore').isDisabled(), 'corrupted encrypted backup cannot enable restore');
+      await backupPage.locator('#file').setInputFiles({ name: 'synthetic-encrypted-backup.json', mimeType: 'application/json', buffer: backupBytes });
+      await backupPage.locator('#validate').click();
+      await backupPage.waitForFunction(() => document.querySelector('#status').textContent.includes('校验通过'), null, { timeout: 45000 });
+      check(await backupPage.locator('#restore').isEnabled(), 'intact encrypted backup passes verification');
+      await backupPage.locator('#restore').click();
+      await backupPage.waitForFunction(() => document.querySelector('#status').textContent.includes('隔离恢复验证通过'), null, { timeout: 45000 });
+      check((await backupPage.locator('#status').innerText()).includes('personal-workbench-p0-test-'), 'restore targets new isolated database only');
+      const afterBackup = await page.evaluate(async () => {
+        const current = await WorkbenchBusinessStore.read();
+        const file = current.files.find(entry => entry.name === 'synthetic-preview.txt');
+        return { revision: current.revision, notes: current.notes.length, fileId: file.id, bytes: Array.from(new Uint8Array(await (await WorkbenchBusinessStore.readFile(file.id)).arrayBuffer())) };
+      });
+      check(JSON.stringify(afterBackup) === JSON.stringify(beforeBackup), 'backup and isolated restore preserve all current records and original file bytes');
+    } finally {
+      await backupPage.close();
+    }
 
     if (engine === 'chromium') {
       await page.evaluate(async () => {
