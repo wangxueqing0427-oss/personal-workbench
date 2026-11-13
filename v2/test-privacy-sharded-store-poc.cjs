@@ -42,7 +42,7 @@ async function main(){
       return {revision:state.revision,hospitals:state.hospitals.length,projects:state.projects.length,jobs:queue.jobs.length,configured:queue.config};
     });
     pass(seeded.revision===0&&seeded.hospitals===3&&seeded.projects===3&&seeded.jobs===1,'synthetic three-hospital seed commits encrypted state and queue together');
-    pass(seeded.config===null,'cloud credentials deliberately unavailable in chunked proof');
+    pass(seeded.configured===null,'cloud credentials deliberately unavailable in chunked proof');
 
     const original=Buffer.alloc(6*1024*1024+39);
     for(let i=0;i<original.length;i++)original[i]=(i*41+(i>>9))&255;
