@@ -1,0 +1,43 @@
+name: V2 preview remote browser smoke
+on:
+  push:
+    branches:
+      - dev/v2-preview-isolated-20261111
+    paths:
+      - .github/workflows/v2-preview-e2e.yml
+      - v2/test-preview-remote.cjs
+      - v2/build-preview.cjs
+      - v2/release-loader.js
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  synthetic-remote-browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 14
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, webkit]
+    env:
+      NODE_PATH: /tmp/workbench-preview-smoke/node_modules
+      WB_BROWSER: ${{ matrix.browser }}
+    steps:
+      - name: Check out independent V2 preview
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned browser automation locally on CI runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --prefix /tmp/workbench-preview-smoke --no-save --no-package-lock playwright@1.56.1
+          /tmp/workbench-preview-smoke/node_modules/.bin/playwright install --with-deps "${WB_BROWSER}"
+      - name: Read-only remote check + synthetic browser functional/offline checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/dev/v2-preview-isolated-20261111"
+          node v2/test-preview-remote.cjs
