@@ -61,19 +61,15 @@ async function main(){
       if(pathname!=='/sync')return answer(404,{error:'Unknown sync route'});
       if(req.method==='GET')return answer(200,cloud);
       if(req.method!=='PUT')return answer(405,{error:'Method denied'});
-      let packet=await readBody(req,300*1024),multipart=false;
+      let packet=await readBody(req,300*1024);
       if(packet.uploadId){
-        const chunks=partial.get(packet.uploadId);
+        const requestedId=packet.uploadId;
+        const chunks=partial.get(requestedId);
         if(!/^[a-f0-9]{64}$/.test(packet.uploadId)||!Number.isInteger(packet.parts)||
           packet.parts<1||packet.parts>400||!chunks||chunks.size!==packet.parts)return answer(400,{error:'Incomplete multipart'});
         packet=JSON.parse(Array.from({length:packet.parts},(_,i)=>chunks.get(i)).join(''));
-        if(hash(packet)!==req.headers['x-synthetic-manifest-hash'] && !multipart){
-          // Worker original validates uploadId against hashed complete packet.
-          // Keep exactly the same content-based identity, not an optional header.
-          if(hash(packet)!==Array.from(partial.keys()).find(id=>id===hash(packet)))
-            return answer(400,{error:'Upload hash mismatch'});
-        }
-        multipart=true;
+        // Worker verifies manifest identity against the complete packet hash.
+        if(hash(packet)!==requestedId)return answer(400,{error:'Upload hash mismatch'});
       }
       if(!Number.isSafeInteger(packet.expectedRevision)||packet.expectedRevision<0||
         packet.hash!==hash(packet.payload)||!packet.payload?.iv||
@@ -293,7 +289,7 @@ async function main(){
       let refused=false;
       try{await WorkbenchE2ECloudPOC.createClient({store:null,phrase:params.phrase,token:params.token,
         transportKey:Uint8Array.from(atob(params.key),x=>x.charCodeAt(0)),
-        endpoint:'https://personal-workbench-v2-preview.invalid/sync'});}catch{refused=true;}
+        endpoint:'https://untrusted.example.invalid/sync'});}catch{refused=true;}
       return refused;
     },{phrase,token,key:transportKey});
     check(foreign,'transport refuses non-loopback production-like endpoint even with a valid test bearer');
