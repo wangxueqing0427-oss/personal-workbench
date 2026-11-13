@@ -23,6 +23,12 @@ async function main() {
     if (occurrences !== 1) throw new Error('Unexpected environment guard shape: ' + file);
     inputs[file] = inputs[file].replace(oldHost, previewHost);
   }
+  // Preview-only status: the public synthetic demo works locally without an enabled
+  // cloud identity. Never imply that pending local records are backed up remotely.
+  const oldStatus = "    const show = async () => { const state = await root.WorkbenchOfflineSync.status(); output.textContent = state.status + ' · ' + state.pending + '项' + (state.reason ? ' · ' + state.reason : ''); };";
+  const newStatus = "    const show = async () => { const state = await root.WorkbenchOfflineSync.status(); output.textContent = !state.configured ? '本机演示模式 · ' + state.pending + '项未上传 · 未接入测试云端，请勿录入真实资料' : state.status + ' · ' + state.pending + '项' + (state.reason ? ' · ' + state.reason : ''); };";
+  if (inputs['release-loader.js'].split(oldStatus).length !== 2) throw new Error('Preview status guard shape changed');
+  inputs['release-loader.js'] = inputs['release-loader.js'].replace(oldStatus, newStatus);
   if (JSON.parse(inputs['wrangler.preview.jsonc']).name !== previewHost) throw new Error('Preview name guard');
   if (JSON.parse(inputs['wrangler.preview.jsonc']).vars?.TEST_DATASET !== 'mobile-preview-20261111') throw new Error('Preview dataset guard');
   if (JSON.parse(inputs['wrangler.preview.jsonc']).durable_objects?.bindings?.[0]?.script_name) throw new Error('External Durable Object binding forbidden');
