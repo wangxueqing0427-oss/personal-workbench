@@ -7,6 +7,9 @@ on:
       - .github/workflows/v2-preview-preflight.yml
       - .github/workflows/v2-preview-deploy.yml
       - v2/build-preview.cjs
+      - v2/business-core.js
+      - v2/business-ui.js
+      - v2/business.css
       - v2/release-loader.js
       - v2/preview-privacy.js
       - v2/privacy-business-adapter-poc.js
