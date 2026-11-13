@@ -21,7 +21,7 @@ async function main() {
   if (process.env.PREVIEW_EXPECTED_SHA) check(manifest.sourceCommit === process.env.PREVIEW_EXPECTED_SHA, 'deployed release matches exact authorized commit SHA');
   check(manifest.syntheticOnly === true && manifest.sourceClean === true, 'synthetic-only published release');
   check(/^[a-f0-9]{40}$/.test(manifest.sourceCommit) && /^[a-f0-9]{64}$/.test(manifest.releaseId), 'release identity signed to committed source');
-  check(Object.keys(manifest.assets).length === 18, 'all 18 preview assets enumerated');
+  check(process.env.PREVIEW_EXPECTED_SHA ? Object.keys(manifest.assets).length === 19 : [18,19].includes(Object.keys(manifest.assets).length), 'verified preview assets enumerated for deployed generation');
   for (const [name, spec] of Object.entries(manifest.assets)) {
     const response = await fetch(origin + '/' + name, { cache: 'no-store' });
     check(response.ok, 'remote asset ' + name);
