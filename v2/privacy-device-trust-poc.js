@@ -90,7 +90,7 @@ function ownerFromIdentity({identity,privateKey,transport,recovery}){
    return {format:FORMAT,certificate,certificateSignature,ownerPublic:clone(identity.ownerPublic),
      senderPublic,salt:b64(salt),info,cipher,expiresAt:time+MAX_AGE};
  }
- async function verify({certificate,certificateSignature,proof}){
+ async function verify({certificate,certificateSignature,proof,request}){
    must();const time=now();
    if(!certificate||certificate.format!==FORMAT||certificate.tenantId!==identity.tenantId||
        !uuid(certificate.deviceId)||time>certificate.expiresAt||
@@ -104,6 +104,11 @@ function ownerFromIdentity({identity,privateKey,transport,recovery}){
      !Number.isSafeInteger(proof.at)||Math.abs(time-proof.at)>PROOF_AGE||
      !/^(GET|PUT)$/.test(proof.method)||proof.path!=='/sync'||
      !/^[a-f0-9]{64}$/.test(proof.bodyHash||''))fail('请求挑战格式、时效或身份不正确');
+   // "request" is the trusted HTTP method/path/body as observed by an ingress
+   // gateway, NEVER just a JSON claim from the untrusted peer in production.
+   if(!request||request.method!==proof.method||request.path!==proof.path||
+      await hex(enc.encode(JSON.stringify(request.body)))!==proof.bodyHash)
+     fail('签名没有绑定到实际收到的请求正文、方法或路径');
    const replayId=certificate.deviceId+'|'+proof.nonce;
    if(usedChallenges.has(replayId))fail('重复请求已被拒绝');
    const statement={deviceId:proof.deviceId,nonce:proof.nonce,at:proof.at,method:proof.method,path:proof.path,bodyHash:proof.bodyHash};
@@ -189,6 +194,9 @@ async function createCandidate(){
      const statement={deviceId,nonce:crypto.randomUUID(),at:now(),method,path,
        bodyHash:await hex(enc.encode(JSON.stringify(body)))};
      return {certificate:clone(cert),certificateSignature:certSig,
+       // Synthetic stand-in for what a trusted ingress would read off HTTP.
+       // The real server must build it itself and never trust caller-supplied JSON.
+       request:{method,path,body:clone(body)},
        proof:{...statement,signature:await sign(identityKeys.privateKey,statement)}};
    },
    async encrypt(data){
