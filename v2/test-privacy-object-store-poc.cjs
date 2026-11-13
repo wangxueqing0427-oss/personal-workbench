@@ -304,6 +304,43 @@ async function main(){
       return denied&&intact;
     },{archive:archive.bundle,phrase,name});
     pass(swapped,'substituting another hospital ciphertext is rejected by authenticated object identity');
+    const unknown=await page.evaluate(async args=>{
+      const vault=await WorkbenchObjectCryptoPOC.open(args.name,args.phrase);
+      const original=await vault.read(),queue=await vault.queueData(),attempt=structuredClone(original);
+      attempt.unknownFutureFeature={ mustNeverBeDiscarded:'SYNTHETIC' };
+      let refused=false;
+      try{await vault.commit(attempt,original.revision);}catch{refused=true;}
+      const afterwards=await vault.read(),jobs=await vault.queueData();
+      vault.close();
+      return refused&&JSON.stringify(original)===JSON.stringify(afterwards)&&
+        JSON.stringify(queue)===JSON.stringify(jobs);
+    },{name,phrase});
+    pass(unknown,'unknown future business fields fail closed without losing previous state or queue');
+
+    const missingObject=await page.evaluate(async args=>{
+      const isolated=await WorkbenchObjectCryptoPOC.restore(args.backup,args.phrase);
+      const db=await new Promise((ok,bad)=>{const q=indexedDB.open(isolated.name);q.onsuccess=()=>ok(q.result);q.onerror=()=>bad(q.error);});
+      await new Promise((ok,bad)=>{
+        const tx=db.transaction('objects','readwrite'),store=tx.objectStore('objects'),keys=store.getAllKeys();
+        keys.onsuccess=()=>{
+          const hospital=keys.result.find(id=>id.startsWith('hospitals:'));
+          if(!hospital)throw Error('Missing synthetic hospital');
+          store.delete(hospital);
+        };
+        tx.oncomplete=ok;tx.onabort=tx.onerror=()=>bad(tx.error);
+      });
+      db.close();
+      let refusedRead=false,refusedBackup=false;
+      try{await isolated.read();}catch{refusedRead=true;}
+      try{await isolated.exportEncryptedBackup();}catch{refusedBackup=true;}
+      isolated.close();
+      const fresh=await WorkbenchObjectCryptoPOC.open(args.name,args.phrase);
+      const intact=(await fresh.read()).hospitals.length===4;
+      fresh.close();
+      return refusedRead&&refusedBackup&&intact;
+    },{backup:archive.bundle,phrase,name});
+    pass(missingObject,'missing encrypted hospital row blocks read and backup; unaffected source records remain intact');
+
     pass(exceptions.length===0,'no browser script exceptions or outbound requests');
     console.log(JSON.stringify({test:'synthetic-object-business-ui',engine,passed:count,failures:0,originalBytes:original.length,chunkBytes:262144}));
   }finally{await ctx.close();await browser.close();await new Promise(ok=>server.close(ok));}
