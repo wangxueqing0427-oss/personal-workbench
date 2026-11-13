@@ -98,6 +98,21 @@ async function main(){
     });
     check(atomic.missingDenied&&atomic.duplicateDenied&&atomic.unchanged, 'incomplete file reference or duplicate ID abort entire encrypted commit with queue intact');
     check(atomic.cloudDenied, 'local encrypted adapter refuses cloud identity and cross-device sync rather than pretending to back up');
+    const oversized = await page.evaluate(async()=>{
+      const adapter=WorkbenchBusinessStore;
+      const state=await adapter.read(), before=await adapter.queueData();
+      const input=new File([new Uint8Array(2*1024*1024+1)],'synthetic-too-large.bin',{type:'application/octet-stream'});
+      const id=crypto.randomUUID(),attempt=structuredClone(state);
+      attempt.files.push({id,name:input.name,type:input.type,size:input.size});
+      let rejected=false;
+      try{await adapter.commit(attempt,state.revision,{id,value:input});}catch{rejected=true;}
+      const after=await adapter.read(),jobs=await adapter.queueData(),keys=await adapter.fileKeys();
+      return {rejected,preserved:JSON.stringify(after)===JSON.stringify(state)&&JSON.stringify(before)===JSON.stringify(jobs),
+        ghostFileAbsent:!keys.includes(id)};
+    });
+    check(oversized.rejected&&oversized.preserved&&oversized.ghostFileAbsent,
+      'oversized attachment cannot create half-written encrypted record, original or queue job');
+
 
     const concurrent=await page.evaluate(async({name,phrase})=>{
       const a=await WorkbenchEncryptedBusinessAdapterPOC.open(name,phrase);
