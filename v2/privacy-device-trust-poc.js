@@ -1,0 +1,207 @@
+/* Localhost-only synthetic proof of key-bound device registration, pairing and recovery.
+ * Absolutely no public Worker/preview/production integration. Private signing/ECDH
+ * keys are NON-EXTRACTABLE after generation, never sent to pairing relay.
+ * Registry/revocation lives only in this test realm; NOT a production identity server.
+ */
+(function(root){
+'use strict';
+if(root.__WORKBENCH_SYNTHETIC_DEVICE_TRUST__!==true||
+  !['localhost','127.0.0.1'].includes(location.hostname))return;
+const FORMAT='wb-synthetic-device-trust-v1',enc=new TextEncoder(),dec=new TextDecoder();
+const MAX_AGE=5*60*1000,PROOF_AGE=30*1000,CERT_LIFE=30*86400000;
+const fail=s=>{throw Error(s);};
+const clone=x=>structuredClone(x);
+const random=n=>crypto.getRandomValues(new Uint8Array(n));
+function b64(v){let s='';for(let i=0;i<v.length;i+=8192)s+=String.fromCharCode(...v.subarray(i,i+8192));return btoa(s);}
+function from64(s){if(typeof s!=='string'||s.length%4||!/^[A-Za-z0-9+/]*={0,2}$/.test(s))fail('Base64格式错误');
+ const v=Uint8Array.from(atob(s),x=>x.charCodeAt(0));if(b64(v)!==s)fail('非规范Base64');return v;}
+const hex=async data=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',data)),x=>x.toString(16).padStart(2,'0')).join('');
+const uuid=s=>typeof s==='string'&&/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/.test(s);
+const fingerprint=async jwk=>{if(!jwk||jwk.kty!=='EC'||jwk.crv!=='P-256'||!jwk.x||!jwk.y||jwk.d)fail('设备公钥格式不正确');
+ return (await hex(enc.encode(JSON.stringify({kty:jwk.kty,crv:jwk.crv,x:jwk.x,y:jwk.y})))).slice(0,24);};
+const sign=async(key,obj)=>b64(new Uint8Array(await crypto.subtle.sign({name:'ECDSA',hash:'SHA-256'},key,enc.encode(JSON.stringify(obj)))));
+async function signature(key,data,s){try{return await crypto.subtle.verify({name:'ECDSA',hash:'SHA-256'},key,from64(s),enc.encode(JSON.stringify(data)));}catch{return false;}}
+async function importPublic(jwk,usage){await fingerprint(jwk);return crypto.subtle.importKey('jwk',jwk,
+  usage==='verify'?{name:'ECDSA',namedCurve:'P-256'}:{name:'ECDH',namedCurve:'P-256'},false,[usage]);}
+async function derivePair(privateKey,other,salt,info){
+  const remote=await importPublic(other,'');
+  const bits=await crypto.subtle.deriveBits({name:'ECDH',public:remote},privateKey,256);
+  const ikm=await crypto.subtle.importKey('raw',bits,'HKDF',false,['deriveKey']);
+  return crypto.subtle.deriveKey({name:'HKDF',hash:'SHA-256',salt,info:enc.encode(info)},ikm,
+   {name:'AES-GCM',length:256},false,['encrypt','decrypt']);
+}
+async function seal(key,body,additional){
+ const iv=random(12),ciphertext=new Uint8Array(await crypto.subtle.encrypt(
+ {name:'AES-GCM',iv,additionalData:enc.encode(additional)},key,enc.encode(JSON.stringify(body))));
+ return {iv:b64(iv),ciphertext:b64(ciphertext)};
+}
+async function open(key,packet,additional){
+ try{
+   const iv=from64(packet.iv),ct=from64(packet.ciphertext);
+   if(iv.length!==12||ct.length<16)fail('无效密文长度');
+   return JSON.parse(dec.decode(await crypto.subtle.decrypt(
+     {name:'AES-GCM',iv,additionalData:enc.encode(additional)},key,ct)));
+ }catch{fail('密钥不匹配、授权内容被篡改或恢复密码错误');}
+}
+async function recoveryKey(phrase,salt){
+ if(typeof phrase!=='string'||phrase.length<24||enc.encode(phrase).length>300)fail('恢复口令必须至少24字符，不接受短PIN');
+ const original=await crypto.subtle.importKey('raw',enc.encode(phrase),'PBKDF2',false,['deriveKey']);
+ return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:310000,hash:'SHA-256'},original,
+   {name:'AES-GCM',length:256},false,['encrypt','decrypt']);
+}
+async function makeRecovery(phrase,identity,rootPrivate,transport){
+ const raw=new Uint8Array(await crypto.subtle.exportKey('pkcs8',rootPrivate)),salt=random(16);
+ try{
+   const k=await recoveryKey(phrase,salt);
+   const crypted=await seal(k,{format:FORMAT,tenantId:identity.tenantId,ownerPublic:identity.ownerPublic,
+     ownerPrivate:b64(raw),transport:b64(transport)},'recovery|'+identity.tenantId);
+   return {format:FORMAT,tenantId:identity.tenantId,ownerPublic:clone(identity.ownerPublic),
+     salt:b64(salt),...crypted};
+ }finally{raw.fill(0);}
+}
+function ownerFromIdentity({identity,privateKey,transport,recovery}){
+ const records=new Map(),usedInvites=new Set(),usedChallenges=new Set();
+ let locked=false,now=()=>Date.now();
+ const must=()=>{if(locked)fail('旧设备已锁定，不得继续批准或验证授权');};
+ async function authorize(request,{approved=false,displayedFingerprint}={}){
+   must();const time=now();
+   if(!approved||!request||request.format!==FORMAT||!uuid(request.deviceId)||
+      typeof request.nonce!=='string'||from64(request.nonce).length!==16||
+      !Number.isSafeInteger(request.createdAt)||Math.abs(time-request.createdAt)>MAX_AGE)
+      fail('设备申请过期、身份无效或未被用户批准');
+   if(usedInvites.has(request.nonce)||records.has(request.deviceId))fail('授权申请已经使用或设备已登记');
+   const expect=await fingerprint(request.identityPublic),ephemeralFingerprint=await fingerprint(request.exchangePublic);
+   const combined=(await hex(enc.encode(request.deviceId+'|'+request.nonce+'|'+expect+'|'+ephemeralFingerprint))).slice(0,24);
+   if(combined!==displayedFingerprint)fail('显示的设备指纹与实际新设备公钥不符');
+   const grantId=crypto.randomUUID(),expiresAt=time+CERT_LIFE;
+   const certificate={format:FORMAT,tenantId:identity.tenantId,deviceId:request.deviceId,
+     signPublic:clone(request.identityPublic),ownerFingerprint:await fingerprint(identity.ownerPublic),
+     requestNonce:request.nonce,grantId,issuedAt:time,expiresAt,
+     scopes:['sync:read','sync:write'],revision:1};
+   const certificateSignature=await sign(privateKey,certificate);
+   const pair=await crypto.subtle.generateKey({name:'ECDH',namedCurve:'P-256'},false,['deriveBits']);
+   const senderPublic=await crypto.subtle.exportKey('jwk',pair.publicKey),salt=random(16);
+   const info=['pair',identity.tenantId,request.deviceId,request.nonce,grantId,combined].join('|');
+   const key=await derivePair(pair.privateKey,request.exchangePublic,salt,info);
+   const cipher=await seal(key,{grantId,tenantId:identity.tenantId,transportKey:b64(transport)},info);
+   // Register only when granted. Any existing registry lookup is authoritative.
+   usedInvites.add(request.nonce);
+   records.set(request.deviceId,{certificate,revoked:false,publicKey:await importPublic(request.identityPublic,'verify')});
+   return {format:FORMAT,certificate,certificateSignature,ownerPublic:clone(identity.ownerPublic),
+     senderPublic,salt:b64(salt),info,cipher,expiresAt:time+MAX_AGE};
+ }
+ async function verify({certificate,certificateSignature,proof}){
+   must();const time=now();
+   if(!certificate||certificate.format!==FORMAT||certificate.tenantId!==identity.tenantId||
+       !uuid(certificate.deviceId)||time>certificate.expiresAt||
+       !certificate.scopes?.includes('sync:write'))fail('设备授权证书已过期或作用域不允许');
+   const found=records.get(certificate.deviceId);
+   if(!found||found.revoked||JSON.stringify(found.certificate)!==JSON.stringify(certificate))
+     fail('设备不存在或已被撤销');
+   if(!await signature(await importPublic(identity.ownerPublic,'verify'),certificate,certificateSignature))
+     fail('设备授权证书签名无效');
+   if(!proof||proof.deviceId!==certificate.deviceId||!uuid(proof.nonce)||
+     !Number.isSafeInteger(proof.at)||Math.abs(time-proof.at)>PROOF_AGE||
+     !/^(GET|PUT)$/.test(proof.method)||proof.path!=='/sync'||
+     !/^[a-f0-9]{64}$/.test(proof.bodyHash||''))fail('请求挑战格式、时效或身份不正确');
+   const replayId=certificate.deviceId+'|'+proof.nonce;
+   if(usedChallenges.has(replayId))fail('重复请求已被拒绝');
+   const statement={deviceId:proof.deviceId,nonce:proof.nonce,at:proof.at,method:proof.method,path:proof.path,bodyHash:proof.bodyHash};
+   if(!await signature(found.publicKey,statement,proof.signature))fail('设备请求签名无效');
+   usedChallenges.add(replayId);
+   return {authorized:true,deviceId:certificate.deviceId,scopes:clone(certificate.scopes)};
+ }
+ const api={
+   ownerPublic:clone(identity.ownerPublic),tenantId:identity.tenantId,recovery:clone(recovery),
+   fingerprint:()=>fingerprint(identity.ownerPublic),authorize,verify,
+   revoke(deviceId){must();const entry=records.get(deviceId);if(!entry||entry.revoked)return false;entry.revoked=true;return true;},
+   isRevoked(deviceId){return !!records.get(deviceId)?.revoked;},
+   list(){return Array.from(records.values(),x=>({deviceId:x.certificate.deviceId,revoked:x.revoked,
+     expiresAt:x.certificate.expiresAt}));},
+   setTestClock(clock){if(typeof clock!=='function')fail('时钟必须是可调用函数');now=clock;},
+   lock(){locked=true;transport.fill(0);}
+ };
+ return Object.freeze(api);
+}
+async function createOwner(phrase){
+ await recoveryKey(phrase,random(16));
+ const ownerKey=await crypto.subtle.generateKey({name:'ECDSA',namedCurve:'P-256'},true,['sign','verify']);
+ const exported=await crypto.subtle.exportKey('pkcs8',ownerKey.privateKey);
+ const privateKey=await crypto.subtle.importKey('pkcs8',exported,{name:'ECDSA',namedCurve:'P-256'},false,['sign']);
+ const tenantId=crypto.randomUUID(),ownerPublic=await crypto.subtle.exportKey('jwk',ownerKey.publicKey),
+   transport=random(32);
+ const identity={tenantId,ownerPublic};
+ const recovery=await makeRecovery(phrase,identity,ownerKey.privateKey,transport);
+ return ownerFromIdentity({identity,privateKey,transport,recovery});
+}
+async function recoverOwner(bundle,phrase){
+ if(!bundle||bundle.format!==FORMAT||!uuid(bundle.tenantId)||from64(bundle.salt).length!==16)fail('恢复包格式非法');
+ const key=await recoveryKey(phrase,from64(bundle.salt));
+ const raw=await open(key,bundle,'recovery|'+bundle.tenantId);
+ if(raw.format!==FORMAT||raw.tenantId!==bundle.tenantId||
+   JSON.stringify(raw.ownerPublic)!==JSON.stringify(bundle.ownerPublic))fail('恢复包身份不一致');
+ const bytes=from64(raw.ownerPrivate);
+ let privateKey;
+ try{privateKey=await crypto.subtle.importKey('pkcs8',bytes,{name:'ECDSA',namedCurve:'P-256'},false,['sign']);}
+ finally{bytes.fill(0);}
+ // A recovery instance uses a fresh empty roster. Production requires a signed,
+ // durable server-side roster and deliberate account-recovery authorization.
+ return ownerFromIdentity({identity:{tenantId:raw.tenantId,ownerPublic:raw.ownerPublic},
+   privateKey,transport:from64(raw.transport),recovery:bundle});
+}
+async function createCandidate(){
+ const deviceId=crypto.randomUUID(),nonce=b64(random(16)),createdAt=Date.now();
+ const identityKeys=await crypto.subtle.generateKey({name:'ECDSA',namedCurve:'P-256'},false,['sign','verify']);
+ const pairKeys=await crypto.subtle.generateKey({name:'ECDH',namedCurve:'P-256'},false,['deriveBits']);
+ const signPublic=await crypto.subtle.exportKey('jwk',identityKeys.publicKey),
+   exchangePublic=await crypto.subtle.exportKey('jwk',pairKeys.publicKey);
+ const request={format:FORMAT,deviceId,nonce,createdAt,identityPublic:signPublic,exchangePublic};
+ const first=await fingerprint(signPublic),second=await fingerprint(exchangePublic);
+ const display=(await hex(enc.encode(deviceId+'|'+nonce+'|'+first+'|'+second))).slice(0,24);
+ let cert=null,certSig=null,key=null,now=()=>Date.now();
+ return Object.freeze({
+   request:clone(request),fingerprint:display,deviceId,
+   async accept(grant,{ownerFingerprint}={}){
+     if(cert)fail('一次性邀请已被领取，禁止重复配对');
+     if(!grant||grant.format!==FORMAT||grant.certificate?.deviceId!==deviceId||
+       grant.certificate?.requestNonce!==nonce||now()>grant.expiresAt||
+       grant.certificate.expiresAt<=now())fail('授权不匹配、过期或已使用');
+     if(ownerFingerprint!==await fingerprint(grant.ownerPublic)||
+        ownerFingerprint!==grant.certificate.ownerFingerprint)fail('未正确核对原设备的所有者指纹');
+     const ownerKey=await importPublic(grant.ownerPublic,'verify');
+     if(!await signature(ownerKey,grant.certificate,grant.certificateSignature))
+       fail('设备授权证书签名不正确');
+     if(JSON.stringify(grant.certificate.signPublic)!==JSON.stringify(signPublic))
+       fail('授权证书不是签给本设备');
+     const shared=await derivePair(pairKeys.privateKey,grant.senderPublic,from64(grant.salt),grant.info);
+     const secrets=await open(shared,grant.cipher,grant.info);
+     if(secrets.grantId!==grant.certificate.grantId||secrets.tenantId!==grant.certificate.tenantId)
+       fail('设备密钥和授权主体不一致');
+     const incoming=from64(secrets.transportKey);
+     if(incoming.length!==32)fail('被封装的传输密钥长度错误');
+     key=await crypto.subtle.importKey('raw',incoming,{name:'AES-GCM'},false,['encrypt','decrypt']);
+     incoming.fill(0);cert=clone(grant.certificate);certSig=grant.certificateSignature;
+     return {paired:true,deviceId,ownerFingerprint,scopes:clone(cert.scopes)};
+   },
+   async proof(method,path,body){
+     if(!cert||!key)fail('当前设备尚未获得可验证身份');
+     if(!/^(GET|PUT)$/.test(method)||path!=='/sync')fail('不支持的请求类型');
+     const statement={deviceId,nonce:crypto.randomUUID(),at:now(),method,path,
+       bodyHash:await hex(enc.encode(JSON.stringify(body)))};
+     return {certificate:clone(cert),certificateSignature:certSig,
+       proof:{...statement,signature:await sign(identityKeys.privateKey,statement)}};
+   },
+   async encrypt(data){
+     if(!key)fail('未配对的设备不可以使用共享传输密钥');
+     return seal(key,data,'device-transfer|'+cert.tenantId);
+   },
+   async decrypt(packet){
+     if(!key)fail('未配对');
+     return open(key,packet,'device-transfer|'+cert.tenantId);
+   },
+   setTestClock(clock){now=clock;},
+   lock(){key=null;cert=null;certSig=null;}
+ });
+}
+root.WorkbenchDeviceTrustPOC=Object.freeze({createOwner,recoverOwner,createCandidate,format:FORMAT});
+})(globalThis);
