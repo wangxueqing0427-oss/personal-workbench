@@ -66,6 +66,15 @@
 - [本机兼容回归](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43402174571) 修复 CI 白名单后重新全部绿色：Chromium169/169 + WebKit169/169，**共338项通过、0失败**。78项真实云端专项与338项本机回归不要混称为416项不同的用户功能。
 - 新增审计 `v2/LIVE-CLOUDFLARE-ENCRYPTED-SYNC-REVIEW-2026-11-13.md`，注明仍缺长期授权、设备配对与密钥解封、按对象云端增量传输、冲突确认交互以及真正 iPhone / PWA 的全链验收。**不允许据此导入正式医院业务或修改生产数据。**
 
+## 设备身份、签名请求、撤销与恢复协议原型（2026-11-13）
+
+- 新增 `privacy-device-trust-poc.js`，仅本机回环域名与合成标记可使用：根设备 ECDSA P-256 证书签发 + 每设备不可导出 ECDSA 私钥及独立 ECDH 密钥 + HKDF-SHA256/AES-GCM 加密密钥交接 + 须人工核对公钥指纹的一次性授权。
+- 设备持有权通过签名 `method/path/bodyHash/time/nonce` 证明；合成验证器要求与收到的请求内容匹配、身份未撤销、证书未过期、随机nonce不重放，撤销设备后原签名密钥仍可以签名但不能获得授权。
+- 丢失原设备的身份通过PBKDF2 + AES-GCM离线加密恢复包重建；恢复之后合成授权名单默认空白，旧设备不自动获得权限。已配对设备的不可导出 WebCrypto `CryptoKey` 可以写到独立随机 IndexedDB，刷新浏览器后继续签名；可以本地擦除该测试库。
+- [最新双浏览器绿色回归](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43405984987)：Chromium217/217 + WebKit217/217，共 **434项通过、0失败**（含此前所有本机回归），其中设备身份专项每端48项；[Preview 资源预检](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43405832276)通过，实验代码未进入公网预览Worker。
+- **硬性阻断项**：当前根签发与设备授权列表仅为本机内存模拟，不具备**持久服务器权威身份、跨 Worker 的强制签名鉴权/审计、吊销后即时阻断真实云端 API**；IndexedDB 不可导出密钥**不是Face ID或Secure Enclave**，同源恶意脚本仍可能调用该密钥；短码不再用作密钥解密基础。离线根恢复包的密码强度、根密钥生命周期和服务端账户恢复审批必须更严谨设计。
+- 详细审核：`v2/DEVICE-TRUST-RECOVERY-REVIEW-2026-11-13.md`。**不变更正式 `device-pair.js`、原Worker、原生产数据或已发布云端身份配置**，更不宣称真实iPhone已经完成Face ID验收。
+
 ## 零损坏迁移次序
 
 - 只读审计旧版 V1.5.7 / 现有 V2 预览的记录和本地文件来源，先列明已检查的**设备 / 域名 / Safari / PWA**范围，不能拿一个浏览器本地数据代替全设备。
