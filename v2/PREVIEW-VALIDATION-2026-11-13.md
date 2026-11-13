@@ -2,6 +2,14 @@
 
 > **状态：内部合成测试通过；非正式环境、非真实 iPhone 终验，禁止接入真实医院数据。**
 
+## 补充：2026-11-13 线上发布后自动验收门禁
+
+- 新预览发布：[GitHub Actions 43359985076](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43359985076)，目标仍只有 `personal-workbench-v2-preview`，Cloudflare Worker 版本 `5397d079-3f6e-492a-a1f1-9d60f539a6a0`，源码 SHA `764243a8545229c6082387a713a65a958c4af6a6`。
+- CI 先校验 18 个版本化资源 SHA-256、独立 Worker/DO/数据集，然后**部署成功后**对实际在线页面执行 Chromium 89 PASS 与 WebKit 85 PASS（合计 174 PASS，0 FAIL）。这次检查要求远端 `sourceCommit` 和当前部署工作流 SHA 完全一致，避免对旧线上版本做测试却误报新版本已通过。
+- 单设备无云端测试身份时，页面明确展示「本机演示模式 · N项未上传 · 未接入测试云端，请勿录入真实资料」；不得仅凭本机队列显示推断云端已备份。
+- 独立 Cloudflare 后端仍采取身份验证，测试凭据已由先前的云端测试 CI 撤销。新发布未修改原 `main`、V1.5.7 或 staging。
+- 真实 iPhone / PWA 完整终验、Face ID/PIN 隐私保护以及实际业务安全迁移仍未通过。**不得直接使用测试站点承载真实业务。**
+
 ## 目标和隔离边界
 - 仓库：`wangxueqing0427-oss/personal-workbench`
 - 仅使用开发分支：`dev/v2-preview-isolated-20261111`
