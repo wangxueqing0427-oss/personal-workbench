@@ -4,7 +4,7 @@ const crypto = require('node:crypto');
 const { execFileSync } = require('node:child_process');
 async function main() {
   const destination = path.join(__dirname, 'preview-public');
-  const files = ['business.html', 'business.css', 'business-core.js', 'business-store.js', 'offline-sync.js', 'business-ui.js', 'sync-panel.js', 'device-pair.js', 'staging.webmanifest', 'staging-init.js', 'offline-sw.js', 'p0.html', 'p0-ui.js', 'safety-core.js', 'release-loader.js'];
+  const files = ['business.html', 'business.css', 'business-core.js', 'business-store.js', 'offline-sync.js', 'business-ui.js', 'sync-panel.js', 'device-pair.js', 'staging.webmanifest', 'staging-init.js', 'offline-sw.js', 'p0.html', 'p0-ui.js', 'safety-core.js', 'release-loader.js', 'preview-privacy.js'];
   const git = (...args) => execFileSync(process.env.WORKBENCH_GIT || 'git', args, { cwd: path.join(__dirname, '..') });
   const sourceCommit = git('rev-parse', 'HEAD').toString().trim();
   const sourceFiles = [...files, 'build-preview.cjs', 'staging-worker.mjs', 'wrangler.preview.jsonc'];
@@ -29,6 +29,20 @@ async function main() {
   const newStatus = "    const show = async () => { const state = await root.WorkbenchOfflineSync.status(); output.textContent = !state.configured ? '本机演示模式 · ' + state.pending + '项未上传 · 未接入测试云端，请勿录入真实资料' : state.status + ' · ' + state.pending + '项' + (state.reason ? ' · ' + state.reason : ''); };";
   if (inputs['release-loader.js'].split(oldStatus).length !== 2) throw new Error('Preview status guard shape changed');
   inputs['release-loader.js'] = inputs['release-loader.js'].replace(oldStatus, newStatus);
+  // Only preview includes this opt-in local screen cover; staging and production
+  // retain their original unmodified files. Any configured PIN fails closed at
+  // first paint; the PIN verifier never leaves localStorage.
+  const privacyCss = "<style id=\"preview-privacy-shield\">" +
+    "html[data-preview-privacy='locked'] body > :not(#privacy-layer){visibility:hidden!important}" +
+    "#privacy-layer{visibility:visible!important;position:fixed;inset:0;z-index:99999;display:grid;place-items:center;padding:18px;background:#f3f6f9;color:#17334b;overflow:auto}" +
+    "#privacy-layer .privacy-sheet{background:white;width:min(100%,440px);border-radius:20px;padding:24px;box-shadow:0 12px 45px #12344b30}" +
+    "#privacy-layer input,#privacy-layer button{display:block;width:100%;margin:14px 0}" +
+    "#privacy-layer h2{font-size:22px}" +
+    "</style>";
+  const privacyBoot = privacyCss + "<script>try{if(localStorage.getItem('personal-workbench-v2-preview-privacy-gate-v1'))document.documentElement.dataset.previewPrivacy='locked'}catch{document.documentElement.dataset.previewPrivacy='locked'}</script>";
+  const rawLoaderEntry = "'offline-sync.js', 'business-ui.js'";
+  if (inputs['release-loader.js'].split(rawLoaderEntry).length !== 2) throw new Error('Preview privacy release-loader insertion guard');
+  inputs['release-loader.js'] = inputs['release-loader.js'].replace(rawLoaderEntry, "'offline-sync.js', 'preview-privacy.js', 'business-ui.js'");
   if (JSON.parse(inputs['wrangler.preview.jsonc']).name !== previewHost) throw new Error('Preview name guard');
   if (JSON.parse(inputs['wrangler.preview.jsonc']).vars?.TEST_DATASET !== 'mobile-preview-20261111') throw new Error('Preview dataset guard');
   if (JSON.parse(inputs['wrangler.preview.jsonc']).durable_objects?.bindings?.[0]?.script_name) throw new Error('External Durable Object binding forbidden');
@@ -36,15 +50,18 @@ async function main() {
   const id = digest(JSON.stringify({ sourceCommit, inputs })), prefix = 'releases/' + id + '/';
   const pwa = JSON.parse(inputs['staging.webmanifest']);
   if (pwa.id !== '/business.html' || pwa.start_url !== '/business.html' || pwa.scope !== '/') throw new Error('PWA identity and launch scope must remain stable');
+  const protectedP0 = inputs['p0.html'].replace('</head>', privacyBoot + '</head>')
+    .replace('<script src="safety-core.js"></script>', '<script src="preview-privacy.js"></script><script src="safety-core.js"></script>');
+  if (protectedP0 === inputs['p0.html'] || !protectedP0.includes('preview-privacy.js')) throw new Error('Preview P0 privacy shield missing');
   const output = {}, release = { id, sourceCommit, files: {} };
   for (const file of files.filter(file => !['business.html', 'offline-sw.js'].includes(file))) {
-    const bytes = Buffer.from(inputs[file]); output[prefix + file] = bytes;
+    const bytes = Buffer.from(file === 'p0.html' ? protectedP0 : inputs[file]); output[prefix + file] = bytes;
     release.files[file] = { url: prefix + file, sha256: digest(bytes), bytes: bytes.length };
   }
-  const html = root => inputs['business.html'].replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '').replace(/<link\b[^>]*rel="stylesheet"[^>]*>/gi, '<style>' + inputs['business.css'] + '</style>').replace('等待同步 · 尚未配置隔离后端', '版本核验中 / 同步已暂停').replace('</body>', '<script>globalThis.WorkbenchRelease=' + JSON.stringify(release) + ';WorkbenchRelease.baseUrl=new URL(' + JSON.stringify(root) + ',location.href).href;\n' + inputs['release-loader.js'] + '</script></body>');
+  const html = root => inputs['business.html'].replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '').replace(/<link\b[^>]*rel="stylesheet"[^>]*>/gi, '<style>' + inputs['business.css'] + '</style>').replace('</head>', privacyBoot + '</head>').replace('等待同步 · 尚未配置隔离后端', '版本核验中 / 同步已暂停').replace('</body>', '<script>globalThis.WorkbenchRelease=' + JSON.stringify(release) + ';WorkbenchRelease.baseUrl=new URL(' + JSON.stringify(root) + ',location.href).href;\n' + inputs['release-loader.js'] + '</script></body>');
   output['business.html'] = Buffer.from(html('./')); output[prefix + 'business.html'] = Buffer.from(html('../../'));
   output['staging.webmanifest'] = Buffer.from(inputs['staging.webmanifest']);
-  output['p0.html'] = Buffer.from(inputs['p0.html'].replace(/src="([^"]+)"/g, (match, file) => 'src="' + prefix + file + '"'));
+  output['p0.html'] = Buffer.from(protectedP0.replace(/src="([^"]+)"/g, (match, file) => 'src="' + prefix + file + '"'));
   const entries = Object.fromEntries(Object.entries(output).map(([name, bytes]) => [name, { sha256: digest(bytes), bytes: bytes.length }]));
   output['offline-sw.js'] = Buffer.from('self.__WORKBENCH_RELEASE__=' + JSON.stringify({ id, entries }) + ';\n' + inputs['offline-sw.js']);
   const manifest = { sourceCommit, sourceClean: true, syntheticOnly: true, releaseId: id, assets: {}, workerSourceSha256: digest(inputs['staging-worker.mjs']), configSha256: digest(inputs['wrangler.preview.jsonc']) };
