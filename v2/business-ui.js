@@ -49,24 +49,23 @@
     return greeting+shortcuts+sections+week+`<details class="card quiet-details"><summary>最近跟进 / 长时间未跟进</summary>${projectButtons(view.recent)}<h3>超过14天未跟进</h3>${projectButtons(view.stale)}</details>`;
   }
   function hospitalSearchResults() {
-    const found = core.searchBusiness(state, searchQuery, searchStatus);
-    const showProjects = Boolean(searchQuery.trim()) || searchStatus !== '全部';
-    const hospitalCards = found.hospitals.map(item => `<button class="project-button" data-hospital="${escape(item.id)}"><strong>${escape(item.name)}</strong><p>${item.departments.length} 个科室 · ${state.projects.filter(project => project.hospitalId === item.id).length} 个项目${item.contacts.length ? ' · ' + item.contacts.length + ' 位联系人' : ''}</p></button>`).join('');
-    const projectCards = showProjects ? projectButtons(found.projects) : '';
-    const label = `筛选结果：${found.hospitals.length} 家医院${showProjects ? ' · ' + found.projects.length + ' 个项目' : ''}`;
-    return `<p class="muted" data-search-count>${label}</p>${hospitalCards || '<p class="muted">没有符合条件的医院</p>'}${showProjects ? `<h3>相关业务项目</h3>${projectCards}` : ''}`;
+    const found=core.searchBusiness(state,searchQuery,searchStatus);
+    const showProjects=Boolean(searchQuery.trim())||searchStatus!=='全部';
+    const hospitalCards=found.hospitals.map(item=>`<button class="hospital-row" data-hospital="${escape(item.id)}"><span class="hospital-icon" aria-hidden="true">医</span><span class="hospital-main"><strong>${escape(item.name)}</strong><small>${item.departments.length} 个科室 · ${state.projects.filter(project=>project.hospitalId===item.id).length} 个项目${item.contacts.length?' · '+item.contacts.length+' 位联系人':''}</small></span><span class="chevron" aria-hidden="true">›</span></button>`).join('');
+    return `<p class="muted search-count" data-search-count>筛选结果：${found.hospitals.length} 家医院${showProjects?` · ${found.projects.length} 个项目`:''}</p>${hospitalCards||'<div class="empty-state"><p>没有找到符合条件的医院</p><small>试试医院简称、设备型号或联系人</small></div>'}${showProjects?`<h3 class="subsection-title">相关业务项目</h3>${projectButtons(found.projects)}`:''}`;
   }
   function updateHospitalSearch() {
-    const container = document.getElementById('business-search-results');
-    if (container) container.innerHTML = hospitalSearchResults();
+    const container=document.getElementById('business-search-results');
+    if(container)container.innerHTML=hospitalSearchResults();
   }
   function hospitals() {
-    if (selection) {
-      const hospital = state.hospitals.find(item => item.id === selection);
-      if (!hospital) { selection = ''; return hospitals(); }
-      return `<section class="card"><button data-back="hospitals">← 医院列表</button><h2>${escape(hospital.name)}</h2><p>科室：${escape(hospital.departments.join('、') || '待完善')}</p>${hospital.contacts.map(item => `<p>${escape(item.department)} · ${escape(item.name)} · ${escape(item.phone)}</p>`).join('')}<button data-edit-hospital="${escape(hospital.id)}">编辑医院 / 科室 / 联系人</button> <button class="primary" data-new-project="${escape(hospital.id)}">新建项目</button><h3>合同与业务项目</h3>${projectButtons(state.projects.filter(item => item.hospitalId === hospital.id))}</section>`;
+    if(selection){
+      const hospital=state.hospitals.find(item=>item.id===selection);
+      if(!hospital){selection='';return hospitals();}
+      const linked=state.projects.filter(item=>item.hospitalId===hospital.id);
+      return `<section class="card detail-head"><button data-back="hospitals" class="back-link">← 医院列表</button><p class="eyebrow">HOSPITAL PROFILE</p><h2>${escape(hospital.name)}</h2><p class="muted">科室：${escape(hospital.departments.join('、')||'待完善')}</p><div class="contact-list">${hospital.contacts.map(item=>`<p>${escape(item.department)} · ${escape(item.name)} · ${escape(item.phone)}</p>`).join('')||'<p class="muted">暂无联系人</p>'}</div><div class="detail-actions"><button data-edit-hospital="${escape(hospital.id)}">编辑医院 / 联系人</button><button class="primary" data-new-project="${escape(hospital.id)}">＋ 新建项目</button></div></section><section class="card">${sectionHead('PROJECTS','合同与业务项目',`${linked.length} 项`)}${projectButtons(linked)}</section>`;
     }
-    return `<section class="card"><h2>医院业务档案</h2><button data-edit-hospital="">＋ 医院 / 联系人</button><div class="search-controls"><label>搜索医院、项目、设备或联系人<input id="business-search" type="search" autocomplete="off" placeholder="输入医院名、设备、项目、电话…" value="${escape(searchQuery)}"></label><label>项目状态<select id="business-status-filter">${options(['全部', ...core.statuses], searchStatus)}</select></label><button type="button" data-clear-search>清空筛选</button></div><div id="business-search-results" aria-live="polite">${hospitalSearchResults()}</div></section>`;
+    return `<section class="card">${sectionHead('HOSPITALS','医院业务档案',`${state.hospitals.length} 家`)}<p class="section-intro">按医院、设备、人员或状态快速找到业务。</p><button class="primary" data-edit-hospital="">＋ 医院 / 联系人</button><div class="search-controls"><label>搜索医院、项目、设备或联系人<input id="business-search" type="search" autocomplete="off" placeholder="医院名、设备、项目、电话…" value="${escape(searchQuery)}"></label><label>项目状态<select id="business-status-filter">${options(['全部',...core.statuses],searchStatus)}</select></label><button type="button" data-clear-search>清空筛选</button></div><div id="business-search-results" aria-live="polite">${hospitalSearchResults()}</div></section>`;
   }
   function hospitalForm() {
     const hospital = state.hospitals.find(item => item.id === selection);
