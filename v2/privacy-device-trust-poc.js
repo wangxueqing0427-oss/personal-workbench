@@ -188,9 +188,10 @@ function readDeviceDb(name){
        db.close();reject(Error('设备身份库不存在或版本不兼容'));return;
      }
      const tx=db.transaction('sessions','readonly'),request=tx.objectStore('sessions').get('current');
-     request.onsuccess=()=>resolve(request.result);
-     tx.oncomplete=()=>db.close();
-     tx.onerror=()=>{db.close();reject(tx.error||Error('设备本地身份无法读取'));};
+     // Resolve only after the read transaction has ended and its connection
+     // is closed. A succeeding deleteDatabase must not race an open handle.
+     tx.oncomplete=()=>{const record=request.result;db.close();resolve(record);};
+     tx.onabort=tx.onerror=()=>{db.close();reject(tx.error||Error('设备本地身份无法读取'));};
    };
  });
 }
