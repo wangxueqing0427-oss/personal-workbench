@@ -33,12 +33,12 @@
 3. 文件原件16MiB单份、最多50份、队列200条及其他人工测试限额没有解除；真实医院业务、DICOM目录等不能用此原型直接处理。
 4. Face ID/硬件密钥、安全 PIN 备用、真正 iPhone Safari/PWA 测试、云端端到端同步身份、旧真实数据迁移，均尚未完成。
 5. 这个实验使用合成测试口令和WebCrypto，不能抵御已经控制同源JavaScript、设备环境的攻击者；苹果系统能力需真实 iPhone 才能最终核实。
-6. **待 CI 绿色完成后才可宣称本轮测试通过**；回归如有失败必须修复并复测，不把旧版成功结果替代新版。
+6. **本轮独立自动化验证已绿色完成，但只覆盖当前模拟与合成场景**。后续代码每次改变仍必须重新运行两套浏览器和预检，不能沿用旧的绿色结果。
 
 ## 运行证据
 
 - [逐对象加密基础绿色回归 #43389466913](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43389466913)：Chromium 104 + WebKit 104 = 208项通过。
-- [增量队列全套回归 #43390258735](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43390258735)：新增并运行中，**结果需要最终核实**。
-- [预览构建隔离校验 #43390281569](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43390281569)：需核实，确认新模块未被打包到公开预览的19个资源中。
+- **最终完整回归绿色通过**：[GitHub Actions #43390258735](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43390258735)，源码 SHA `1ae3ade3bfd398a853245d1f92ea6b5c9bff0864`。Chromium **135项通过/0失败**，WebKit **135项通过/0失败**，最新合计 **270项自动化断言通过、0失败**。增量日志专项每引擎31项（两端合计62项），其余为此前成功的本机加密、影子复制、单快照事务、分块原件与逐对象加密兼容回归。
+- **预览构建隔离校验成功**：[GitHub Actions #43390281569](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43390281569)，仅在开发分支生成19项校验资源并通过 Wrangler dry-run；新差量日志实验模块没有部署到Cloudflare。该运行源码SHA `f2aeac05580e4d29e02baf29f35d01acbe0d10c6`。
 
 用户当前无需点击任何新链接/配置凭据；真正上线需要单独授权。
