@@ -79,8 +79,9 @@ async function main() {
     await dialog.locator('input[placeholder="隔离测试凭证"]').fill(credential);
     await dialog.locator('input[placeholder="两端相同的独立测试加密密钥（Base64）"]').fill(key);
     await dialog.getByRole('button', { name: '确认接入隔离测试（仅合成数据）' }).click();
-    await page.waitForFunction(async () => !!(await WorkbenchBusinessStore.queueData()).config, null, { timeout: 30000 });
+    await page.waitForFunction(async () => !!(await WorkbenchBusinessStore.queueData()).config && document.querySelector('dialog.sync-dialog')?.textContent.includes('设备身份已接入。'), null, { timeout: 30000 });
     await dialog.getByRole('button', { name: '关闭' }).click();
+    await page.waitForFunction(() => !document.querySelector('dialog.sync-dialog')?.open, null, { timeout: 10000 });
   };
   const syncTo = async (page, desired, label) => {
     for (let i = 0; i < 20; i++) {
