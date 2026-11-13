@@ -185,6 +185,66 @@ async function main() {
       check(await page.evaluate(async () => (await WorkbenchBusinessStore.read()).files.some(file => file.name === 'synthetic-preview.txt')), 'offline local original metadata retained');
       await context.setOffline(false);
     }
+    if (Object.keys(manifest.assets).some(name => name.endsWith('/preview-privacy.js'))) {
+      const pin = '69032518'; // Fake synthetic PIN: never a user credential.
+      const privacy = page.locator('#preview-privacy-settings');
+      check(await privacy.isVisible(), 'preview-only PIN settings visible and opt-in');
+      await privacy.click();
+      const manage = page.locator('dialog.privacy-manage');
+      await manage.locator('input[data-preview-pin="设置6至12位数字PIN"]').fill(pin);
+      await manage.locator('input[data-preview-pin="重复输入PIN"]').fill(pin);
+      await manage.getByRole('button', { name: '启用本机PIN遮挡' }).click();
+      await page.locator('#privacy-layer').waitFor({ timeout: 15000 });
+      check(!await page.locator('main').isVisible(), 'protected business UI is hidden immediately after PIN enrollment');
+      const configCheck = await page.evaluate(() => {
+        const raw = localStorage.getItem('personal-workbench-v2-preview-privacy-gate-v1');
+        const config = JSON.parse(raw);
+        return { digest: config.digest, salt: config.salt, raw };
+      });
+      check(configCheck.digest.length === 64 && configCheck.salt.length === 32 && !configCheck.raw.includes(pin), 'PIN is stored as salted derived verifier, not plaintext');
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await page.locator('#privacy-layer').waitFor({ timeout: 30000 });
+      check(!await page.locator('main').isVisible(), 'reload fails closed before showing business content');
+      await page.locator('#privacy-layer input').fill('12312312');
+      await page.getByRole('button', { name: '解锁工作台' }).click();
+      await page.locator('#privacy-layer').getByText('PIN不正确').waitFor();
+      check(!await page.locator('main').isVisible(), 'incorrect PIN leaves business data hidden');
+      await page.locator('#privacy-layer input').fill(pin);
+      await page.getByRole('button', { name: '解锁工作台' }).click();
+      await page.locator('#privacy-layer').waitFor({ state: 'detached' });
+      check(await page.locator('main').isVisible(), 'correct PIN restores business interface');
+
+      const back = await page.goto(origin + '/p0.html', { waitUntil: 'domcontentloaded' });
+      check(back.status() === 200, 'direct backup entry can be reached without modifying data');
+      await page.locator('#privacy-layer').waitFor({ timeout: 30000 });
+      check(!await page.locator('main').isVisible(), 'direct backup URL cannot display data while PIN screen is active');
+      await page.locator('#privacy-layer input').fill(pin);
+      await page.getByRole('button', { name: '解锁工作台' }).click();
+      await page.locator('#privacy-layer').waitFor({ state: 'detached' });
+      check(await page.getByRole('heading', { name: '完整加密备份' }).isVisible(), 'backup UI reopens only after local PIN unlock');
+
+      const versioned = Object.keys(manifest.assets).find(name => name.endsWith('/p0.html'));
+      check(!!versioned, 'versioned P0 entry exists within signed preview release');
+      const versionedResponse = await page.goto(origin + '/' + versioned, { waitUntil: 'domcontentloaded' });
+      check(versionedResponse.status() === 200, 'versioned backup entry is accessible');
+      await page.locator('#privacy-layer').waitFor({ timeout: 30000 });
+      check(!await page.locator('main').isVisible(), 'versioned backup entry also fails closed before PIN');
+
+      await page.goto(origin + '/business.html', { waitUntil: 'domcontentloaded' });
+      await page.locator('#privacy-layer').waitFor({ timeout: 30000 });
+      await page.locator('#privacy-layer input').fill(pin);
+      await page.getByRole('button', { name: '解锁工作台' }).click();
+      await page.locator('#privacy-layer').waitFor({ state: 'detached' });
+      await page.waitForFunction(expected => document.documentElement.dataset.releaseReady === expected, manifest.releaseId, { timeout: 45000 });
+      check(await page.evaluate(async () => (await WorkbenchBusinessStore.read()).files.some(item => item.name === 'synthetic-preview.txt')), 'PIN gate leaves original record references intact');
+      await page.locator('#preview-privacy-settings').click();
+      const disable = page.locator('dialog.privacy-manage');
+      await disable.locator('input[data-preview-pin="当前PIN"]').fill(pin);
+      await disable.getByRole('button', { name: '验证PIN并关闭遮挡' }).click();
+      await disable.waitFor({ state: 'detached' });
+      check(await page.evaluate(() => !localStorage.getItem('personal-workbench-v2-preview-privacy-gate-v1')), 'correct PIN can safely disable optional preview gate');
+      check(await page.evaluate(async () => (await WorkbenchBusinessStore.read()).files.some(item => item.name === 'synthetic-preview.txt')), 'disabling PIN does not delete or change local originals');
+    }
     check(errors.length === 0, 'no page exceptions or external resource access: ' + errors.join('; '));
     console.log(JSON.stringify({ engine, passed, failures: 0, releaseId: manifest.releaseId, sourceCommit: manifest.sourceCommit }));
   } finally {
