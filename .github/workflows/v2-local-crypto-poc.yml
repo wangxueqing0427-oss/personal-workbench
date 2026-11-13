@@ -1,0 +1,46 @@
+name: V2 local ciphertext POC - isolated browser validation
+on:
+  push:
+    branches:
+      - dev/v2-preview-isolated-20261111
+    paths:
+      - .github/workflows/v2-local-crypto-poc.yml
+      - v2/privacy-crypto-poc.js
+      - v2/test-privacy-crypto-poc.cjs
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  isolated-local-encryption:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, webkit]
+    env:
+      NODE_PATH: /tmp/workbench-local-crypto-poc/node_modules
+      WB_BROWSER: ${{ matrix.browser }}
+    steps:
+      - name: Checkout isolated V2 preview only
+        uses: actions/checkout@v4
+      - name: Validate repo identity and no live endpoint usage
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "wangxueqing0427-oss/personal-workbench"
+          test "$GITHUB_REF" = "refs/heads/dev/v2-preview-isolated-20261111"
+          node --check v2/privacy-crypto-poc.js
+          node --check v2/test-privacy-crypto-poc.cjs
+          ! grep -E 'personal-workbench-v2-(staging|preview)\.|CLOUDFLARE_API_TOKEN|wrangler deploy' v2/privacy-crypto-poc.js v2/test-privacy-crypto-poc.cjs
+      - name: Install pinned isolated browser tools in temporary CI folder
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --prefix /tmp/workbench-local-crypto-poc --no-save --no-package-lock playwright@1.56.1
+          /tmp/workbench-local-crypto-poc/node_modules/.bin/playwright install --with-deps "$WB_BROWSER"
+      - name: Verify AES-GCM synthetic record and 512KiB original offline end to end
+        shell: bash
+        run: |
+          set -euo pipefail
+          node v2/test-privacy-crypto-poc.cjs
