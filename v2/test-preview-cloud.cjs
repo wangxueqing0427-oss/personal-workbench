@@ -57,6 +57,18 @@ async function main() {
   };
   const send = async (packet) => request('PUT', '', packet);
 
+  // Cloudflare may take several seconds to activate the new Worker-secret deployment.
+  // Require authorized success before running read/write tests; never weaken server auth.
+  let active = false;
+  for (let attempt = 0; attempt < 40; attempt++) {
+    const checkResponse = await request('GET');
+    if (checkResponse.status === 200) { active = true; break; }
+    if (checkResponse.status !== 401 && checkResponse.status !== 503) {
+      throw new Error('Temporary test credential activation returned unexpected status: ' + checkResponse.status);
+    }
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+  check(active, 'temporary credential has propagated to isolated Worker');
   check((await request('GET', '', undefined, { noAuth: true })).status === 401, 'anonymous sync denied');
   check((await request('GET', '', undefined, { badToken: true })).status === 401, 'incorrect token denied');
   check((await request('GET', '', undefined, { origin: 'https://production.invalid' })).status === 403, 'cross-origin sync denied');
