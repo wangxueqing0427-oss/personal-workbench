@@ -8,6 +8,7 @@ on:
       - .github/workflows/v2-preview-deploy.yml
       - v2/build-preview.cjs
       - v2/release-loader.js
+      - v2/preview-privacy.js
       - v2/wrangler.preview.jsonc
 permissions:
   contents: read
@@ -34,6 +35,7 @@ jobs:
         run: |
           set -euo pipefail
           node --check v2/build-preview.cjs
+          node --check v2/preview-privacy.js
           node v2/build-preview.cjs
           node <<'NODE'
           const fs = require('node:fs');
@@ -63,6 +65,8 @@ jobs:
           if (!Object.keys(manifest.assets).some(name=>name.endsWith('/preview-privacy.js'))) fail('Missing preview-only PIN gate resource');
           if (!fs.readFileSync(path.join(root,'business.html'),'utf8').includes('preview-privacy-shield')) fail('Business page must fail closed before first paint');
           if (!fs.readFileSync(path.join(root,'p0.html'),'utf8').includes('preview-privacy-shield')) fail('Backup page must also be gated');
+          const versionedP0=Object.keys(manifest.assets).find(name=>name.endsWith('/p0.html'));
+          if(!versionedP0||!fs.readFileSync(path.join(root,versionedP0),'utf8').includes('preview-privacy-shield')) fail('Signed backup page must be privacy-gated');
           if (fs.readFileSync('v2/wrangler.preview.jsonc','utf8').includes('TEST_TOKEN')) fail('Never commit secrets');
           console.log('PREVIEW_PREFLIGHT_PASS: 19 assets + hashes + distinct Worker/DO/dataset/host');
           NODE
