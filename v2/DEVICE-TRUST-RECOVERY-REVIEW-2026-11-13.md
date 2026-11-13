@@ -30,7 +30,9 @@
 - 本轮首次设备协议自动化：[成功记录 #43405131103](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43405131103)：Chromium + WebKit 各39项新的身份、配对、撤销和恢复验证全部通过；原有每引擎169项加密存储/双设备回归同时通过，总计每引擎208项，双引擎共416项（含旧回归）。
 - [公开预览隔离预检 #43404966013](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43404966013)绿色：实验模块不在19项对外资源中。
 - 进一步补强：将模拟签名令牌和**实际HTTP正文/路径**绑定、浏览器刷新后的不可导出 CryptoKey 恢复、证书篡改和本地密钥删除测试纳入最新工作流；这些变化都需要最后绿色复测，不能把旧轮成功当作新轮。
-- 最终新版完整回归：[GitHub Actions #43405984987](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43405984987)——**以实际结束状态和日志为准**，不能先计入通过数。
+- **最新完整自动化复测成功**：[GitHub Actions #43405984987](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43405984987)，源码 SHA `85107f4260d4b01a7e5067d0f942dd59e36e3cb0`，Chromium **217项通过/0失败**，WebKit **217项通过/0失败**，合计 **434项通过、0失败**。这434项包含此前每引擎169项旧套件，本轮设备身份专项每引擎48项（合计96项）；不能把旧轮结果额外重复累加。
+- 本轮追加的内容已复测：模拟权威验证器绑定实际收到的HTTP正文、方法与路径；不可导出ECDSA签名私钥和不可导出AES-GCM传输密钥写入独立IndexedDB；完整刷新后重新证明原设备签名有效；错误/篡改的设备证书不能恢复；本地身份删除后拒绝继续恢复。
+- 最新合成资源预检 [#43405832276](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43405832276)绿色；原 Worker公开部署内容不含试验模块，未部署到 Cloudflare。
 
 ## 下一步技术路线
 
