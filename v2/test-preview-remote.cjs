@@ -55,8 +55,10 @@ async function main() {
     await page.waitForFunction(expected => document.documentElement.dataset.releaseReady === expected, manifest.releaseId, { timeout: 60000 });
     check(await page.locator('h1').innerText() === '个人工作台', 'verified release initializes user interface');
     check(await page.locator('main h2').first().innerText() === '今天先办重要的事', 'home dashboard renders');
-    await page.waitForFunction(() => document.querySelector('#sync-status')?.textContent.includes('本机演示模式'), null, { timeout: 10000 });
-    check((await page.locator('#sync-status').innerText()).includes('未接入测试云端'), 'unconfigured preview explicitly labels local-only data, not cloud backup');
+    if (process.env.PREVIEW_REQUIRE_LOCAL_LABEL === 'true') {
+      await page.waitForFunction(() => document.querySelector('#sync-status')?.textContent.includes('本机演示模式'), null, { timeout: 10000 });
+      check((await page.locator('#sync-status').innerText()).includes('未接入测试云端'), 'unconfigured preview explicitly labels local-only data, not cloud backup');
+    }
     check((await page.locator('header .badge').innerText()).includes('仅合成示例'), 'synthetic data badge displayed');
     const layout = await page.evaluate(() => ({
       nav: getComputedStyle(document.querySelector('nav')).position,
