@@ -27,3 +27,10 @@
 - 提交源码、Chromium 与 WebKit 的真实手机布局和表单自动化全部通过，预览版版本来源明确。
 - 正式 V1.5.7 和真实业务数据保持原样，直到用户亲自批准迁移；必须先有可核对并能恢复的备份。
 - 没有真实 iPhone 测过的项目不宣称已完成真机验收；独立演示 Preview 不承载真实客户资料。
+
+## 线上独立预览验收最终记录
+
+- 已更新**仅合成数据**的独立 Cloudflare Worker `personal-workbench-v2-preview`，发布源码 `0438a305658894e0a82400038cb2779db2401ec4`，releaseId `5b10dbdee184d0748204bd3abaa3d695e2eaa27fb5880d89ac8faa042deda169`。
+- [发布后真实浏览器运行 #43409142887](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43409142887) **成功**。Chromium **121项通过/0失败**，WebKit **117项通过/0失败**，线上合计238项自动化检查。专项含新搜索和状态筛选、准确版本校验、19项资源原始哈希、手机布局、离线重新打开、附件原件、加密备份恢复及本机隐私遮挡等。
+- 预览 URL：`https://personal-workbench-v2-preview.wangxueqing0427.workers.dev/business.html`。这个地址公开可访问、但只有合成示例；**不用于真实医院业务，也不代表正式上线**。
+- 保留原 V1.5.7、旧 staging、main 和真实业务数据不变。来源明确：独立预览 Cloudflare 发布 ≠ 原正式版本上线。
