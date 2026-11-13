@@ -59,7 +59,7 @@ async function main() {
     const serialized = JSON.stringify(packet);
     if (Buffer.byteLength(serialized) <= 240 * 1024) return request('PUT', '', packet);
     const id = sha(serialized);
-    const chunks = serialized.match(/[\\s\\S]{1,48000}/g);
+    const chunks = serialized.match(/.{1,48000}/gs);
     for (let i = 0; i < chunks.length; i++) {
       const part = await request('PUT', '/uploads/' + id + '/' + i, { data: chunks[i] });
       assert.equal(part.status, 200, 'Encrypted multipart data accepted');
