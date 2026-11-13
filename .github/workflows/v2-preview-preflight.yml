@@ -13,6 +13,7 @@ on:
       - v2/privacy-sharded-store-poc.js
       - v2/privacy-object-store-poc.js
       - v2/privacy-delta-journal-poc.js
+      - v2/privacy-e2e-cloud-poc.js
       - v2/wrangler.preview.jsonc
 permissions:
   contents: read
@@ -56,14 +57,14 @@ jobs:
           if (config.migrations?.[0]?.tag !== 'v2-preview-sqlite-1') fail('Wrong migration');
           if (manifest.syntheticOnly !== true || manifest.sourceClean !== true || manifest.sourceCommit !== process.env.GITHUB_SHA) fail('Wrong manifest source');
           if (Object.keys(manifest.assets).length !== 19) fail('Expected exactly 19 generated assets');
-          if (Object.keys(manifest.assets).some(file => /(?:privacy-(?:crypto|shadow|business-adapter|sharded-store|object-store|delta-journal)-poc|test-privacy-|LOCAL-ENCRYPTION-REVIEW)/.test(file))) fail('POC must never ship with public preview');
+          if (Object.keys(manifest.assets).some(file => /(?:privacy-(?:crypto|shadow|business-adapter|sharded-store|object-store|delta-journal|e2e-cloud)-poc|test-privacy-|LOCAL-ENCRYPTION-REVIEW)/.test(file))) fail('POC must never ship with public preview');
           for (const [name, spec] of Object.entries(manifest.assets)) {
             const filename = path.resolve(root,name);
             if (!filename.startsWith(path.resolve(root)+path.sep)) fail('Unsafe path');
             const bytes = fs.readFileSync(filename);
             if (bytes.length !== spec.bytes || crypto.createHash('sha256').update(bytes).digest('hex') !== spec.sha256) fail('Resource mismatch: '+name);
             if (bytes.includes(Buffer.from('personal-workbench-v2-staging'))) fail('Preview references staging: '+name);
-            if (bytes.includes(Buffer.from('WorkbenchEncryptedBusinessAdapterPOC')) || bytes.includes(Buffer.from('WorkbenchShardedCryptoPOC')) || bytes.includes(Buffer.from('WorkbenchObjectCryptoPOC')) || bytes.includes(Buffer.from('WorkbenchDeltaCryptoPOC')) || bytes.includes(Buffer.from('WorkbenchCryptoPOC'))) fail('Standalone crypto experiment leaked into public preview: '+name);
+            if (bytes.includes(Buffer.from('WorkbenchEncryptedBusinessAdapterPOC')) || bytes.includes(Buffer.from('WorkbenchShardedCryptoPOC')) || bytes.includes(Buffer.from('WorkbenchObjectCryptoPOC')) || bytes.includes(Buffer.from('WorkbenchDeltaCryptoPOC')) || bytes.includes(Buffer.from('WorkbenchE2ECloudPOC')) || bytes.includes(Buffer.from('WorkbenchCryptoPOC'))) fail('Standalone crypto experiment leaked into public preview: '+name);
           }
           const verifiedLoader = Object.keys(manifest.assets).find(name => name.endsWith('/release-loader.js'));
           if (!verifiedLoader || !fs.readFileSync(path.join(root, verifiedLoader),'utf8').includes('本机演示模式')) fail('Public demo must disclose unconfigured cloud identity');
