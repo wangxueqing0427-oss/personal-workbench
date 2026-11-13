@@ -16,3 +16,5 @@ Independent preflight: https://github.com/wangxueqing0427-oss/personal-workbench
 
 Synthetic-preview-only privacy QA, 2026-11-13: gated business and both backup pages; no user records, no paid services, no production modification.
 Expected post-deploy tests: exact source SHA, mobile Chromium/WebKit, local-only status, opt-in salted PBKDF2 PIN screen cover, wrong/correct PIN, backup entrypoints and data preservation.
+
+Preview-only PIN recovery hardening, 2026-11-13: user-saved one-time 128-bit recovery code, verifier-only storage, wrong-code refusal, original record preservation; tested in browser engines before accepting preview readiness.
