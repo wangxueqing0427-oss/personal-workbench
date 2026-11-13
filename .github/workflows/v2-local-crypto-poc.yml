@@ -58,7 +58,7 @@ jobs:
           node --check v2/test-privacy-e2e-cloud-poc.cjs
           ! grep -E 'personal-workbench-v2-(staging|preview)\.|CLOUDFLARE_API_TOKEN|wrangler deploy' v2/privacy-crypto-poc.js v2/test-privacy-crypto-poc.cjs v2/privacy-shadow-poc.js v2/test-privacy-shadow-poc.cjs v2/privacy-business-adapter-poc.js v2/test-privacy-business-adapter-poc.cjs v2/privacy-sharded-store-poc.js v2/test-privacy-sharded-store-poc.cjs v2/privacy-object-store-poc.js v2/test-privacy-object-store-poc.cjs v2/privacy-delta-journal-poc.js v2/test-privacy-delta-journal-poc.cjs v2/privacy-e2e-cloud-poc.js
           ! grep -E 'personal-workbench-v2-staging\\.|CLOUDFLARE_API_TOKEN|wrangler deploy' v2/test-privacy-e2e-cloud-poc.cjs
-          test "$(grep -Fc 'const remoteOrigin=\x27https://personal-workbench-v2-preview.wangxueqing0427.workers.dev\x27' v2/test-privacy-e2e-cloud-poc.cjs)" -eq 1
+          test "$(grep -Fc "const remoteOrigin='https://personal-workbench-v2-preview.wangxueqing0427.workers.dev'" v2/test-privacy-e2e-cloud-poc.cjs)" -eq 1
       - name: Install pinned isolated browser tools in temporary CI folder
         shell: bash
         run: |
