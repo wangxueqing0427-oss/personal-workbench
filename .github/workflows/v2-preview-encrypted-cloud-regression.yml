@@ -1,0 +1,102 @@
+name: V2 encrypted E2E real preview cloud - synthetic only
+on:
+  push:
+    branches:
+      - dev/v2-preview-isolated-20261111
+    paths:
+      - .github/workflows/v2-preview-encrypted-cloud-regression.yml
+      - v2/test-privacy-e2e-cloud-poc.cjs
+      - v2/privacy-e2e-cloud-poc.js
+      - v2/privacy-delta-journal-poc.js
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: personal-workbench-v2-preview-deploy
+  cancel-in-progress: false
+jobs:
+  test-live-encrypted-preview:
+    if: >-
+      github.ref == 'refs/heads/dev/v2-preview-isolated-20261111' &&
+      vars.V2_PREVIEW_DEPLOY_ENABLED == 'true' &&
+      vars.V2_PREVIEW_FREE_PLAN_CONFIRMED == 'true' &&
+      vars.V2_PREVIEW_WORKER_READY == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 26
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PREVIEW_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      PREVIEW_TEST_TOKEN_FILE: /tmp/workbench-v2-e2e-ephemeral-token
+      WRANGLER_SEND_METRICS: 'false'
+      NODE_PATH: /tmp/workbench-v2-e2e-preview/node_modules
+      WB_REAL_PREVIEW_CLOUD: 'true'
+    steps:
+      - name: Check out isolated preview only
+        uses: actions/checkout@v4
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Enforce exact Worker, repository, free authorization and absent prior token
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "wangxueqing0427-oss/personal-workbench"
+          test "$GITHUB_REF" = "refs/heads/dev/v2-preview-isolated-20261111"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          test -n "$CLOUDFLARE_API_TOKEN"
+          node --check v2/test-privacy-e2e-cloud-poc.cjs
+          node --check v2/privacy-e2e-cloud-poc.js
+          node --check v2/privacy-delta-journal-poc.js
+          node -e "const fs=require('fs');const c=JSON.parse(fs.readFileSync('v2/wrangler.preview.jsonc','utf8'));if(c.name!=='personal-workbench-v2-preview'||c.vars.TEST_ENVIRONMENT!=='synthetic-only'||c.vars.TEST_DATASET!=='mobile-preview-20261111'||c.durable_objects.bindings?.length!==1||c.durable_objects.bindings[0].name!=='TEST_SYNC'||c.durable_objects.bindings[0].script_name)throw Error('Preview Worker isolation configuration mismatch')"
+          npx --yes wrangler@4.149.0 secret list --name personal-workbench-v2-preview --config v2/wrangler.preview.jsonc --format json > "$RUNNER_TEMP/preview-existing-secrets.json"
+          node -e "const fs=require('fs');const values=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/preview-existing-secrets.json','utf8'));if(!Array.isArray(values)||values.some(x=>x.name==='TEST_TOKEN'))throw Error('Prior TEST_TOKEN found, fail closed without replacing it')"
+      - name: Create random single-run synthetic-only credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('hex'))" > "$PREVIEW_TEST_TOKEN_FILE"
+          chmod 600 "$PREVIEW_TEST_TOKEN_FILE"
+          test "$(wc -c < "$PREVIEW_TEST_TOKEN_FILE")" -eq 64
+      - name: Install isolated mobile browser engines on CI runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --prefix /tmp/workbench-v2-e2e-preview --no-save --no-package-lock playwright@1.56.1
+          /tmp/workbench-v2-e2e-preview/node_modules/.bin/playwright install --with-deps chromium webkit
+      - name: Attach temporary credential to PREVIEW Worker only
+        id: write_secret
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.149.0 secret put TEST_TOKEN --name personal-workbench-v2-preview --config v2/wrangler.preview.jsonc < "$PREVIEW_TEST_TOKEN_FILE"
+      - name: Verify real Cloudflare encrypted E2E with two independent Chromium mobile clients
+        shell: bash
+        env:
+          WB_BROWSER: chromium
+        run: |
+          set -euo pipefail
+          node v2/test-privacy-e2e-cloud-poc.cjs
+      - name: Verify real Cloudflare encrypted E2E with two independent WebKit mobile clients
+        shell: bash
+        env:
+          WB_BROWSER: webkit
+        run: |
+          set -euo pipefail
+          node v2/test-privacy-e2e-cloud-poc.cjs
+      - name: Revoke temporary cloud credential even after a failed test
+        if: ${{ always() && steps.write_secret.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'y\n' | npx --yes wrangler@4.149.0 secret delete TEST_TOKEN --name personal-workbench-v2-preview --config v2/wrangler.preview.jsonc
+          npx --yes wrangler@4.149.0 secret list --name personal-workbench-v2-preview --config v2/wrangler.preview.jsonc --format json > "$RUNNER_TEMP/preview-after-secrets.json"
+          node -e "const fs=require('fs');const values=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/preview-after-secrets.json','utf8'));if(!Array.isArray(values)||values.some(x=>x.name==='TEST_TOKEN'))throw Error('TEST_TOKEN revocation unconfirmed')"
+          node -e "fetch('https://personal-workbench-v2-preview.wangxueqing0427.workers.dev/sync',{cache:'no-store'}).then(r=>{if(r.status!==401)throw Error('Anonymous preview sync is not blocked');console.log('LIVE_PREVIEW_ANONYMOUS_SYNC_BLOCKED')}).catch(e=>{console.error(e.message);process.exitCode=1})"
+          echo PREVIEW_ENCRYPTED_E2E_TEST_SECRET_REVOKED
+      - name: Erase temporary credential and remote test script environment
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          rm -f "$PREVIEW_TEST_TOKEN_FILE"
