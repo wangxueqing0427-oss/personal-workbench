@@ -7,6 +7,8 @@ on:
       - .github/workflows/v2-local-crypto-poc.yml
       - v2/privacy-crypto-poc.js
       - v2/test-privacy-crypto-poc.cjs
+      - v2/privacy-shadow-poc.js
+      - v2/test-privacy-shadow-poc.cjs
   workflow_dispatch:
 permissions:
   contents: read
@@ -32,7 +34,9 @@ jobs:
           test "$GITHUB_REF" = "refs/heads/dev/v2-preview-isolated-20261111"
           node --check v2/privacy-crypto-poc.js
           node --check v2/test-privacy-crypto-poc.cjs
-          ! grep -E 'personal-workbench-v2-(staging|preview)\.|CLOUDFLARE_API_TOKEN|wrangler deploy' v2/privacy-crypto-poc.js v2/test-privacy-crypto-poc.cjs
+          node --check v2/privacy-shadow-poc.js
+          node --check v2/test-privacy-shadow-poc.cjs
+          ! grep -E 'personal-workbench-v2-(staging|preview)\.|CLOUDFLARE_API_TOKEN|wrangler deploy' v2/privacy-crypto-poc.js v2/test-privacy-crypto-poc.cjs v2/privacy-shadow-poc.js v2/test-privacy-shadow-poc.cjs
       - name: Install pinned isolated browser tools in temporary CI folder
         shell: bash
         run: |
@@ -44,3 +48,4 @@ jobs:
         run: |
           set -euo pipefail
           node v2/test-privacy-crypto-poc.cjs
+          node v2/test-privacy-shadow-poc.cjs
