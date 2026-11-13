@@ -86,13 +86,34 @@ jobs:
           set -euo pipefail
           node v2/test-privacy-e2e-cloud-poc.cjs
       - name: Revoke temporary cloud credential even after a failed test
-        if: ${{ always() && steps.write_secret.outcome == 'success' }}
+        if: ${{ always() && (steps.write_secret.outcome == 'success' || steps.write_secret.outcome == 'failure') }}
         shell: bash
         run: |
           set -euo pipefail
-          printf 'y\n' | npx --yes wrangler@4.149.0 secret delete TEST_TOKEN --name personal-workbench-v2-preview --config v2/wrangler.preview.jsonc
+          npx --yes wrangler@4.149.0 secret list --name personal-workbench-v2-preview --config v2/wrangler.preview.jsonc --format json > "$RUNNER_TEMP/preview-before-cleanup.json"
+          if node -e "const fs=require('fs');const xs=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/preview-before-cleanup.json','utf8'));if(!Array.isArray(xs))throw Error('Invalid Worker secret list');process.exit(xs.some(x=>x.name==='TEST_TOKEN')?0:1)"; then
+            printf 'y\n' | npx --yes wrangler@4.149.0 secret delete TEST_TOKEN --name personal-workbench-v2-preview --config v2/wrangler.preview.jsonc
+          fi
           npx --yes wrangler@4.149.0 secret list --name personal-workbench-v2-preview --config v2/wrangler.preview.jsonc --format json > "$RUNNER_TEMP/preview-after-secrets.json"
           node -e "const fs=require('fs');const values=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/preview-after-secrets.json','utf8'));if(!Array.isArray(values)||values.some(x=>x.name==='TEST_TOKEN'))throw Error('TEST_TOKEN revocation unconfirmed')"
+          node <<'NODE'
+          const fs=require('node:fs'),crypto=require('node:crypto');
+          const token=fs.readFileSync(process.env.PREVIEW_TEST_TOKEN_FILE,'utf8').trim();
+          const url='https://personal-workbench-v2-preview.wangxueqing0427.workers.dev/sync';
+          (async()=>{
+            let revoked=false;
+            for(let attempt=0;attempt<30;attempt++){
+              const result=await fetch(url,{cache:'no-store',redirect:'error',headers:{
+                Authorization:'Bearer '+token,'X-Workbench-Test-Run':crypto.randomUUID()
+              }});
+              if(result.status===401){revoked=true;break;}
+              if(result.status!==200&&result.status!==503)throw Error('Unexpected status during secret propagation: '+result.status);
+              await new Promise(done=>setTimeout(done,1000));
+            }
+            if(!revoked)throw Error('Previously valid test token still accepted after deletion');
+            console.log('LIVE_PREVIEW_PREVIOUS_TOKEN_REVOKED');
+          })().catch(error=>{console.error(error.message);process.exitCode=1});
+          NODE
           node -e "fetch('https://personal-workbench-v2-preview.wangxueqing0427.workers.dev/sync',{cache:'no-store'}).then(r=>{if(r.status!==401)throw Error('Anonymous preview sync is not blocked');console.log('LIVE_PREVIEW_ANONYMOUS_SYNC_BLOCKED')}).catch(e=>{console.error(e.message);process.exitCode=1})"
           echo PREVIEW_ENCRYPTED_E2E_TEST_SECRET_REVOKED
       - name: Erase temporary credential and remote test script environment
