@@ -72,6 +72,23 @@ async function main() {
     await page.locator('nav button[data-route="hospitals"]').click();
     check(await page.getByRole('heading', { name: '医院业务档案' }).isVisible(), 'hospital directory opens');
     check(await page.locator('[data-hospital]').count() === 3, 'three synthetic hospital examples');
+    if (process.env.PREVIEW_EXPECTED_SHA) {
+      await page.locator('#business-search').fill('TOMO');
+      check(await page.locator('[data-hospital]').count() === 1 && await page.locator('[data-project]').count() === 1,
+        'new deployed phone search finds TOMO project and associated hospital');
+      check(await page.locator('#business-search').evaluate(input => document.activeElement === input),
+        'new deployed phone search keeps focus while typing');
+      await page.locator('#business-status-filter').selectOption('等待对方');
+      check(await page.locator('[data-project]').count() === 0,
+        'new deployed status filter excludes unrelated waiting projects');
+      await page.locator('#business-status-filter').selectOption('待处理');
+      check(await page.locator('[data-project]').count() === 1,
+        'new deployed filter restores matching pending project');
+      await page.locator('[data-clear-search]').click();
+      check(await page.locator('[data-hospital]').count() === 3,
+        'deployed mobile reset shows all synthetic hospitals');
+    }
+
     await page.locator('[data-hospital]').first().click();
     check(await page.getByRole('heading', { name: '合同与业务项目' }).isVisible(), 'hospital detail opens');
     await page.locator('nav button[data-route="supplies"]').click();
