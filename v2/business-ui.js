@@ -26,13 +26,27 @@
     }
     return result;
   }
-  function projectButtons(items) {
-    return items.length ? items.map(project => `<button class="project-button" data-project="${escape(project.id)}"><strong>${escape(state.hospitals.find(item => item.id === project.hospitalId)?.name)} · ${escape(project.name)}</strong><p>${escape(project.nextAction || '尚未填写下一步')}<br><small>${escape(project.status)} · ${escape(project.followupDate || '未设日期')}${project.status === '等待对方' && project.followupDate <= today() && project.followupDate ? ' · 已到跟进日' : ''}</small></p></button>`).join('') : '<p class="muted">暂无事项</p>';
+  const statusTag = status => `<span class="status-pill" data-status="${escape(status)}">${escape(status)}</span>`;
+  const sectionHead = (eyebrow,title,detail='') => `<div class="section-head"><div><p class="eyebrow">${escape(eyebrow)}</p><h2>${escape(title)}</h2></div>${detail ? `<span class="section-detail">${escape(detail)}</span>` : ''}</div>`;
+  function projectButtons(items,{actions=false}={}) {
+    return items.length ? items.map(project => {
+      const hospital=state.hospitals.find(item=>item.id===project.hospitalId);
+      const date=project.followupDate?escape(project.followupDate):'日期待定';
+      const main=`<button class="project-button" data-project="${escape(project.id)}"><span class="project-title">${escape(project.name)}</span><span class="project-subtitle">${escape(hospital?.name||'未关联医院')} · ${escape(project.kind)}</span><span class="project-summary">${escape(project.nextAction||'尚未填写下一步')}</span><span class="project-foot">${statusTag(project.status)}<span class="project-date">${date}</span></span></button>`;
+      return `<div class="work-item">${main}${actions?`<div class="work-actions"><button type="button" data-quick-project="${escape(project.id)}">更新跟进</button><button type="button" data-note-project="${escape(project.id)}">记录进展</button><button type="button" data-files-project="${escape(project.id)}">上传资料</button></div>`:''}</div>`;
+    }).join('') : '<div class="empty-state"><span aria-hidden="true">✓</span><p>目前没有需要处理的事项</p><small>新进展可以随时从下方快捷入口记录</small></div>';
   }
   function home() {
-    const view = core.dashboard(state, today());
-    const future = view.week.filter(item => item.followupDate > today());
-    return `<section class="card"><h2>今天先办重要的事</h2><div class="grid"><button class="primary" data-route="note">随手记录</button><button data-route="hospitals">医院与项目</button><button data-route="files">拍照 / 上传</button><button data-route="supplies">耗材业务</button></div></section>` + [['今天要办', view.today], ['已逾期', view.overdue], ['等待反馈', view.waiting]].filter(([name, items]) => name === '今天要办' || items.length).map(([name, items]) => `<section class="card"><h2>${name} <small>${items.length}</small></h2>${projectButtons(items)}</section>`).join('') + (future.length || view.nodes.length ? `<section class="card"><h2>未来7天节点</h2>${projectButtons(future)}${view.nodes.map(node => `<p>${escape(node.project.name)} · ${escape(({ bidDate: '招标', contractEnd: '合同到期', renewalDate: '续约', quoteDate: '报价' })[node.field])} · ${escape(node.date)}</p>`).join('')}</section>` : '') + `<details class="card"><summary>最近跟进 / 长时间未跟进</summary>${projectButtons(view.recent)}<h3>超过14天未跟进</h3>${projectButtons(view.stale)}</details>`;
+    const view=core.dashboard(state,today());
+    const future=view.week.filter(item=>item.followupDate>today());
+    const upcoming=future.length+view.nodes.length;
+    const greeting=`<section class="hero card"><p class="eyebrow">WORKBENCH · DAILY FOCUS</p><h2>今天先办重要的事</h2><p class="hero-description">轻松梳理医院业务，下一步始终清楚。</p><div class="hero-metrics"><div><strong>${view.today.length}</strong><span>今日事项</span></div><div><strong>${view.overdue.length}</strong><span>已逾期</span></div><div><strong>${view.waiting.length}</strong><span>等待反馈</span></div><div><strong>${upcoming}</strong><span>本周节点</span></div></div></section>`;
+    const shortcuts=`<section class="card shortcut-panel">${sectionHead('QUICK ACTIONS','常用操作')}<div class="shortcut-grid"><button class="shortcut primary" data-route="note"><span class="shortcut-icon" aria-hidden="true">✎</span><span>随手记录</span></button><button class="shortcut" data-route="hospitals"><span class="shortcut-icon" aria-hidden="true">⌕</span><span>医院与项目</span></button><button class="shortcut" data-route="files"><span class="shortcut-icon" aria-hidden="true">▧</span><span>拍照 / 上传</span></button><button class="shortcut" data-route="supplies"><span class="shortcut-icon" aria-hidden="true">▤</span><span>耗材业务</span></button></div></section>`;
+    const categories=[['TODAY','今天要办',view.today],['OVERDUE','已逾期',view.overdue],['WAITING','等待反馈',view.waiting]];
+    const sections=categories.filter(([,label,items])=>label==='今天要办'||items.length).map(([eyebrow,label,items])=>`<section class="card task-section">${sectionHead(eyebrow,label,`${items.length} 项`)}${projectButtons(items,{actions:true})}</section>`).join('');
+    const nodes=view.nodes.map(node=>`<div class="milestone"><span class="milestone-date">${escape(node.date)}</span><span>${escape(node.project.name)} · ${escape(({bidDate:'招标',contractEnd:'合同到期',renewalDate:'续约',quoteDate:'报价'})[node.field])}</span></div>`).join('');
+    const week=(future.length||nodes)?`<section class="card task-section">${sectionHead('AHEAD','未来7天节点')}${projectButtons(future,{actions:true})}${nodes}</section>`:'';
+    return greeting+shortcuts+sections+week+`<details class="card quiet-details"><summary>最近跟进 / 长时间未跟进</summary>${projectButtons(view.recent)}<h3>超过14天未跟进</h3>${projectButtons(view.stale)}</details>`;
   }
   function hospitalSearchResults() {
     const found = core.searchBusiness(state, searchQuery, searchStatus);
