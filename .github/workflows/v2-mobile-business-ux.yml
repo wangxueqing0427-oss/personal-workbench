@@ -1,0 +1,50 @@
+name: V2 mobile business UX - isolated synthetic browser regression
+on:
+  push:
+    branches:
+      - dev/v2-preview-isolated-20261111
+    paths:
+      - .github/workflows/v2-mobile-business-ux.yml
+      - v2/business-core.js
+      - v2/business-ui.js
+      - v2/business.css
+      - v2/test-mobile-business-ux.cjs
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  mobile-ux:
+    if: github.ref == 'refs/heads/dev/v2-preview-isolated-20261111'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 14
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, webkit]
+    env:
+      NODE_PATH: /tmp/workbench-v2-mobile-ux/node_modules
+      WB_BROWSER: ${{ matrix.browser }}
+    steps:
+      - name: Checkout isolated source
+        uses: actions/checkout@v4
+      - name: Check source syntax and forbid remote service usage
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "wangxueqing0427-oss/personal-workbench"
+          test "$GITHUB_REF" = "refs/heads/dev/v2-preview-isolated-20261111"
+          node --check v2/business-core.js
+          node --check v2/business-ui.js
+          node --check v2/test-mobile-business-ux.cjs
+          ! grep -E 'wrangler deploy|CLOUDFLARE_API_TOKEN|personal-workbench-v2-staging\\.|personal-workbench-v2-preview\\.' v2/test-mobile-business-ux.cjs
+      - name: Install pinned browser in ephemeral CI directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --prefix /tmp/workbench-v2-mobile-ux --no-save --no-package-lock playwright@1.56.1
+          /tmp/workbench-v2-mobile-ux/node_modules/.bin/playwright install --with-deps "$WB_BROWSER"
+      - name: Test actual mobile UI with new synthetic local IndexedDB
+        shell: bash
+        run: |
+          set -euo pipefail
+          node v2/test-mobile-business-ux.cjs
