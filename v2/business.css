@@ -138,3 +138,11 @@ nav button.active{background:#e5f3f6;color:#175f77;font-weight:770}
 }
 @media(max-width:350px){.hero-metrics span{font-size:10px}.status-pill{font-size:11px}.shortcut-icon{font-size:20px}.card{padding:14px}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}button,a.button{transition:none}}
+
+/* Thumb-friendly follow-ups and inline photo-linked progress. */
+.work-actions{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;padding:9px}
+.work-actions button{min-height:46px;font-size:12px;line-height:1.35;border-radius:10px}
+.timeline-file{margin:8px 0 0}
+.timeline-file button{background:#f0f8fa;border-color:#d5eaf0;font-size:12px;min-height:42px;max-width:100%;text-align:left}
+form[data-form="file"] textarea[name="remark"]{min-height:96px;background:#f8fcfd}
+@media(max-width:420px){.work-actions button{font-size:12px;padding:10px 4px}}
