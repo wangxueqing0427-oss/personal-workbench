@@ -6,7 +6,7 @@
   try {
     if (!release || !/^[a-f0-9]{64}$/.test(release.id)) throw new Error('Missing release manifest');
     const verified = new Map();
-    for (const [name, asset] of Object.entries(release.files)) {
+    await Promise.all(Object.entries(release.files).map(async ([name, asset]) => {
       const url = new URL(asset.url, release.baseUrl);
       if (url.origin !== location.origin || !url.pathname.includes('/releases/' + release.id + '/')) throw new Error('Release scope mismatch');
       const response = await fetch(url, { cache: 'no-store' });
@@ -15,7 +15,7 @@
       const digest = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), value => value.toString(16).padStart(2, '0')).join('');
       if (digest !== asset.sha256 || bytes.byteLength !== asset.bytes) throw new Error('Release hash mismatch: ' + name);
       verified.set(name, new TextDecoder().decode(bytes));
-    }
+    }));
     root.WorkbenchReleaseAssets = { sourceCommit: release.sourceCommit, id: release.id, url: name => release.files[name] ? new URL(release.files[name].url, release.baseUrl).href : (() => { throw new Error('Unknown release resource'); })() };
     const style = document.createElement('style'); style.textContent = verified.get('business.css'); document.head.append(style);
     for (const name of ['business-core.js', 'business-store.js', 'offline-sync.js', 'business-ui.js', 'sync-panel.js', 'device-pair.js', 'staging-init.js']) {
