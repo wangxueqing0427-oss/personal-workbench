@@ -2,6 +2,13 @@
 
 > **状态：内部合成测试通过；非正式环境、非真实 iPhone 终验，禁止接入真实医院数据。**
 
+## 终版补充：真实云端 + 本机 PIN / 恢复码试验
+
+- 最后一次独立预览发布已成功，并通过发布后全套手机自动化：[43363901554](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43363901554)；Cloudflare Worker version `553206e4-0dfd-47ba-b6e9-5ca850439bac`，提交 SHA `9cffa2ed2becf7f7b3908260e8c6811d1baa23bd`，Chromium **116 PASS**，WebKit **112 PASS**。
+- 使用已部署的 19个资源：哈希验证、完整备份/隔离恢复、合成附件原件持久化、离线启动、未登录明确本机模式、可选 PIN 遮挡、错 PIN 冷却、90秒闲置遮挡、页面后台遮挡、根/版本备份页面访问保护、128位随机恢复码、PIN与恢复码均不以明文持久化、恢复后原件/记录保留。
+- 最后一次云端测试：[43364191816](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43364191816)：35项接口测试与32项独立双浏览器业务测试，**67 PASS**，临时测试密钥已核实撤销。上述两轮最新绿色结果总计 **295 PASS、0 FAIL**。
+- 此 PIN 仍然只是针对**合成测试**的网页界面遮挡，不是 Face ID，不加密本机 IndexedDB，也不能防范所有旧缓存页/恶意同源脚本/开发者工具；真实业务禁止接入。详见 `v2/PREVIEW-SAFETY-GATE-2026-11-13.md` 与 `v2/PRODUCTION-PRIVACY-DESIGN.md`。
+
 ## 补充：2026-11-13 线上发布后自动验收门禁
 
 - 新预览发布：[GitHub Actions 43359985076](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43359985076)，目标仍只有 `personal-workbench-v2-preview`，Cloudflare Worker 版本 `5397d079-3f6e-492a-a1f1-9d60f539a6a0`，源码 SHA `764243a8545229c6082387a713a65a958c4af6a6`。
