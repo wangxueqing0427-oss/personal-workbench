@@ -13,3 +13,6 @@ No production or staging deployment.
 Follow-up preview-only clarity + post-deploy live mobile verification, 2026-11-13.
 Checks: never imply offline demo is cloud-backed; verify exact deployed commit in Chromium and WebKit after publish.
 Independent preflight: https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43359895823
+
+Synthetic-preview-only privacy QA, 2026-11-13: gated business and both backup pages; no user records, no paid services, no production modification.
+Expected post-deploy tests: exact source SHA, mobile Chromium/WebKit, local-only status, opt-in salted PBKDF2 PIN screen cover, wrong/correct PIN, backup entrypoints and data preservation.
