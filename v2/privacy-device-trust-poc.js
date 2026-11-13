@@ -154,6 +154,91 @@ async function recoverOwner(bundle,phrase){
  return ownerFromIdentity({identity:{tenantId:raw.tenantId,ownerPublic:raw.ownerPublic},
    privateKey,transport:from64(raw.transport),recovery:bundle});
 }
+const DEVICE_DB='personal-workbench-v2-device-trust-poc-';
+function validDeviceDb(name){if(typeof name!=='string'||!name.startsWith(DEVICE_DB)||
+  !uuid(name.slice(DEVICE_DB.length)))fail('不得访问其他设备、工作台或真实业务数据库');}
+function createDeviceDb(name,session){
+ validDeviceDb(name);
+ return new Promise((resolve,reject)=>{
+   let created=false;
+   const req=indexedDB.open(name,1);
+   req.onupgradeneeded=()=>{
+     created=true;
+     const store=req.result.createObjectStore('sessions');
+     store.add(session,'current');
+   };
+   req.onsuccess=()=>{
+     req.result.close();
+     if(!created)reject(Error('设备身份库已存在，禁止覆盖旧密钥'));
+     else resolve(name);
+   };
+   req.onerror=()=>reject(req.error||Error('设备密钥保存失败'));
+ });
+}
+function readDeviceDb(name){
+ validDeviceDb(name);
+ return new Promise((resolve,reject)=>{
+   let missing=false;
+   const open=indexedDB.open(name);
+   open.onupgradeneeded=()=>{missing=true;open.transaction.abort();};
+   open.onerror=()=>reject(Error('设备密钥不存在或已失效'));
+   open.onsuccess=()=>{
+     const db=open.result;
+     if(missing||db.version!==1||!db.objectStoreNames.contains('sessions')){
+       db.close();reject(Error('设备身份库不存在或版本不兼容'));return;
+     }
+     const tx=db.transaction('sessions','readonly'),request=tx.objectStore('sessions').get('current');
+     request.onsuccess=()=>resolve(request.result);
+     tx.oncomplete=()=>db.close();
+     tx.onerror=()=>{db.close();reject(tx.error||Error('设备本地身份无法读取'));};
+   };
+ });
+}
+async function resumeCandidate(name){
+ const info=await readDeviceDb(name);
+ if(!info||info.format!==FORMAT||!info.savedDeviceId||!uuid(info.savedDeviceId)||
+    !info.certificate||!info.ownerPublic||!info.certificateSignature||
+    !info.signKey||!info.transportKey||info.certificate.deviceId!==info.savedDeviceId)
+    fail('设备本机身份存储结构损坏');
+ const certificate=clone(info.certificate);
+ if(Date.now()>certificate.expiresAt)fail('长期设备授权已过期');
+ if(info.signKey.extractable!==false||info.transportKey.extractable!==false||
+    info.signKey.type!=='private'||info.transportKey.type!=='secret')
+    fail('设备私钥未标记为不可导出，拒绝恢复');
+ if(certificate.ownerFingerprint!==await fingerprint(info.ownerPublic)||
+    !await signature(await importPublic(info.ownerPublic,'verify'),certificate,info.certificateSignature))
+    fail('本地设备授权证书已被修改');
+ // Confirm stored device signing key really corresponds to the certified public key.
+ const probe={deviceId:info.savedDeviceId,nonce:crypto.randomUUID(),at:Date.now()};
+ const proof=await sign(info.signKey,probe);
+ if(!await signature(await importPublic(certificate.signPublic,'verify'),probe,proof))
+    fail('恢复的设备私钥与已签发证书不匹配');
+ let active=true;
+ return Object.freeze({
+   deviceId:info.savedDeviceId,certificate:clone(certificate),storedDb:name,
+   async proof(method,path,body){
+     if(!active)fail('设备身份已锁定');
+     if(!['PUT','GET'].includes(method)||path!=='/sync')fail('设备请求路径无效');
+     const statement={deviceId:info.savedDeviceId,nonce:crypto.randomUUID(),at:Date.now(),method,path,
+       bodyHash:await hex(enc.encode(JSON.stringify(body)))};
+     return {certificate:clone(certificate),certificateSignature:info.certificateSignature,
+       request:{method,path,body:clone(body)},proof:{...statement,signature:await sign(info.signKey,statement)}};
+   },
+   async encrypt(value){if(!active)fail('设备身份已锁定');
+     return seal(info.transportKey,value,'device-transfer|'+certificate.tenantId);},
+   async decrypt(packet){if(!active)fail('设备身份已锁定');
+     return open(info.transportKey,packet,'device-transfer|'+certificate.tenantId);},
+   lock(){active=false;}
+ });
+}
+async function eraseSavedCandidate(name){
+ validDeviceDb(name);
+ return new Promise((resolve,reject)=>{
+   const request=indexedDB.deleteDatabase(name);
+   request.onsuccess=()=>resolve(true);
+   request.onerror=request.onblocked=()=>reject(Error('设备数据删除失败或被其他窗口占用'));
+ });
+}
 async function createCandidate(){
  const deviceId=crypto.randomUUID(),nonce=b64(random(16)),createdAt=Date.now();
  const identityKeys=await crypto.subtle.generateKey({name:'ECDSA',namedCurve:'P-256'},false,['sign','verify']);
@@ -163,7 +248,7 @@ async function createCandidate(){
  const request={format:FORMAT,deviceId,nonce,createdAt,identityPublic:signPublic,exchangePublic};
  const first=await fingerprint(signPublic),second=await fingerprint(exchangePublic);
  const display=(await hex(enc.encode(deviceId+'|'+nonce+'|'+first+'|'+second))).slice(0,24);
- let cert=null,certSig=null,key=null,now=()=>Date.now();
+ let cert=null,certSig=null,key=null,ownerPublic=null,now=()=>Date.now();
  return Object.freeze({
    request:clone(request),fingerprint:display,deviceId,
    async accept(grant,{ownerFingerprint}={}){
@@ -186,6 +271,7 @@ async function createCandidate(){
      if(incoming.length!==32)fail('被封装的传输密钥长度错误');
      key=await crypto.subtle.importKey('raw',incoming,{name:'AES-GCM'},false,['encrypt','decrypt']);
      incoming.fill(0);cert=clone(grant.certificate);certSig=grant.certificateSignature;
+     ownerPublic=clone(grant.ownerPublic);
      return {paired:true,deviceId,ownerFingerprint,scopes:clone(cert.scopes)};
    },
    async proof(method,path,body){
@@ -207,9 +293,19 @@ async function createCandidate(){
      if(!key)fail('未配对');
      return open(key,packet,'device-transfer|'+cert.tenantId);
    },
+   async persist({approved=false}={}){
+     if(!approved||!cert||!key||!ownerPublic)fail('没有用户确认或未完成配对，禁止持久保存设备密钥');
+     if(identityKeys.privateKey.extractable!==false||key.extractable!==false)
+       fail('拒绝持久化可导出的设备密钥');
+     const db=DEVICE_DB+crypto.randomUUID();
+     await createDeviceDb(db,{format:FORMAT,savedDeviceId:deviceId,
+       signKey:identityKeys.privateKey,transportKey:key,certificate:clone(cert),
+       certificateSignature:certSig,ownerPublic:clone(ownerPublic)});
+     return {saved:true,database:db,nonextractable:true};
+   },
    setTestClock(clock){now=clock;},
-   lock(){key=null;cert=null;certSig=null;}
+   lock(){key=null;cert=null;certSig=null;ownerPublic=null;}
  });
 }
-root.WorkbenchDeviceTrustPOC=Object.freeze({createOwner,recoverOwner,createCandidate,format:FORMAT});
+root.WorkbenchDeviceTrustPOC=Object.freeze({createOwner,recoverOwner,createCandidate,resumeCandidate,eraseSavedCandidate,format:FORMAT});
 })(globalThis);
