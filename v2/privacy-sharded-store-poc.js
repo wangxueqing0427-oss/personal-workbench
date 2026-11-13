@@ -77,6 +77,20 @@
       q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error);
     });
   }
+  function listKeys(db,type){
+    return new Promise((resolve,reject)=>{
+      const q=db.transaction(type,'readonly').objectStore(type).getAllKeys();
+      q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error||Error('索引读取失败'));
+    });
+  }
+  function listRows(db,type,range){
+    return new Promise((resolve,reject)=>{
+      const tx=db.transaction(type,'readonly'),store=tx.objectStore(type);
+      const values=store.getAll(range),keys=store.getAllKeys(range);
+      tx.oncomplete=()=>resolve(values.result.map((value,i)=>({key:keys.result[i],value})));
+      tx.onabort=tx.onerror=()=>reject(tx.error||Error('加密索引读取失败'));
+    });
+  }
   function all(db){
     return new Promise((resolve,reject)=>{
       const tx=db.transaction(stores,'readonly'),req={};
@@ -160,7 +174,9 @@
       if(state.files.length>MAX_FILES||new Set(state.files.map(f=>f.id)).size!==state.files.length)fail('文件引用重复或超限');
       const old=await read();
       if((old?.revision??-1)!==expected)fail('本机状态已经更改，禁止覆盖');
-      const currentFiles=(await all(db)).files;
+      const [fileIds,jobIds]=await Promise.all([listKeys(db,'files'),listKeys(db,'jobs')]);
+      const currentFiles=fileIds.map(key=>({key}));
+      if(jobIds.length>=MAX_JOBS)fail('合成离线队列超过200项，停止追加但保留旧数据');
       if(state.files.length!==currentFiles.length+(file?1:0))fail('文件引用新增/删除与实际原件不一致');
       const prior=new Map((old?.files||[]).map(x=>[x.id,x]));
       for(const ref of state.files){
@@ -218,16 +234,17 @@
     }
     async function readFile(id){
       unlocked();
-      const shot=await all(db),entry=shot.files.find(x=>x.key===id);
-      if(!entry)return null;
-      const raw=await decodeFile(key,h,id,entry.value,shot.chunks);
+      const manifest=await get(db,'files',id);
+      if(!manifest)return null;
+      const chunks=await listRows(db,'chunks',IDBKeyRange.bound(id+':',id+':\uffff'));
+      const raw=await decodeFile(key,h,id,manifest,chunks);
       const ref=(await read())?.files.find(x=>x.id===id);
       if(!ref||ref.name!==raw.name||ref.type!==raw.type||ref.size!==raw.size)fail('原件引用与密文清单不符');
       return new File([raw.bytes],raw.name,{type:raw.type,lastModified:raw.lastModified});
     }
     async function queueData(){
-      unlocked();const shot=await all(db),jobs=[];
-      for(const row of shot.jobs){
+      unlocked();const jobs=[];
+      for(const row of await listRows(db,'jobs')){
         const value=await readJson(key,row.value,label(h,'job',row.key));
         if(value.localRevision!==row.key)fail('离线队列已损坏');
         jobs.push({key:'queue:'+String(row.key).padStart(12,'0'),...value});
@@ -245,7 +262,7 @@
     }
     const noCloud=async()=>fail('分块密文原型禁止云端身份和同步写入');
     return Object.freeze({name,protocol:'workbench-sync-2',mode:'synthetic-sharded-local-only',chunkBytes:CHUNK,maxFileBytes:MAX_FILE,
-      read,commit,readFile,queueData,fileKeys:async()=>{unlocked();return(await all(db)).files.map(x=>x.key);},
+      read,commit,readFile,queueData,fileKeys:async()=>{unlocked();return listKeys(db,'files');},
       exportEncryptedBackup:backup,changeQueue:noCloud,stageRemote:noCloud,resolveConflict:noCloud,
       lock(){key=null;},close(){key=null;db.close();}});
   }
