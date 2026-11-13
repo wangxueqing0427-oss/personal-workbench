@@ -59,6 +59,13 @@
 - [最新完整 Chromium+WebKit 复测](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43397336843)：每引擎169项通过，**共338项通过、0失败**（含以前所有兼容回归），双端云端模拟专项各34项。模拟云端6个历史版本，122次分片上传及2次重复分片确认；[公开预览构建隔离预检](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43396918957)通过，没有部署这些实验模块。
 - **正式交付仍有重要缺口**：尚未连接真实Cloudflare Worker测试身份、未验证真正 iPhone Face ID/PWA、没有安全的设备配对和密钥分发、没有生产可用的原件增量云传输及同一业务对象的人工冲突解决界面。技术审核见 `v2/LOCAL-E2E-CLOUD-REVIEW-2026-11-13.md`。
 
+## 真实 Cloudflare Preview Worker 合成加密同步通过（2026-11-13）
+
+- 新增隔离 [GitHub Actions 真实云端专项](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43401928008)：Chromium39/39 + WebKit39/39，共 **78项通过、0失败**。该测试使用真实已部署的 `personal-workbench-v2-preview` Worker、SQLite Durable Object、随机独立合成命名空间、真实分片网络请求和版本 CAS；每引擎验证6个不可变历史版本、两台独立浏览器同步、断网补传、同 ID 冲突保护、无需覆盖旧库的确认合并、512KiB原件逐字节恢复、加密历史版本重建及ACK丢失时不重复提交。服务端只接收加密信封，不读取应用记录和原件。
+- **云端临时密钥已撤销并复核**：测试前确保无已有 `TEST_TOKEN`，使用一次性 GitHub CI 密钥对固定 Preview Worker短期授权；测试后删除、检查 Secret List 和匿名访问仍返回401。两台浏览器只访问本机测试网页，云端凭据仅保留在 CI 代理服务端。此流程不是长期设备登录系统。
+- [本机兼容回归](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43402174571) 修复 CI 白名单后重新全部绿色：Chromium169/169 + WebKit169/169，**共338项通过、0失败**。78项真实云端专项与338项本机回归不要混称为416项不同的用户功能。
+- 新增审计 `v2/LIVE-CLOUDFLARE-ENCRYPTED-SYNC-REVIEW-2026-11-13.md`，注明仍缺长期授权、设备配对与密钥解封、按对象云端增量传输、冲突确认交互以及真正 iPhone / PWA 的全链验收。**不允许据此导入正式医院业务或修改生产数据。**
+
 ## 零损坏迁移次序
 
 - 只读审计旧版 V1.5.7 / 现有 V2 预览的记录和本地文件来源，先列明已检查的**设备 / 域名 / Safari / PWA**范围，不能拿一个浏览器本地数据代替全设备。
