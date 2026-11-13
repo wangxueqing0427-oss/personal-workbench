@@ -55,7 +55,17 @@ async function main() {
     assert.equal(response.status, 200, 'Authorized read in isolated synthetic namespace');
     return response.json();
   };
-  const send = async (packet) => request('PUT', '', packet);
+  const send = async packet => {
+    const serialized = JSON.stringify(packet);
+    if (Buffer.byteLength(serialized) <= 240 * 1024) return request('PUT', '', packet);
+    const id = sha(serialized);
+    const chunks = serialized.match(/[\\s\\S]{1,48000}/g);
+    for (let i = 0; i < chunks.length; i++) {
+      const part = await request('PUT', '/uploads/' + id + '/' + i, { data: chunks[i] });
+      assert.equal(part.status, 200, 'Encrypted multipart data accepted');
+    }
+    return request('PUT', '', { uploadId: id, parts: chunks.length });
+  };
 
   // Cloudflare may take several seconds to activate the new Worker-secret deployment.
   // Require authorized success before running read/write tests; never weaken server auth.
