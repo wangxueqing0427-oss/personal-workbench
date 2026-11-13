@@ -21,6 +21,9 @@ on:
       - v2/test-privacy-e2e-cloud-poc.cjs
       - v2/privacy-device-trust-poc.js
       - v2/test-privacy-device-trust-poc.cjs
+      - v2/business-core.js
+      - v2/business-ui.js
+      - v2/business.css
   workflow_dispatch:
 permissions:
   contents: read
