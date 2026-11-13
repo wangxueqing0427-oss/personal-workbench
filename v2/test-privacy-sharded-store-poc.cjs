@@ -44,6 +44,22 @@ async function main(){
     pass(seeded.revision===0&&seeded.hospitals===3&&seeded.projects===3&&seeded.jobs===1,'synthetic three-hospital seed commits encrypted state and queue together');
     pass(seeded.configured===null,'cloud credentials deliberately unavailable in chunked proof');
 
+    const firstWrite=await page.evaluate(async phrase=>{
+      const poc=WorkbenchShardedCryptoPOC;
+      const owner=await poc.create(phrase),other=await poc.open(owner.name,phrase);
+      const x=WorkbenchBusiness.empty(),y=WorkbenchBusiness.empty();
+      x.hospitals.push({id:crypto.randomUUID(),name:'SYNTHETIC FIRST A',aliases:[],contacts:[],departments:[]});
+      y.hospitals.push({id:crypto.randomUUID(),name:'SYNTHETIC FIRST B',aliases:[],contacts:[],departments:[]});
+      const responses=await Promise.allSettled([owner.commit(x,-1),other.commit(y,-1)]);
+      const current=await owner.read(),jobs=await owner.queueData();
+      owner.close();other.close();
+      return {statuses:responses.map(r=>r.status).sort().join(','),revision:current.revision,
+        jobs:jobs.jobs.length,hospitals:current.hospitals.length};
+    },phrase);
+    pass(firstWrite.statuses==='fulfilled,rejected'&&firstWrite.revision===0&&
+      firstWrite.jobs===1&&firstWrite.hospitals===1,
+      'two concurrent first-ever writes cannot lose initial data or create duplicate queue entries');
+
     const original=Buffer.alloc(6*1024*1024+39);
     for(let i=0;i<original.length;i++)original[i]=(i*41+(i>>9))&255;
     const expectedHash=crypto.createHash('sha256').update(original).digest('hex');
@@ -161,6 +177,38 @@ async function main(){
         wrongPhrase:await refused(wrong,'a-long-but-wrong-recovery-phrase-2026')};
     },{archive:archive.bundle,phrase});
     pass(tamper.omit&&tamper.change&&tamper.wrongPhrase,'missing/tampered encrypted chunk and wrong password all prevent restoring any partial archive');
+
+    const liveTamper=await page.evaluate(async args=>{
+      const poc=WorkbenchShardedCryptoPOC;
+      const isolated=await poc.restore(args.archive,args.phrase);
+      const db=await new Promise((resolve,reject)=>{
+        const request=indexedDB.open(isolated.name);
+        request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);
+      });
+      await new Promise((resolve,reject)=>{
+        const tx=db.transaction('chunks','readwrite'),store=tx.objectStore('chunks');
+        const request=store.getAllKeys();
+        request.onsuccess=()=>{
+          const key=request.result[0],read=store.get(key);
+          read.onsuccess=()=>{
+            const row=read.result;
+            row.ciphertext=(row.ciphertext[0]==='A'?'B':'A')+row.ciphertext.slice(1);
+            store.put(row,key);
+          };
+        };
+        tx.oncomplete=resolve;tx.onabort=tx.onerror=()=>reject(tx.error);
+      });
+      db.close();
+      let readRefused=false,backupRefused=false;
+      try{await isolated.readFile(args.id);}catch{readRefused=true;}
+      try{await isolated.exportEncryptedBackup();}catch{backupRefused=true;}
+      isolated.close();
+      const original=await WorkbenchBusinessStore.readFile(args.id);
+      const valid=original?.size===args.size;
+      return {readRefused,backupRefused,valid};
+    },{archive:archive.bundle,phrase,id:saved.fileId,size:original.length});
+    pass(liveTamper.readRefused&&liveTamper.backupRefused&&liveTamper.valid,
+      'tampered IndexedDB ciphertext chunk blocks read and export without changing original vault');
 
     await page.evaluate(()=>WorkbenchBusinessStore.lock());
     pass(await page.evaluate(async()=>{try{await WorkbenchBusinessStore.read();return false;}catch{return true;}}),
