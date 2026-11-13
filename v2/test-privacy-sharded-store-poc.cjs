@@ -93,11 +93,27 @@ async function main(){
     pass(!saved.opaque.includes('示例秦皇岛医院')&&!saved.opaque.includes('ONLY-SYNTHETIC-6MB-HOSPITAL-SCAN.bin')&&
       !saved.opaque.includes(phrase),'raw IndexedDB state queue manifests and chunks contain no business/file/password plaintext');
 
+    await page.evaluate(()=>{
+      window.__shardedChunkReads=0;
+      window.__shardedOriginalGetAll=IDBObjectStore.prototype.getAll;
+      IDBObjectStore.prototype.getAll=function(...args){
+        if(this.name==='chunks')window.__shardedChunkReads++;
+        return window.__shardedOriginalGetAll.apply(this,args);
+      };
+    });
     await page.locator('nav button[data-route="hospitals"]').click();
     await page.locator('button[data-edit-hospital]').click();
     await page.locator('form[data-form="hospital"] input[name="name"]').fill('合成分块加密医院A');
     await page.locator('form[data-form="hospital"] button.primary').click();
     await page.getByText('合成分块加密医院A').waitFor();
+    const chunkReadsOnEdit=await page.evaluate(()=>{
+      const count=window.__shardedChunkReads;
+      IDBObjectStore.prototype.getAll=window.__shardedOriginalGetAll;
+      delete window.__shardedOriginalGetAll;delete window.__shardedChunkReads;
+      return count;
+    });
+    pass(chunkReadsOnEdit===0,'business-only edit does not scan or decrypt any stored file chunks');
+
     const edited=await page.evaluate(async()=>{
       const storage=WorkbenchBusinessStore,state=await storage.read(),jobs=await storage.queueData();
       const db=await new Promise((resolve,reject)=>{
@@ -132,6 +148,19 @@ async function main(){
     });
     pass(atomic.interrupted&&atomic.unchanged&&!atomic.partialFile,'simulated mid-chunk failure rolls back state queue manifest and every chunk');
     pass(atomic.missingDenied&&atomic.cloudDenied,'missing original and unauthorized cloud identity fail closed');
+    const sizeRefusal=await page.evaluate(async()=>{
+      const store=WorkbenchBusinessStore,old=await store.read(),queue=await store.queueData(),keys=await store.fileKeys();
+      const id=crypto.randomUUID(),bytes=new Uint8Array(16*1024*1024+1);
+      const attempted=structuredClone(old),input=new File([bytes],'synthetic-oversized-photo.bin',{type:'application/octet-stream'});
+      attempted.files.push({id,name:input.name,type:input.type,size:input.size});
+      let rejected=false;
+      try{await store.commit(attempted,old.revision,{id,value:input});}catch{rejected=true;}
+      const now=await store.read(),jobs=await store.queueData(),afterKeys=await store.fileKeys();
+      return rejected&&JSON.stringify(now)===JSON.stringify(old)&&
+        JSON.stringify(queue)===JSON.stringify(jobs)&&JSON.stringify(keys)===JSON.stringify(afterKeys);
+    });
+    pass(sizeRefusal,'over-16MiB original is refused without losing state queue or existing originals');
+
 
     const concurrent=await page.evaluate(async params=>{
       const a=await WorkbenchShardedCryptoPOC.open(params.name,params.phrase);
