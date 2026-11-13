@@ -47,7 +47,7 @@ async function main(){
     await page.locator('button[data-edit-hospital]').click();
     const form=page.locator('[data-form="hospital"]');
     await form.locator('input[name="name"]').fill('合成加密医院-仅自动化');
-    await form.locator('button').last().click();
+    await form.locator('button.primary').click();
     await page.getByText('合成加密医院-仅自动化').waitFor();
     const afterHospital=await page.evaluate(async()=>({s:await WorkbenchBusinessStore.read(),q:await WorkbenchBusinessStore.queueData()}));
     check(afterHospital.s.hospitals.length===4&&afterHospital.s.revision===1&&afterHospital.q.jobs.length===2, 'hospital form saves encrypted business revision and matching queue job');
