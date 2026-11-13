@@ -25,7 +25,7 @@
 - 初版独立对象测试两浏览器完整通过：[Actions 43388936892](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43388936892)，Chromium 102/102 + WebKit 102/102，共204项。
 - 补充未来字段拒绝与缺失对象检测：[Actions 43389294214](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43389294214)，Chromium 104/104 + WebKit 104/104，共208项（两套原型和旧加密回归均含在内）。
 - 最新公开预览资源预检：[Actions 43389466873](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43389466873)，验证19项不可变资源并 dry-run，无生产发版。
-- 新增最新队列一致性校验已经提交，最终完结结果由 [Actions 43389466913](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43389466913) 单独确认后才可宣称本次所有更改均通过。**不得把尚未完成的运行算作成功**。
+- **最终完整复测绿色通过**：[Actions 43389466913](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43389466913)，源码 SHA `b81353c609b3a7e9add6507e9f091fbb65b2bbc0`，Chromium **104/104 PASS** + WebKit **104/104 PASS**，合计 **208项通过、0失败**。新增队列一致性防线已随此提交纳入全套测试；其中逐对象加密专项各28项（两引擎合计56项），其余为基础加密、影子迁移与分块兼容回归。
 
 ## 仍是正式交付的阻断项
 
