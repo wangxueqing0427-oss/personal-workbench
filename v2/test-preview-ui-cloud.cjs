@@ -20,6 +20,13 @@ async function main() {
   const file = process.env.PREVIEW_TEST_TOKEN_FILE;
   if (!file || !process.env.NODE_PATH) throw new Error('CI-only synthetic identity or isolated browser missing');
   const token = (await fs.readFile(file, 'utf8')).trim();
+  const deployed = await fetch(origin + '/build-info.json', { cache: 'no-store' });
+  check(deployed.ok, 'real deployed preview manifest can be fetched');
+  const published = await deployed.json();
+  check(published.syntheticOnly === true && Object.keys(published.assets).length === 19 &&
+    Object.keys(published.assets).some(asset => asset.endsWith('/preview-privacy.js')),
+    'cloud UI regression targets synthetic-only preview with PIN privacy module');
+
   if (!/^[a-f0-9]{64}$/.test(token)) throw new Error('Ephemeral token is invalid');
   const run = crypto.randomUUID();
   const keyBytes = crypto.randomBytes(32);
