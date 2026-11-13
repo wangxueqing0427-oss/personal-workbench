@@ -45,3 +45,11 @@
 - [本机手机回归 #43430112054](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43430112054) Chromium47 + WebKit47，合计**94项通过/0失败**；[加密基础兼容回归 #43429913839](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43429913839) Chromium/WebKit均成功；[Preview预检 #43429913889](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43429913889)成功。
 - `v2/test-preview-remote.cjs` 已补线上专项：预览首页快捷日期需人工确认，合成文件备注与项目时间线同存，原件不变。**部署后完整线上浏览器验收仍必须检查日志才能报成功**。
 - 全部仅在隔离开发分支及公开合成测试环境；旧V1.5.7/原staging/正式main/真实资料不得写入。用户无需阶段性提供指令或重新开发。
+
+## 真实预览已通过：拍照备注与次日跟进（2026-11-13最终）
+
+- 独立合成数据Worker发布验收：[Actions #43430605005](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43430605005) **SUCCESS**，源提交 `8fe2c9bb865282f3792cac49f8bf1531c50a67ed`，releaseId `0c45e0137ca31a335e335f4c3020d1a97658517bbfa07474201211f48d6d3b32`，19项资源Hash核验成功。
+- 发布后实际Chromium **125/125**、WebKit **121/121**，合计**246项通过、0失败**；新增检查“明天跟进”预填但不静默保存、“上传资料备注＋项目时间线原件关联”在真实独立Worker的浏览器客户端中完成同事务持久保存，原件与备份兼容。
+- 本机真实UI [#43430112054](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43430112054) Chromium47+WebKit47，共94/94项通过；旧加密存储回归 [#43429913839](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43429913839) 两端均SUCCESS。
+- 本轮未碰正式 `main`、V1.5.7、原staging及真实医院数据。公开预览仅可用合成示例，不得输入真实合同、发票、联系人。
+- 下轮优先继续完善医院/项目移动端实际操作，避免无谓安全框架扩展。**聊天篇幅过长时，直接用本文件作为续聊接管依据，不重复前面几百条过程日志**。
