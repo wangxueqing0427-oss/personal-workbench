@@ -209,12 +209,12 @@ async function main() {
       await page.reload({ waitUntil: 'domcontentloaded' });
       await page.locator('#privacy-layer').waitFor({ timeout: 30000 });
       check(!await page.locator('main').isVisible(), 'reload fails closed before showing business content');
-      await page.locator('#privacy-layer input').fill('12312312');
+      await page.locator('#privacy-layer input[type="password"]').fill('12312312');
       await page.getByRole('button', { name: '解锁工作台' }).click();
       await page.locator('#privacy-layer').getByText('PIN不正确').waitFor();
       check(!await page.locator('main').isVisible(), 'incorrect PIN leaves business data hidden');
       for (let i = 0; i < 4; i++) {
-        await page.locator('#privacy-layer input').fill('12312312');
+        await page.locator('#privacy-layer input[type="password"]').fill('12312312');
         await page.getByRole('button', { name: '解锁工作台' }).click();
       }
       const throttled = await page.evaluate(() => {
@@ -223,7 +223,7 @@ async function main() {
       });
       check(throttled && !await page.locator('main').isVisible(), 'five wrong PINs trigger durable cooldown without exposing data');
       await page.evaluate(() => { window.__previewRealNow = Date.now; Date.now = () => window.__previewRealNow() + 31 * 1000; });
-      await page.locator('#privacy-layer input').fill(pin);
+      await page.locator('#privacy-layer input[type="password"]').fill(pin);
       await page.getByRole('button', { name: '解锁工作台' }).click();
       await page.locator('#privacy-layer').waitFor({ state: 'detached' });
       check(await page.locator('main').isVisible(), 'correct PIN restores business interface');
@@ -234,7 +234,7 @@ async function main() {
       check(back.status() === 200, 'direct backup entry can be reached without modifying data');
       await page.locator('#privacy-layer').waitFor({ timeout: 30000 });
       check(!await page.locator('main').isVisible(), 'direct backup URL cannot display data while PIN screen is active');
-      await page.locator('#privacy-layer input').fill(pin);
+      await page.locator('#privacy-layer input[type="password"]').fill(pin);
       await page.getByRole('button', { name: '解锁工作台' }).click();
       await page.locator('#privacy-layer').waitFor({ state: 'detached' });
       check(await page.getByRole('heading', { name: '完整加密备份' }).isVisible(), 'backup UI reopens only after local PIN unlock');
@@ -248,7 +248,7 @@ async function main() {
 
       await page.goto(origin + '/business.html', { waitUntil: 'domcontentloaded' });
       await page.locator('#privacy-layer').waitFor({ timeout: 30000 });
-      await page.locator('#privacy-layer input').fill(pin);
+      await page.locator('#privacy-layer input[type="password"]').fill(pin);
       await page.getByRole('button', { name: '解锁工作台' }).click();
       await page.locator('#privacy-layer').waitFor({ state: 'detached' });
       await page.waitForFunction(expected => document.documentElement.dataset.releaseReady === expected, manifest.releaseId, { timeout: 45000 });
@@ -260,14 +260,14 @@ async function main() {
       });
       await page.locator('#privacy-layer').waitFor({ timeout: 10000 });
       check(!await page.locator('main').isVisible(), 'simulated background transition immediately activates PIN cover');
-      await page.locator('#privacy-layer input').fill(pin);
+      await page.locator('#privacy-layer input[type="password"]').fill(pin);
       await page.getByRole('button', { name: '解锁工作台' }).click();
       await page.locator('#privacy-layer').waitFor({ state: 'detached' });
       await page.evaluate(() => { window.__previewIdleRealNow = Date.now; Date.now = () => window.__previewIdleRealNow() + 92000; });
       await page.locator('#privacy-layer').waitFor({ timeout: 15000 });
       check(!await page.locator('main').isVisible(), 'simulated 90-second inactivity activates PIN cover');
       await page.evaluate(() => { Date.now = window.__previewIdleRealNow; delete window.__previewIdleRealNow; });
-      await page.locator('#privacy-layer input').fill(pin);
+      await page.locator('#privacy-layer input[type="password"]').fill(pin);
       await page.getByRole('button', { name: '解锁工作台' }).click();
       await page.locator('#privacy-layer').waitFor({ state: 'detached' });
       await page.locator('#preview-privacy-settings').click();
