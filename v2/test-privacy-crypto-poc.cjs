@@ -137,6 +137,38 @@ async function main() {
     check(restored.target !== create.source && restored.count === 3 && restored.restored && restored.hashed === create.origHash, 'new isolated encrypted restore preserves records and 512KiB file exactly');
     check(restored.duplicateRejected && restored.afterLock, 'restore never overwrites an existing database, and lock prevents further plaintext reads');
 
+    const authenticated = await page.evaluate(async () => {
+      const p = WorkbenchCryptoPOC, s = window.__cryptoSynthetic;
+      const target = p.newName();
+      const vault = await p.importEncryptedBackup(target, s.snapshot, s.phrase);
+      const db = await new Promise((resolve, reject) => {
+        const request = indexedDB.open(target);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      const corrupt = await new Promise((resolve, reject) => {
+        const tx = db.transaction('items', 'readwrite'), store = tx.objectStore('items');
+        const rows = store.getAll();
+        rows.onsuccess = () => {
+          const source = rows.result.find(r => r.id === s.anotherId);
+          const victim = rows.result.find(r => r.id === s.recordId);
+          if (!source || !victim) { tx.abort(); reject(new Error('Missing tamper fixture')); return; }
+          store.put({ ...victim, iv: source.iv, ciphertext: source.ciphertext });
+        };
+        tx.oncomplete = resolve;
+        tx.onabort = tx.onerror = () => reject(tx.error || new Error('Attack fixture failed'));
+      });
+      db.close();
+      let swapRejected = false;
+      try { await vault.readRecord(s.recordId); } catch { swapRejected = true; }
+      vault.close();
+      const original = await p.open(s.source, s.phrase);
+      const intact = (await original.readRecord(s.recordId)).value.name === s.marker;
+      original.close();
+      return { swapRejected, intact };
+    });
+    check(authenticated.swapRejected && authenticated.intact, 'ciphertext swapping between IDs is rejected by authenticated context, original vault unaffected');
+
     const crossTab = await page.evaluate(async () => {
       const p = WorkbenchCryptoPOC, s = window.__cryptoSynthetic, a = await p.open(s.source, s.phrase), b = await p.open(s.source, s.phrase);
       const [ra, rb] = await Promise.allSettled([
@@ -168,6 +200,15 @@ async function main() {
     });
     check(rotation.wrongOld && rotation.intact && rotation.oldDenied, 'incorrect old recovery phrase cannot rotate key and old phrase is denied after successful rotation');
     check(rotation.now && rotation.hash === create.origHash && rotation.locked, 'passphrase rotation rewraps key without rewriting or losing records and files');
+    const oldArchive = await page.evaluate(async () => {
+      const p = WorkbenchCryptoPOC, s = window.__cryptoSynthetic;
+      const historical = await p.importEncryptedBackup(p.newName(), s.snapshot, s.phrase);
+      const state = await historical.readRecord(s.recordId);
+      const valid = state.value.name === s.marker;
+      historical.close();
+      return valid;
+    });
+    check(oldArchive, 'old exported backup retains original passphrase even after vault rotation; password rotation cannot revoke prior archives');
 
     await context.setOffline(true);
     const offline = await page.evaluate(async () => {
