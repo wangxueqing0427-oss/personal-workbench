@@ -88,6 +88,9 @@ async function main() {
       await page.evaluate(() => offlineRunner.run(true));
       const status = await page.evaluate(() => WorkbenchOfflineSync.status());
       if (status.status === desired) {
+        // Close the sync modal only after all asynchronous callbacks have settled.
+        // A pending panel redraw can reopen it after an earlier close click.
+        await page.evaluate(() => document.querySelector('dialog.sync-dialog')?.close());
         check(true, label + ' -> ' + desired);
         return status;
       }
