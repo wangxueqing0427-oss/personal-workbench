@@ -35,7 +35,7 @@ async function main() {
     const bytes = Buffer.from(inputs[file]); output[prefix + file] = bytes;
     release.files[file] = { url: prefix + file, sha256: digest(bytes), bytes: bytes.length };
   }
-  const html = root => inputs['business.html'].replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '').replace(/<link\b[^>]*rel="stylesheet"[^>]*>/gi, '').replace('等待同步 · 尚未配置隔离后端', '版本核验中 / 同步已暂停').replace('</body>', '<script>globalThis.WorkbenchRelease=' + JSON.stringify(release) + ';WorkbenchRelease.baseUrl=new URL(' + JSON.stringify(root) + ',location.href).href;\n' + inputs['release-loader.js'] + '</script></body>');
+  const html = root => inputs['business.html'].replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '').replace(/<link\b[^>]*rel="stylesheet"[^>]*>/gi, '<style>' + inputs['business.css'] + '</style>').replace('等待同步 · 尚未配置隔离后端', '版本核验中 / 同步已暂停').replace('</body>', '<script>globalThis.WorkbenchRelease=' + JSON.stringify(release) + ';WorkbenchRelease.baseUrl=new URL(' + JSON.stringify(root) + ',location.href).href;\n' + inputs['release-loader.js'] + '</script></body>');
   output['business.html'] = Buffer.from(html('./')); output[prefix + 'business.html'] = Buffer.from(html('../../'));
   output['staging.webmanifest'] = Buffer.from(inputs['staging.webmanifest']);
   output['p0.html'] = Buffer.from(inputs['p0.html'].replace(/src="([^"]+)"/g, (match, file) => 'src="' + prefix + file + '"'));
