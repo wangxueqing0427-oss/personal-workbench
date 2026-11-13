@@ -23,6 +23,14 @@
 7. 匿名同步请求、错误 bearer、错误传输密钥、错误远端摘要、跨域/非白名单端点都被拒绝，本机已写入的记录与队列不会自动删除；新版客户端不把待同步数据假报为“已备份”。
 8. 每个测试轮次最后独立请求真正的 Worker `/sync/diagnostics`、`/sync` 和 `/sync/history/1`，验证**真实 SQLite Durable Object 六个已提交历史版本、最终哈希、初始历史密文及另一随机命名空间的隔离性**。不是只检查测试脚本内部模拟变量。
 
+## 追加：临时密钥撤销的真实请求验证（最终强化门禁）
+
+- [最新真实云端强化复测 #43402890786](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43402890786) 绿色，源码 SHA `b23a6677226d61509c5543d10d5ed749a4d02de5`。
+- Chromium **39项通过 / 0失败**，WebKit **39项通过 / 0失败**；同样分别实测6个不可变历史版本、122次加密分片及2次重复幂等确认。
+- 在此前成功的 Secret List 删除审计与匿名 401 的基础上，本轮**额外从测试CI进程实际使用已被删除的旧Bearer Token请求 Cloudflare Worker**，最多等待传播30次，最终确实收到401，日志为 `LIVE_PREVIEW_PREVIOUS_TOKEN_REVOKED`；匿名请求也实际收到401，日志为 `LIVE_PREVIEW_ANONYMOUS_SYNC_BLOCKED`；最后确认 `PREVIEW_ENCRYPTED_E2E_TEST_SECRET_REVOKED`。这比单凭配置里看不到密钥更严格。
+- 若 `secret put` 在一部分过程成功、随后步骤报告失败，清理步骤现在也会检查并清除存在的 TEST_TOKEN；不再只依据步骤标记成功才尝试撤销。**若整个授权流程未开始，则不会写入新Token。**
+- 本轮日志确认从始至终只作用于 `personal-workbench-v2-preview`；生产 `main`、原 staging、用户手机数据未被访问。正式身份与完整业务上线仍按本报告阻断项处理。
+
 ## 本轮排错和复测经过
 
 - [#43401768957](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43401768957)：本机 CI 的旧规则禁止任何文件出现 Preview 域名，新远端联调脚本需要一个经过审计的固定地址，故被安全扫描阻断（代码测试未执行）。
