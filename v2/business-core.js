@@ -24,8 +24,21 @@
   function upsertHospital(state, input) {
     const next = copy(state), name = text(input.name);
     if (!name) throw new Error('请填写医院正式名称');
-    let hospital = next.hospitals.find(item => item.id === input.id || key(item.name) === key(name) || item.aliases.some(alias => key(alias) === key(name)));
-    if (!hospital) { hospital = { id: identifier(), name, aliases: [], departments: [], contacts: [] }; next.hospitals.push(hospital); }
+    const sameName = item => key(item.name) === key(name) || item.aliases.some(alias => key(alias) === key(name));
+    let hospital;
+    if (input.id) {
+      hospital = next.hospitals.find(item => item.id === input.id);
+      if (!hospital) throw new Error('医院档案不存在，请刷新列表后重试，未创建重复档案');
+      if (next.hospitals.some(item => item.id !== hospital.id && sameName(item))) throw new Error('医院名称或别名已被其他医院使用，请核对后再修改');
+      if (key(hospital.name) !== key(name)) {
+        if (!hospital.aliases.some(alias => key(alias) === key(hospital.name))) hospital.aliases.push(hospital.name);
+        hospital.aliases = hospital.aliases.filter(alias => key(alias) !== key(name));
+        hospital.name = name;
+      }
+    } else {
+      hospital = next.hospitals.find(sameName);
+      if (!hospital) { hospital = { id: identifier(), name, aliases: [], departments: [], contacts: [] }; next.hospitals.push(hospital); }
+    }
     if (input.department && !hospital.departments.includes(text(input.department))) hospital.departments.push(text(input.department));
     if (input.contact) {
       const contact = { name: text(input.contact), department: text(input.department), phone: text(input.phone) };
@@ -33,6 +46,32 @@
       if (existing) { if (contact.phone) existing.phone = contact.phone; } else hospital.contacts.push(contact);
     }
     return { state: next, hospitalId: hospital.id };
+  }
+  function searchBusiness(state, query = '', status = '全部') {
+    if (status !== '全部' && !statuses.includes(status)) throw new Error('筛选状态无效');
+    const terms = text(query).normalize('NFKC').toLowerCase().split(/\s+/).filter(Boolean);
+    const searchable = values => values.map(value => text(value).normalize('NFKC').toLowerCase()).join(' ');
+    const hospitalText = hospital => searchable([
+      hospital.name, ...(hospital.aliases || []), ...(hospital.departments || []),
+      ...(hospital.contacts || []).flatMap(contact => [contact.name, contact.department, contact.phone])
+    ]);
+    const hospitalMap = new Map(state.hospitals.map(hospital => [hospital.id, hospital]));
+    const matchingProjects = state.projects.filter(project => {
+      if (status !== '全部' && project.status !== status) return false;
+      const hospital = hospitalMap.get(project.hospitalId);
+      const haystack = searchable([
+        hospital ? hospitalText(hospital) : '', project.name, project.kind, project.status,
+        project.department, project.owner, project.nextAction, project.waitingOn,
+        ...Object.values(project.details || {})
+      ]);
+      return terms.every(term => haystack.includes(term));
+    });
+    const matchingHospitalIds = new Set(matchingProjects.map(project => project.hospitalId));
+    const matchingHospitals = state.hospitals.filter(hospital => {
+      if (status !== '全部') return matchingHospitalIds.has(hospital.id);
+      return !terms.length || terms.every(term => hospitalText(hospital).includes(term)) || matchingHospitalIds.has(hospital.id);
+    });
+    return { hospitals: matchingHospitals, projects: matchingProjects };
   }
   function saveProject(state, input, today) {
     const next = copy(state), hospital = next.hospitals.find(item => item.id === input.hospitalId);
@@ -140,5 +179,5 @@
   function finance(state) {
     return { uninvoiced: state.orders.filter(item => !item.invoiced), unpaid: state.orders.filter(item => item.invoiced && !item.received), balances: state.movements.reduce((result, item) => { result[item.inventoryKey] = (result[item.inventoryKey] || 0) + item.delta; return result; }, {}) };
   }
-  root.WorkbenchBusiness = { empty, statuses, kinds, stages, date, addDays, upsertHospital, saveProject, fromLegacy, suggestNote, confirmNote, dashboard, saveOrder, advanceOrder, stock, finance };
+  root.WorkbenchBusiness = { empty, statuses, kinds, stages, date, addDays, upsertHospital, searchBusiness, saveProject, fromLegacy, suggestNote, confirmNote, dashboard, saveOrder, advanceOrder, stock, finance };
 })(globalThis);
