@@ -57,6 +57,9 @@ jobs:
             if (bytes.length !== spec.bytes || crypto.createHash('sha256').update(bytes).digest('hex') !== spec.sha256) fail('Resource mismatch: '+name);
             if (bytes.includes(Buffer.from('personal-workbench-v2-staging'))) fail('Preview references staging: '+name);
           }
+          const verifiedLoader = Object.keys(manifest.assets).find(name => name.endsWith('/release-loader.js'));
+          if (!verifiedLoader || !fs.readFileSync(path.join(root, verifiedLoader),'utf8').includes('本机演示模式')) fail('Public demo must disclose unconfigured cloud identity');
+          if (!fs.readFileSync(path.join(root, 'business.html'),'utf8').includes('本机演示模式')) fail('First-visit entry must disclose local-only preview state');
           if (fs.readFileSync('v2/wrangler.preview.jsonc','utf8').includes('TEST_TOKEN')) fail('Never commit secrets');
           console.log('PREVIEW_PREFLIGHT_PASS: 18 assets + hashes + distinct Worker/DO/dataset/host');
           NODE
