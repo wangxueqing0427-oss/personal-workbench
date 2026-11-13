@@ -98,6 +98,45 @@ async function main(){
       try{await __device.accept(args.grant,{ownerFingerprint:args.fingerprint});return false;}catch{return true;}
     },{grant,fingerprint:owner.fingerprint});
     check(reuse,'paired device cannot re-import invitation repeatedly');
+    const needsConsent=await newPhone.evaluate(async()=>{
+      try{await __device.persist({approved:false});return false;}catch{return true;}
+    });
+    check(needsConsent,'storing persistent device keys requires explicit approval after pairing');
+    const savedIdentity=await newPhone.evaluate(()=>__device.persist({approved:true}));
+    check(savedIdentity.saved&&savedIdentity.nonextractable&&
+      /^personal-workbench-v2-device-trust-poc-[a-f0-9-]{36}$/.test(savedIdentity.database),
+      'paired device identity is written only to a new isolated random IndexedDB');
+    const persistedKeys=await newPhone.evaluate(async name=>{
+      const db=await new Promise((ok,bad)=>{
+        const q=indexedDB.open(name);q.onsuccess=()=>ok(q.result);q.onerror=()=>bad(q.error);
+      });
+      const value=await new Promise((ok,bad)=>{
+        const tx=db.transaction('sessions','readonly'),q=tx.objectStore('sessions').get('current');
+        q.onsuccess=()=>ok(q.result);q.onerror=()=>bad(q.error);
+      });
+      db.close();
+      let privateExportDenied=false,secretExportDenied=false;
+      try{await crypto.subtle.exportKey('pkcs8',value.signKey);}catch{privateExportDenied=true;}
+      try{await crypto.subtle.exportKey('raw',value.transportKey);}catch{secretExportDenied=true;}
+      return {isDevicePrivate:value.signKey.type==='private'&&value.signKey.extractable===false,
+        isTransportSecret:value.transportKey.type==='secret'&&value.transportKey.extractable===false,
+        privateExportDenied,secretExportDenied};
+    },savedIdentity.database);
+    check(persistedKeys.isDevicePrivate&&persistedKeys.isTransportSecret&&
+      persistedKeys.privateExportDenied&&persistedKeys.secretExportDenied,
+      'nonextractable signing and AES-GCM keys survive structured-clone IDB storage but reject raw export');
+    await newPhone.reload({waitUntil:'load'});
+    const resumed=await newPhone.evaluate(async name=>{
+      globalThis.__device=await WorkbenchDeviceTrustPOC.resumeCandidate(name);
+      return {id:__device.deviceId,storedDb:__device.storedDb};
+    },savedIdentity.database);
+    check(resumed.id===request.deviceId&&resumed.storedDb===savedIdentity.database,
+      'full browser reload restores same device identity from isolated encrypted test origin');
+    const resumedProof=await newPhone.evaluate(()=>__device.proof('GET','/sync',{afterReload:true}));
+    const resumedAuthorized=await ownerPage.evaluate(proof=>__owner.verify(proof),resumedProof);
+    check(resumedAuthorized.authorized&&resumedAuthorized.deviceId===request.deviceId,
+      'device proof-of-possession survives browser reload without exposing raw private signing key');
+
 
     const proof=await newPhone.evaluate(()=>__device.proof('PUT','/sync',{revision:1,synthetic:true}));
     const accepted=await ownerPage.evaluate(proof=>__owner.verify(proof),proof);
@@ -230,6 +269,26 @@ async function main(){
       try{await __device.encrypt({secret:'test'});return false;}catch{return true;}
     });
     check(deviceLocked,'locking a paired device disables use of decrypted transport key');
+    const invalidStored=await newPhone.evaluate(async name=>{
+      const db=await new Promise((ok,bad)=>{
+        const q=indexedDB.open(name);q.onsuccess=()=>ok(q.result);q.onerror=()=>bad(q.error);
+      });
+      await new Promise((ok,bad)=>{
+        const tx=db.transaction('sessions','readwrite'),store=tx.objectStore('sessions'),r=store.get('current');
+        r.onsuccess=()=>{const v=r.result;v.certificate.scopes=['admin:*'];store.put(v,'current');};
+        tx.oncomplete=ok;tx.onabort=tx.onerror=()=>bad(tx.error);
+      });
+      db.close();
+      let invalidDenied=false;
+      try{await WorkbenchDeviceTrustPOC.resumeCandidate(name);}catch{invalidDenied=true;}
+      await WorkbenchDeviceTrustPOC.eraseSavedCandidate(name);
+      let erasedDenied=false;
+      try{await WorkbenchDeviceTrustPOC.resumeCandidate(name);}catch{erasedDenied=true;}
+      return {invalidDenied,erasedDenied};
+    },savedIdentity.database);
+    check(invalidStored.invalidDenied,'edited persisted authorization scopes invalidate device recovery');
+    check(invalidStored.erasedDenied,'local stored device identity can be erased and no longer resumed');
+
     check(errors.length===0,'no page script errors or external network requests in simulated mobile browser contexts');
     console.log(JSON.stringify({test:'synthetic-device-trust-and-recovery',engine,passed:passes,failures:0,
       realWorker:false,realIPhone:false,ownerRoasterOnlyInMemory:true}));
