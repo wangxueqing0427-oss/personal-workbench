@@ -190,6 +190,8 @@
       if(!row)fail('加密队列历史缺项');
       const job=await readJson(key,row.value,label(h,'job',i));
       if(job.localRevision!==i||job.snapshot?.revision!==i)fail('队列版本不匹配');
+      if(i===state.revision&&JSON.stringify(job.snapshot)!==JSON.stringify(state))
+        fail('最新待同步快照与逐条加密业务记录不一致，拒绝生成不完整备份');
     }
     for(const item of shot.files){
       const original=await decodeFile(key,h,item.key,item.value,shot.chunks);
