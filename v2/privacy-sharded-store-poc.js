@@ -100,7 +100,7 @@
       !Array.isArray(s.notes)||!Array.isArray(s.orders))fail('业务数据结构不兼容');
   }
   async function decodeState(key,h,row){
-    if(!row||!Number.isSafeInteger(row.revision))fail('缺少加密状态修订号');
+    if(!row||!Number.isSafeInteger(row.revision)||row.revision< -1)fail('缺少加密状态修订号');
     const state=await readJson(key,row,label(h,'state',row.revision));
     stateCheck(state);
     if(state&&state.revision!==row.revision)fail('状态版本不一致');
@@ -199,7 +199,7 @@
         q.onsuccess=()=>{
           try{
             const current=q.result,version=current?.revision??-1;
-            if(version!==expected && !(expected===-1&&version===0))fail('两个窗口并发操作，拒绝覆盖');
+            if(version!==expected)fail('两个窗口并发操作，拒绝覆盖');
             if(file){
               tx.objectStore('files').add(manifest,file.id);
               for(let i=0;i<chunks.length;i++){
@@ -259,7 +259,7 @@
         wrappedKey:await seal(kek,raw,aad('wrapped-dek',vaultId))};
       key=await crypto.subtle.importKey('raw',raw,{name:'AES-GCM'},false,['encrypt','decrypt']);
     }finally{raw.fill(0);}
-    const initial={revision:0,...await sealJson(key,null,label(h,'state',0))};
+    const initial={revision:-1,...await sealJson(key,null,label(h,'state',-1))};
     const db=await begin(name,h,initial);
     return wrap(name,db,h,key);
   }
