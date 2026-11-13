@@ -18,6 +18,41 @@ const readBody=async(req,maxBytes=350*1024)=>{
   return JSON.parse(Buffer.concat(buffers).toString('utf8'));
 };
 async function main(){
+  const remoteMode=process.env.WB_REAL_PREVIEW_CLOUD==='true';
+  const remoteOrigin='https://personal-workbench-v2-preview.wangxueqing0427.workers.dev';
+  const testRun=crypto.randomUUID();
+  let remoteToken=null;
+  if(remoteMode){
+    if(process.env.GITHUB_REPOSITORY!=='wangxueqing0427-oss/personal-workbench'||
+       process.env.GITHUB_REF!=='refs/heads/dev/v2-preview-isolated-20261111'||
+       !process.env.PREVIEW_TEST_TOKEN_FILE)throw Error('Live encrypted test is restricted to isolated GitHub CI');
+    remoteToken=(await fs.readFile(process.env.PREVIEW_TEST_TOKEN_FILE,'utf8')).trim();
+    if(!/^[a-f0-9]{64}$/.test(remoteToken))throw Error('Missing valid ephemeral preview-only token');
+    const manifestResponse=await fetch(remoteOrigin+'/build-info.json',{cache:'no-store',redirect:'error'});
+    if(!manifestResponse.ok)throw Error('Preview manifest inaccessible');
+    const manifest=await manifestResponse.json();
+    if(manifest.syntheticOnly!==true||manifest.sourceClean!==true||
+       Object.keys(manifest.assets||{}).length!==19)throw Error('Live Worker is not isolated synthetic preview');
+    let ready=false;
+    for(let attempt=0;attempt<40;attempt++){
+      const response=await fetch(remoteOrigin+'/sync',{headers:{
+        Authorization:'Bearer '+remoteToken,'X-Workbench-Test-Run':testRun
+      },cache:'no-store',redirect:'error'});
+      if(response.status===200){
+        const init=await response.json();
+        if(init.revision!==0||init.hash!==hash(null)||init.payload!==null)
+          throw Error('Random live test namespace is not empty: stop without writing');
+        ready=true;break;
+      }
+      if(response.status!==401&&response.status!==503)
+        throw Error('Preview test token not safely active: '+response.status);
+      await new Promise(resolve=>setTimeout(resolve,1000));
+    }
+    if(!ready)throw Error('Temporary test credential did not activate; no data was written');
+    const anon=await fetch(remoteOrigin+'/sync',{cache:'no-store'});
+    if(anon.status!==401)throw Error('Remote sync accepted unauthenticated access');
+    console.log('LIVE_PREVIEW_SCOPE_READY: fresh UUID synthetic namespace, anonymous blocked');
+  }
   const token='SYNTHETIC-ONLY-'+crypto.randomBytes(24).toString('hex');
   const transportKey=crypto.randomBytes(32).toString('base64');
   const phrase='Synthetic and unique E2E encrypted recovery phrase, never use for real data 2026';
@@ -45,6 +80,39 @@ async function main(){
       if(!pathname.startsWith('/sync'))return answer(404,{error:'No external routes'});
       if(req.headers.authorization!=='Bearer '+token)return answer(401,{error:'Synthetic identity required'});
       requests++;
+      if(remoteMode){
+        // The browser never sees the Cloudflare admin/test credential. The
+        // loopback bridge injects it only on requests to this exact worker,
+        // with a per-process, randomly isolated Durable Object namespace.
+        if(!/^\/sync(?:\/history\/[1-9]\d{0,7}|\/uploads\/[a-f0-9]{64}\/\d{1,3})?$/.test(pathname))
+          return answer(404,{error:'Not an approved synthetic remote route'});
+        const body=req.method==='PUT'?await readBody(req,350*1024):undefined;
+        const upstream=await fetch(remoteOrigin+pathname,{
+          method:req.method,cache:'no-store',redirect:'error',signal:AbortSignal.timeout(60000),
+          headers:{Authorization:'Bearer '+remoteToken,'X-Workbench-Test-Run':testRun,'Content-Type':'application/json'},
+          ...(body===undefined?{}:{body:JSON.stringify(body)})
+        });
+        const response=await upstream.json();
+        if(upstream.status===200){
+          const chunk=/^\/sync\/uploads\/([a-f0-9]{64})\/(\d{1,3})$/.exec(pathname);
+          if(chunk&&req.method==='PUT'){
+            let found=partial.get(chunk[1]);if(!found){found=new Map();partial.set(chunk[1],found);}
+            if(found.has(Number(chunk[2])))duplicateParts++;
+            found.set(Number(chunk[2]),body.data);partsPut++;
+          }else if(pathname==='/sync'&&req.method==='PUT'){
+            if(response.revision!==cloud.revision+1||response.hash!==
+              (body.uploadId?hash(JSON.parse(Array.from({length:body.parts},(_,i)=>
+                partial.get(body.uploadId)?.get(i)).join('')) .payload):body.hash))
+              throw Error('Real Worker commit diverged from verified local mirror');
+            cloud={revision:response.revision,hash:response.hash,payload:response.payload};
+            history.set(cloud.revision,{...cloud});uploadCommits++;
+            outboundLog.push(response.hash);
+          }else if(pathname==='/sync'&&req.method==='GET'){
+            cloud={revision:response.revision,hash:response.hash,payload:response.payload};
+          }
+        }
+        return answer(upstream.status,response);
+      }
       const historyRoute=/^\/sync\/history\/([1-9]\d{0,7})$/.exec(pathname);
       if(historyRoute&&req.method==='GET')return answer(200,history.get(Number(historyRoute[1]))||{error:'History missing'});
       const partRoute=/^\/sync\/uploads\/([a-f0-9]{64})\/(\d{1,3})$/.exec(pathname);
@@ -333,6 +401,28 @@ async function main(){
     },{phrase,token,key:transportKey});
     check(foreign,'transport refuses non-loopback production-like endpoint even with a valid test bearer');
     check(errors.length===0,'two independent mobile browsers execute without script exceptions or external network requests');
+    if(remoteMode){
+      const remoteAuth={Authorization:'Bearer '+remoteToken,'X-Workbench-Test-Run':testRun};
+      const head=await fetch(remoteOrigin+'/sync/diagnostics',{headers:remoteAuth,cache:'no-store',redirect:'error'});
+      check(head.status===200,'real Cloudflare Worker diagnostic endpoint authorized only for synthetic run');
+      const status=await head.json();
+      check(status.syntheticOnly===true&&status.revision===6&&status.historyVersions===6,
+        'real Cloudflare SQLite Durable Object recorded six expected revisions and preserved history');
+      const finalVersion=await fetch(remoteOrigin+'/sync',{headers:remoteAuth,cache:'no-store',redirect:'error'});
+      const final=await finalVersion.json();
+      check(finalVersion.status===200&&final.revision===6&&final.hash===cloud.hash,
+        'real Worker encrypted head and local verified CAS mirror agree');
+      const history1=await fetch(remoteOrigin+'/sync/history/1',{headers:remoteAuth,cache:'no-store',redirect:'error'});
+      const firstVersion=await history1.json();
+      check(history1.status===200&&firstVersion.revision===1&&firstVersion.hash===history.get(1)?.hash,
+        'real immutable revision one still matches its original encrypted envelope');
+      const anotherRun=await fetch(remoteOrigin+'/sync',{headers:{
+        Authorization:'Bearer '+remoteToken,'X-Workbench-Test-Run':crypto.randomUUID()
+      },cache:'no-store',redirect:'error'});
+      const another=await anotherRun.json();
+      check(anotherRun.status===200&&another.revision===0&&another.hash===hash(null),
+        'second isolated random Cloudflare test namespace remains empty');
+    }
     check(requests>20&&partsPut>10,'network exercised authenticated multipart encrypted upload and historical reads');
     console.log(JSON.stringify({test:'synthetic-e2e-delta-cloud',engine,passed,failures:0,
       remoteRevisions:cloud.revision,immutableHistory:history.size,multipartPartWrites:partsPut,
