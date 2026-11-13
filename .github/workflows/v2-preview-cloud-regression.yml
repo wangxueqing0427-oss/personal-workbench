@@ -6,6 +6,7 @@ on:
     paths:
       - .github/workflows/v2-preview-cloud-regression.yml
       - v2/test-preview-cloud.cjs
+      - v2/test-preview-ui-cloud.cjs
 permissions:
   contents: read
 concurrency:
@@ -25,6 +26,7 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       PREVIEW_TEST_TOKEN_FILE: /tmp/preview-test-token
       WRANGLER_SEND_METRICS: "false"
+      NODE_PATH: /tmp/preview-ui-cloud/node_modules
     steps:
       - name: Checkout independent preview branch
         uses: actions/checkout@v4
@@ -51,6 +53,12 @@ jobs:
           node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('hex'))" > "$PREVIEW_TEST_TOKEN_FILE"
           chmod 600 "$PREVIEW_TEST_TOKEN_FILE"
           test "$(wc -c < "$PREVIEW_TEST_TOKEN_FILE")" -eq 64
+      - name: Prepare isolated automated browser for end-to-end cloud UI verification
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --prefix /tmp/preview-ui-cloud --no-save --no-package-lock playwright@1.56.1
+          /tmp/preview-ui-cloud/node_modules/.bin/playwright install --with-deps chromium
       - name: Attach one-run test secret to isolated Worker
         id: write_secret
         shell: bash
@@ -62,6 +70,11 @@ jobs:
         run: |
           set -euo pipefail
           node v2/test-preview-cloud.cjs
+      - name: Test two independent mobile UI clients with isolated real cloud sync
+        shell: bash
+        run: |
+          set -euo pipefail
+          node v2/test-preview-ui-cloud.cjs
       - name: Revoke temporary test secret and block preview sync after test
         if: ${{ always() && steps.write_secret.outcome == 'success' }}
         shell: bash
