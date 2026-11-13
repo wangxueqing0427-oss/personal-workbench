@@ -20,3 +20,5 @@ Expected post-deploy tests: exact source SHA, mobile Chromium/WebKit, local-only
 Preview-only PIN recovery hardening, 2026-11-13: user-saved one-time 128-bit recovery code, verifier-only storage, wrong-code refusal, original record preservation; tested in browser engines before accepting preview readiness.
 
 Preview release verification gate: signed local PIN and recovery source + all 19 immutable assets verified. Latest two-engine remote smoke succeeded: https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43363688071 . Trigger green source-pinned after-publish gate; no real data.
+
+Solo-user mobile UX isolated preview rollout, 2026-11-13: after Chromium/WebKit search+camera+order tests 60/60 and existing encrypted-store compatibility regression 434/434, deploy only synthetic preview assets for the new hospital/project search, alias-preserving hospital rename, and one-tap order camera upload. Existing V1.5.7, original V2 staging, real user records and production main unchanged. Post-deploy source-pinned live tests must pass before acceptance. No new authentication or paid service.
