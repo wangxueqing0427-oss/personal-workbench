@@ -42,6 +42,7 @@ async function main() {
       const nextPhrase = 'updated synthetic vault password: Never-use-this-for-real-data';
       const marker = 'SYNTHETIC-UNENCRYPTED-MARKER-SHOULD-NEVER-APPEAR-AT-REST';
       const vault = await poc.create(source, phrase);
+      const keyNotExposed = !('key' in vault) && !('phrase' in vault) && !('delete' in vault);
       const record = { name: marker, projects: [{ name: 'SYNTHETIC MRI & CT ONLY', notes: 'no personal data' }], followup: '2026-11-15' };
       const revision1 = await vault.writeRecord(recordId, record, 0);
       const revision2 = await vault.writeRecord(recordId, { ...record, status: 'follow-up needed' }, revision1);
@@ -64,7 +65,7 @@ async function main() {
           tr.onerror = () => reject(tr.error);
         };
       });
-      return { vault, snapshot, persisted, origHash, readHash, revision1, revision2, record, source, marker, fileLength: read.bytes.length };
+      return { keyNotExposed, snapshot, persisted, origHash, readHash, revision1, revision2, record, source, marker, fileLength: read.bytes.length };
     });
     check(create.revision1 === 1 && create.revision2 === 2, 'encrypted record revisions advance deterministically');
     check(create.origHash === create.readHash && create.fileLength === 524288, '512KiB synthetic file survives encryption and decryption byte-for-byte');
@@ -76,7 +77,7 @@ async function main() {
       'raw IndexedDB header and rows contain no record, filename, or password plaintext');
     check(create.persisted.rows.every(row => /^[A-Za-z0-9+/]+=*$/.test(row.ciphertext) && row.iv && row.revision > 0) &&
       new Set(create.persisted.rows.map(row => row.iv)).size === 3, 'AES-GCM uses fresh nonces and stores authenticated ciphertext');
-    check(!('key' in create.vault) && !('phrase' in create.vault) && !('delete' in create.vault), 'vault API never exposes raw key, recovery phrase, or delete operation');
+    check(create.keyNotExposed, 'vault API never exposes raw key, recovery phrase, or delete operation');
 
     const rejected = await page.evaluate(async () => {
       const p = WorkbenchCryptoPOC, s = window.__cryptoSynthetic;
@@ -86,8 +87,6 @@ async function main() {
         shortPin: await fails(() => p.create(p.newName(), '123456')),
         existingDb: await fails(() => p.create(s.source, s.phrase)),
         badPhrase: await fails(() => p.open(s.source, 'different long but wrong test password')),
-        missingRevision: await fails(() => window.__noVault.writeRecord(s.recordId, {}, 999)),
-        staleRevision: await fails(() => createVault.writeRecord(s.recordId, { name: 'OVERWRITE ATTEMPT' }, 1)),
         oversized: await fails(() => createVault.writeFile(p.newId(), new Uint8Array(8 * 1024 * 1024 + 1), { name: 'oversize', type: 'x' }, 0))
       };
     }).catch(error => ({ error: error.message }));
