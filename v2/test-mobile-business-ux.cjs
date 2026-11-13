@@ -47,6 +47,24 @@ async function main(){
      'calm gradient dashboard, fixed bottom navigation and 44px mobile tap targets render without horizontal scroll');
    check(await page.locator('.work-item [data-quick-project]').count()>=1,
      'home project cards expose real quick follow-up action');
+   check(await page.locator('.work-item [data-follow-tomorrow]').count()>=1,
+     'each daily project includes a thumb-friendly tomorrow shortcut');
+   await page.locator('.work-item [data-follow-tomorrow]').first().click();
+   const tomorrow=await page.evaluate(()=>{
+     const result=new Date();
+     result.setDate(result.getDate()+1);
+     return new Intl.DateTimeFormat('sv-SE',{year:'numeric',month:'2-digit',day:'2-digit'}).format(result);
+   });
+   check(await page.locator('form[data-form="quick-project"] input[name="followupDate"]').inputValue()===tomorrow,
+     'tomorrow shortcut opens the edit screen with prefilled date without silently committing');
+   await page.locator('form[data-form="quick-project"] [data-back="project"]').click();
+   check(await page.locator('.focus-box').count()===1,
+     'canceling tomorrow suggestion returns to the same project detail safely');
+   const preserved=await page.evaluate(async()=>{
+     const state=await WorkbenchBusinessStore.read();
+     return state.projects.every(project=>project.followupDate!=='2099-01-01'&&project.followupDate!=='');
+   });
+   check(preserved,'canceling tomorrow shortcut leaves all original follow-up dates unchanged');
 
    const seeded=await page.evaluate(async()=>{
      const state=await WorkbenchBusinessStore.read(),result=WorkbenchBusiness.searchBusiness(state,'TOMO');
@@ -171,6 +189,7 @@ async function main(){
    const photo=Buffer.from('SYNTHETIC_CAMERA_PHOTO_'+crypto.randomUUID());
    await page.locator('form[data-form="file"] input[name="photo"]').setInputFiles({
      name:'synthetic-camera.jpg',mimeType:'image/jpeg',buffer:photo});
+   await page.locator('form[data-form="file"] textarea[name="remark"]').fill('合成拍照沟通：请设备科确认过滤器采购申请');
    check(await page.locator('form[data-form="file"] input[name="photo"]').evaluate(el=>el.files.length===1),
      'camera capture file picker accepts the synthetic iPhone photo');
    await page.locator('form[data-form="file"] button.primary').click();
@@ -185,6 +204,20 @@ async function main(){
    check(uploaded.orderLinked&&uploaded.projectLinked&&uploaded.sameProject,
      'one camera photo is correctly linked to both the purchase order and its hospital project');
    check(Buffer.from(uploaded.bytes).equals(photo),'original camera photo bytes survive IndexedDB save unchanged');
+   const attached=await page.evaluate(async()=>{
+     const state=await WorkbenchBusinessStore.read();
+     const file=state.files.find(item=>item.name==='synthetic-camera.jpg');
+     const order=state.orders.find(item=>item.product==='合成过滤器订单');
+     const project=state.projects.find(item=>item.id===order.projectId);
+     const notes=state.notes.filter(item=>item.fileId===file.id);
+     const events=project.timeline.filter(item=>item.fileId===file.id);
+     return {remark:file.remark,notes:notes.length,events:events.length,
+       eventId:events[0]?.id,noteId:notes[0]?.id,projectId:notes[0]?.projectId};
+   });
+   check(attached.remark==='合成拍照沟通：请设备科确认过滤器采购申请'&&attached.notes===1&&attached.events===1,
+     'camera upload and optional remark are one atomic local commit linked into project timeline');
+   check(attached.eventId===attached.noteId&&attached.projectId===selected.expected,
+     'timeline and inbox share the same note ID and project relation without duplicate progress records');
    const second=Buffer.from('SYNTHETIC_INVOICE_'+crypto.randomUUID());
    await page.locator('form[data-form="file"] input[name="photo"]').setInputFiles({
      name:'not-selected.jpg',mimeType:'image/jpeg',buffer:photo});
@@ -207,6 +240,34 @@ async function main(){
      'document bytes and both associations remain intact after camera-to-file switch');
    check(!verified.names.includes('not-selected.jpg')&&verified.jobs>1,
      'stale camera selection is never accidentally uploaded and pending offline jobs remain');
+   await page.locator('nav button[data-route="hospitals"]').click();
+   await page.locator('[data-project]').first().click();
+   const photoTimeline=await page.getByText('合成拍照沟通：请设备科确认过滤器采购申请');
+   check(await photoTimeline.isVisible()&&await page.locator('.timeline-file [data-download]').count()>=1,
+     'project detail timeline visibly links upload remark and downloadable original file');
+   await page.locator('nav button[data-route="home"]').click();
+   await page.locator('.shortcut-grid button[data-route="files"]').click();
+   await page.locator('form[data-form="file"] select[name="projectId"]').selectOption('');
+   await page.locator('form[data-form="file"] textarea[name="remark"]').fill('合成未分类原件：临时发票待归档');
+   const inboxPhoto=Buffer.from('SYNTHETIC_UNCLASSIFIED_'+crypto.randomUUID());
+   await page.locator('form[data-form="file"] input[name="file"]').setInputFiles({
+     name:'synthetic-unclassified.txt',mimeType:'text/plain',buffer:inboxPhoto});
+   await page.locator('form[data-form="file"] button.primary').click();
+   await page.getByText('查看 / 下载 synthetic-unclassified.txt').waitFor({timeout:15000});
+   const unclassified=await page.evaluate(async()=>{
+     const state=await WorkbenchBusinessStore.read();
+     const file=state.files.find(item=>item.name==='synthetic-unclassified.txt');
+     const notes=state.notes.filter(item=>item.fileId===file?.id);
+     return {fileId:file?.id,notes:notes.length,disposition:notes[0]?.disposition,
+       progress:notes[0]?.progress,linkedProject:notes[0]?.projectId||''};
+   });
+   check(unclassified.notes===1&&unclassified.disposition==='收件箱'&&!unclassified.linkedProject,
+     'unassigned file and remark are saved together in inbox without inventing a project link');
+   await page.locator('nav button[data-route="more"]').click();
+   await page.getByRole('button',{name:'记录收件箱'}).click();
+   check(await page.getByText('合成未分类原件：临时发票待归档').isVisible(),
+     'inbox presents unassigned file remark for later sorting');
+
    await page.reload({waitUntil:'load'});
    await page.getByRole('heading',{name:'今天先办重要的事'}).waitFor();
    const after=await page.evaluate(async()=>{
@@ -218,6 +279,16 @@ async function main(){
    });
    check(after.hospitalNames.includes('示例秦皇岛医院新名称')&&after.allOriginals&&after.projectFiles===2&&after.orders===1,
      'full page reload preserves renamed hospital, order, project associations and both original metadata');
+   const restoredNote=await page.evaluate(async()=>{
+     const state=await WorkbenchBusinessStore.read();
+     const file=state.files.find(item=>item.name==='synthetic-camera.jpg');
+     const project=state.projects.find(item=>item.fileIds.includes(file.id));
+     const note=state.notes.find(item=>item.fileId===file.id);
+     return {remark:file.remark,hasTimeline:project.timeline.some(item=>item.fileId===file.id),
+       hasNote:!!note};
+   });
+   check(restoredNote.hasTimeline&&restoredNote.hasNote&&restoredNote.remark.includes('合成拍照沟通'),
+     'reload preserves photo remark, linked note and project timeline without losing originals');
    const viewport=await page.evaluate(()=>({overflow:document.documentElement.scrollWidth>innerWidth+1}));
    check(!viewport.overflow,'original iPhone-width UI does not overflow horizontally');
    check(errors.length===0,'no script crashes or external network access during mobile business workflows');
