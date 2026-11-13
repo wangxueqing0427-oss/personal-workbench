@@ -69,6 +69,8 @@ async function main() {
     await page.evaluate(() => offlineRunner.stop());
     const initial = await page.evaluate(async () => ({ state: await WorkbenchBusinessStore.read(), status: await WorkbenchOfflineSync.status() }));
     check(initial.state.hospitals.length === 3 && !initial.status.configured && initial.status.pending === 1, label + ' has fresh synthetic local seed and one pending job');
+    check(await page.locator('#preview-privacy-settings').isVisible(), label + ' optional privacy settings are present');
+    check(await page.evaluate(() => document.documentElement.dataset.previewPrivacy !== 'locked'), label + ' fresh isolated browser is not locked without opting in');
     return { context, page };
   };
   const configureViaUI = async (page, credential) => {
