@@ -110,6 +110,9 @@
   }
   function stateCheck(s){
     if(s===null)return;
+    const expected=['schema','revision',...COLLECTIONS].sort().join(',');
+    if(!s||Object.keys(s).sort().join(',')!==expected)
+      fail('发现尚未支持的业务字段，拒绝静默忽略或丢失数据');
     if(!s||s.schema!==2||!Number.isSafeInteger(s.revision)||s.revision<0||
       !Array.isArray(s.files)||!Array.isArray(s.projects)||!Array.isArray(s.hospitals)||
       !Array.isArray(s.notes)||!Array.isArray(s.orders))fail('业务数据结构不兼容');
