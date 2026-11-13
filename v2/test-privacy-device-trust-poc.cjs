@@ -113,6 +113,19 @@ async function main(){
       try{await __owner.verify(proof);return false;}catch{return true;}
     },changedBody);
     check(wrongBody,'request body digest cannot be altered after signing');
+    const substitutedRequest=await newPhone.evaluate(()=>__device.proof('PUT','/sync',{transaction:'SYNTHETIC ORIGINAL'}));
+    substitutedRequest.request.body={transaction:'UNSIGNED SUBSTITUTED BODY'};
+    const deniedBodySwap=await ownerPage.evaluate(async packet=>{
+      try{await __owner.verify(packet);return false;}catch{return true;}
+    },substitutedRequest);
+    check(deniedBodySwap,'actual HTTP request body substitution is denied even when original signature is valid');
+    const changedPath=await newPhone.evaluate(()=>__device.proof('PUT','/sync',{transaction:'SYNTHETIC ORIGINAL'}));
+    changedPath.request.path='/sync/other';
+    const deniedPathSwap=await ownerPage.evaluate(async packet=>{
+      try{await __owner.verify(packet);return false;}catch{return true;}
+    },changedPath);
+    check(deniedPathSwap,'signed device proof cannot be reused for another HTTP route');
+
     const spoof=structuredClone(proof);
     spoof.certificate.expiresAt+=86400000;
     spoof.proof.nonce=globalThis.crypto?.randomUUID?.()||'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa';
