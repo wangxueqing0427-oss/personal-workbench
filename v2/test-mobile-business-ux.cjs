@@ -34,6 +34,20 @@ async function main(){
    await page.goto(origin+'/',{waitUntil:'load'});
    await page.getByRole('heading',{name:'今天先办重要的事'}).waitFor();
    check(await page.locator('nav button').count()===5,'original V2 five-tab mobile application opens with unchanged navigation');
+   check(await page.locator('.hero-metrics > div').count()===4 &&
+     await page.locator('.shortcut-grid button').count()===4,
+     'refined dashboard shows four focus metrics and four large quick actions');
+   const visual=await page.evaluate(()=>({
+     hero:getComputedStyle(document.querySelector('.hero')).backgroundImage,
+     nav:getComputedStyle(document.querySelector('nav')).position,
+     tap:[...document.querySelectorAll('.shortcut-grid button')].every(x=>x.getBoundingClientRect().height>=44),
+     width:document.documentElement.scrollWidth<=innerWidth+1
+   }));
+   check(visual.hero.includes('gradient')&&visual.nav==='fixed'&&visual.tap&&visual.width,
+     'calm gradient dashboard, fixed bottom navigation and 44px mobile tap targets render without horizontal scroll');
+   check(await page.locator('.work-item [data-quick-project]').count()>=1,
+     'home project cards expose real quick follow-up action');
+
    const seeded=await page.evaluate(async()=>{
      const state=await WorkbenchBusinessStore.read(),result=WorkbenchBusiness.searchBusiness(state,'TOMO');
      return {hospitals:state.hospitals.length,projects:state.projects.length,matches:result.hospitals.length,projectMatches:result.projects.length};
@@ -104,13 +118,38 @@ async function main(){
    await page.getByRole('heading',{name:'合成DR设备维保'}).waitFor({timeout:15000});
    check(await page.getByRole('heading',{name:'合成DR设备维保'}).isVisible(),
      'new project form saves status, follow-up date and device model');
+   check(await page.locator('.focus-box').count()===1 &&
+     await page.locator('[data-quick-project]').count()===1,
+     'project detail emphasizes next action and provides an accessible quick-edit entry');
+   await page.locator('[data-quick-project]').click();
+   const quick=page.locator('form[data-form="quick-project"]');
+   check(await quick.isVisible(),'quick update form opens directly without navigating multiple project sections');
+   await quick.locator('select[name="status"]').selectOption('等待对方');
+   await quick.locator('input[name="followupDate"]').fill('2026-11-22');
+   await quick.locator('input[name="nextAction"]').fill('核对DR检修报价和质控日期');
+   await quick.locator('input[name="waitingOn"]').fill('设备科');
+   await quick.locator('textarea[name="progress"]').fill('合成验收：电话沟通后等待设备科确认');
+   await quick.locator('button.primary').click();
+   await page.getByText('合成验收：电话沟通后等待设备科确认').waitFor({timeout:15000});
+   const quickSaved=await page.evaluate(async()=>{
+     const st=await WorkbenchBusinessStore.read(),item=st.projects.find(p=>p.name==='合成DR设备维保');
+     return {status:item.status,date:item.followupDate,next:item.nextAction,waiting:item.waitingOn,
+       model:item.details.model,last:item.timeline.at(-1)?.text,
+       linkedNotes:st.notes.filter(note=>note.projectId===item.id).length};
+   });
+   check(quickSaved.status==='等待对方'&&quickSaved.date==='2026-11-22'&&
+     quickSaved.next==='核对DR检修报价和质控日期'&&quickSaved.waiting==='设备科',
+     'quick status/date/action/waiting edits are durably saved, not decorative shortcuts');
+   check(quickSaved.model==='Discovery RT 合成型号'&&
+     quickSaved.last.includes('合成验收')&&quickSaved.linkedNotes===1,
+     'single atomic quick edit preserves device details and appends project timeline with linked note');
    await page.locator('[data-back="hospitals"]').click();
    await page.locator('#business-search').fill('Discovery RT');
    await page.locator('#business-status-filter').selectOption('等待对方');
    check(await page.locator('[data-hospital]').count()===1&&await page.locator('[data-project]').count()===1,
      'filter by device model and waiting status returns one actionable project');
    await page.locator('#business-search').fill('无结果用的虚构名称XYZ');
-   check(await page.getByText('没有符合条件的医院').isVisible()&&await page.locator('[data-project]').count()===0,
+   check(await page.getByText('没有找到符合条件的医院').isVisible()&&await page.locator('[data-project]').count()===0,
      'empty results display clear message without listing unrelated projects');
    await page.locator('[data-clear-search]').click();
    await page.locator('nav button[data-route="supplies"]').click();
