@@ -23,12 +23,12 @@
 - `v2/business.css`：iPhone优先轻商务设计系统，柔和背景/深色hero/卡片阴影/筛选/状态标签/时间线/44px点击区/底部导航/安全区适配/减少动画选项。
 - `v2/test-mobile-business-ux.cjs`：新增视觉布局检查与快捷编辑实存检查；**Chromium 37/37 + WebKit 37/37 = 74项成功**，见 [Actions 43415383358](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43415383358)。
 - `v2/privacy-device-trust-poc.js`：之前兼容性回归偶发本机测试库删除被未关闭的IndexedDB句柄阻塞，仅对该实验模块改为“读取事务结束+关闭连接后才resolve”，用于防止测试清理竞态；与真实业务界面无关。随后需要按最新工作流`v2-local-crypto-poc.yml`结果确认回归。
-- 独立 Preview preflight [43415747388](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43415747388)已完成且成功；**本轮视觉改版尚须经独立Worker部署后的来源绑定浏览器验收，才能说线上已经更新**。
+- 独立 Preview preflight [43415747388](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43415747388)成功。**视觉升级已发布到独立合成数据预览，并已通过发布后双浏览器实测**：[Actions 43416203965](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43416203965)，Chromium 121/121、WebKit 117/117，合计238项通过、0失败。部署源提交 `3c82fb61c94dd715650eb38ab7d067504b1c7b4c`，19项静态资源一致性通过，releaseId `9fb98c940f6451fe846c568a2e6fff42b1385061931e948a0662094b068ca570`。**这不等于 V1.5.7 正式版更新或真实 iPhone 终验**。
 
 ## 下一阶段连续推进
 
-1. 等待并检查最新旧加密套件回归两浏览器全部绿灯，若只因实验库删除竞态失败则继续修复，不修改真实数据。
-2. 更新`v2/preview-deploy.trigger`，只部署合成资料的独立 Worker，发布后让`v2/test-preview-remote.cjs`检验当前源码SHA、19项资源、手机流程及隐私遮挡；记录真实运行ID。
+1. 上述浏览器回归与独立预览线上验收均已完成，不要重复旧阶段。旧本机测试库删除句柄竞态已修复，最新兼容回归 [43415747194](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43415747194) Chromium+WebKit 均绿色。
+2. 继续迭代首页项目卡片的单手操作、快捷跟进与日期变更，再优先改进拍照附带简短进展备注的交互；每次在合成区先测试，不对 V1/正式数据写入。
 3. 继续优先打磨“首页今天要办 -> 快速编辑跟进 -> 联系人反馈 -> 关联照片”和日常耗材未开票/未回款项目的显示；不展开新的复杂身份系统。
 4. 未来用户亲自iPhone验收时再决定是否发布到正式版本，绝不把合成预览演示当成已有真实记录。
 
