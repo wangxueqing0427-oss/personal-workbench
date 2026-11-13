@@ -49,7 +49,7 @@ jobs:
           if (config.durable_objects?.bindings?.length !== 1 || config.durable_objects.bindings[0].name !== 'TEST_SYNC' || config.durable_objects.bindings[0].class_name !== 'TestSync' || config.durable_objects.bindings[0].script_name) fail('Durable Object must be locally scoped');
           if (config.migrations?.[0]?.tag !== 'v2-preview-sqlite-1') fail('Wrong migration');
           if (manifest.syntheticOnly !== true || manifest.sourceClean !== true || manifest.sourceCommit !== process.env.GITHUB_SHA) fail('Wrong manifest source');
-          if (Object.keys(manifest.assets).length !== 18) fail('Expected exactly 18 generated assets');
+          if (Object.keys(manifest.assets).length !== 19) fail('Expected exactly 19 generated assets');
           for (const [name, spec] of Object.entries(manifest.assets)) {
             const filename = path.resolve(root,name);
             if (!filename.startsWith(path.resolve(root)+path.sep)) fail('Unsafe path');
@@ -60,8 +60,11 @@ jobs:
           const verifiedLoader = Object.keys(manifest.assets).find(name => name.endsWith('/release-loader.js'));
           if (!verifiedLoader || !fs.readFileSync(path.join(root, verifiedLoader),'utf8').includes('本机演示模式')) fail('Public demo must disclose unconfigured cloud identity');
           if (!fs.readFileSync(path.join(root, 'business.html'),'utf8').includes('本机演示模式')) fail('First-visit entry must disclose local-only preview state');
+          if (!Object.keys(manifest.assets).some(name=>name.endsWith('/preview-privacy.js'))) fail('Missing preview-only PIN gate resource');
+          if (!fs.readFileSync(path.join(root,'business.html'),'utf8').includes('preview-privacy-shield')) fail('Business page must fail closed before first paint');
+          if (!fs.readFileSync(path.join(root,'p0.html'),'utf8').includes('preview-privacy-shield')) fail('Backup page must also be gated');
           if (fs.readFileSync('v2/wrangler.preview.jsonc','utf8').includes('TEST_TOKEN')) fail('Never commit secrets');
-          console.log('PREVIEW_PREFLIGHT_PASS: 18 assets + hashes + distinct Worker/DO/dataset/host');
+          console.log('PREVIEW_PREFLIGHT_PASS: 19 assets + hashes + distinct Worker/DO/dataset/host');
           NODE
       - name: Verify Wrangler package is deployable without deployment or credentials
         working-directory: repo
