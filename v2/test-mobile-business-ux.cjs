@@ -68,6 +68,7 @@ async function main(){
    await hospital.locator('input[name="contact"]').fill('陈主任');
    await hospital.locator('input[name="phone"]').fill('13800000000');
    await hospital.locator('button.primary').click();
+   await page.getByRole('heading',{name:'示例秦皇岛医院新名称'}).waitFor({timeout:15000});
    check(await page.getByRole('heading',{name:'示例秦皇岛医院新名称'}).isVisible(),
      'hospital rename updates visible official name rather than silently retaining old name');
    const renamed=await page.evaluate(async()=>{
@@ -100,6 +101,7 @@ async function main(){
    await project.locator('details summary').click();
    await project.locator('input[name="model"]').fill('Discovery RT 合成型号');
    await project.locator('button.primary').click();
+   await page.getByRole('heading',{name:'合成DR设备维保'}).waitFor({timeout:15000});
    check(await page.getByRole('heading',{name:'合成DR设备维保'}).isVisible(),
      'new project form saves status, follow-up date and device model');
    await page.locator('[data-back="hospitals"]').click();
@@ -117,6 +119,7 @@ async function main(){
    await orderForm.locator('input[name="quantity"]').fill('2');
    await orderForm.locator('input[name="unitPrice"]').fill('8');
    await orderForm.locator('button.primary').click();
+   await page.getByRole('heading',{name:/合成过滤器订单/}).waitFor({timeout:15000});
    check(await page.getByRole('heading',{name:/合成过滤器订单/}).isVisible(),
      'consumables purchase plan can be recorded without disturbing hospital search');
    await page.locator('[data-files-order]').first().click();
@@ -132,6 +135,7 @@ async function main(){
    check(await page.locator('form[data-form="file"] input[name="photo"]').evaluate(el=>el.files.length===1),
      'camera capture file picker accepts the synthetic iPhone photo');
    await page.locator('form[data-form="file"] button.primary').click();
+   await page.locator('button[data-download]').first().waitFor({timeout:15000});
    const uploaded=await page.evaluate(async()=>{
      const data=await WorkbenchBusinessStore.read(),order=data.orders.find(x=>x.product==='合成过滤器订单');
      const entry=data.files.find(f=>f.name==='synthetic-camera.jpg'),project=data.projects.find(p=>p.id===order.projectId);
@@ -150,6 +154,7 @@ async function main(){
    check(await page.locator('form[data-form="file"] input[name="photo"]').evaluate(el=>el.files.length===0),
      'selecting a document after taking a photo clears the stale camera file');
    await page.locator('form[data-form="file"] button.primary').click();
+   await page.waitForFunction(()=>document.querySelectorAll('button[data-download]').length>=2,{timeout:15000});
    const verified=await page.evaluate(async()=>{
      const data=await WorkbenchBusinessStore.read(),entry=data.files.find(f=>f.name==='synthetic-invoice.txt');
      const order=data.orders.find(x=>x.product==='合成过滤器订单');
