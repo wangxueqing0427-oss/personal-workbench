@@ -18,7 +18,7 @@ jobs:
       vars.V2_PREVIEW_FREE_PLAN_CONFIRMED == 'true' &&
       vars.V2_PREVIEW_WORKER_READY == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 12
+    timeout-minutes: 18
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PREVIEW_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -64,3 +64,22 @@ jobs:
       - name: Deploy only the pre-created isolated Worker
         shell: bash
         run: npx --yes wrangler@4.149.0 deploy --config v2/wrangler.preview.jsonc
+      - name: Install isolated post-deploy mobile browser simulators
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --prefix /tmp/workbench-preview-deploy-smoke --no-save --no-package-lock playwright@1.56.1
+          /tmp/workbench-preview-deploy-smoke/node_modules/.bin/playwright install --with-deps chromium webkit
+      - name: Verify LIVE deployed revision and complete mobile flows
+        shell: bash
+        env:
+          NODE_PATH: /tmp/workbench-preview-deploy-smoke/node_modules
+          PREVIEW_EXPECTED_SHA: ${{ github.sha }}
+          PREVIEW_REQUIRE_LOCAL_LABEL: "true"
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/dev/v2-preview-isolated-20261111"
+          WB_BROWSER=chromium node v2/test-preview-remote.cjs
+          WB_BROWSER=webkit node v2/test-preview-remote.cjs
+          echo PREVIEW_LIVE_MOBILE_GATE_PASS
+
