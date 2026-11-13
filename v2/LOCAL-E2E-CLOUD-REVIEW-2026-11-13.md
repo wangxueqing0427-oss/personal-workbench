@@ -45,5 +45,5 @@
 
 - 所有本机加密/分块/逐对象/差量回归：[之前绿色运行 #43390258735](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43390258735)，270 PASS / 0 FAIL。
 - 新增本机双设备云端测试：[工作流 #43397019045](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43397019045)，Chromium + WebKit 30项专项/引擎，两端执行成功（之前完整试验回归及本轮新测合计165项/引擎）。
-- 新增加分片中途网络故障、重复分片幂等、错误身份的复测：[工作流 #43397336843](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43397336843)，须待最终状态和日志核实再填写通过数量，不能用旧运行冒充新运行成功。
+- **最新完整复测成功**：[GitHub Actions #43397336843](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43397336843)，测试源码 SHA `64f3322a6aad5624e0dae7da93e1b66e57af4bf1`。Chromium **169项PASS / 0 FAIL**，WebKit **169项PASS / 0 FAIL**，最新一轮共 **338项通过、0失败**；其中本机双设备E2E专项 **各34项**，包含分片中断后重试、重复分片幂等、最终ACK丢失后的无重复版本、错误身份拒绝。模拟云端保留 **6个不可变历史版本**，接收 **122次加密分片写入，其中2次重复分片安全确认**。其余测试为上轮加密、影子迁移、逐对象、文件分块与增量队列兼容回归，不能累加旧轮通过数。
 - 公开预览隔离预检：[工作流 #43396918957](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43396918957)成功；原预览版仍保持19项资源，独立加密云端原型不部署公开Worker。
