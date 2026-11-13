@@ -144,8 +144,7 @@
             throw new Error('当前PIN不正确，设置未更改。');
           }
           localStorage.removeItem(storageKey);
-          status.textContent = '本机遮挡已关闭；业务数据、附件和队列没有被删除。';
-          action.disabled = true;
+          dialog.close();
           return;
         }
         if (!/^\d{6,12}$/.test(first.value) || first.value !== confirm.value) throw new Error('请输入相同的6至12位数字PIN。');
