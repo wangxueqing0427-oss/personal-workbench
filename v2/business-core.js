@@ -112,33 +112,67 @@
     return result;
   }
   function resolveDate(sentence, today) {
-    const explicit = sentence.match(/20\d{2}-\d{2}-\d{2}/);
-    if (explicit) return date(explicit[0]);
-    if (/明天/.test(sentence)) return addDays(today, 1);
-    if (/后天/.test(sentence)) return addDays(today, 2);
-    const weekday = sentence.match(/(下周|周|星期)([一二三四五六日天])/);
-    if (weekday) {
-      const target = '一二三四五六日'.indexOf(weekday[2].replace('天', '日')) + 1;
-      const current = new Date(today + 'T12:00:00Z').getUTCDay() || 7;
-      let offset = target - current;
-      if (weekday[1] === '下周') offset += 7;
-      else if (offset <= 0) offset += 7;
-      return addDays(today, offset);
+    const explicit=sentence.match(/20\d{2}-\d{2}-\d{2}/);
+    if(explicit) return date(explicit[0]);
+    const calendar=sentence.match(/(?:(20\d{2})年\s*)?(\d{1,2})月\s*(\d{1,2})(?:日|号)/);
+    if(calendar){
+      const yyyy=Number(calendar[1]||today.slice(0,4)),mm=Number(calendar[2]),dd=Number(calendar[3]);
+      const candidate=[String(yyyy),String(mm).padStart(2,'0'),String(dd).padStart(2,'0')].join('-');
+      try{
+        date(candidate);
+        // Never silently interpret a past month/day with no specified year as next year.
+        if(!calendar[1]&&candidate<today)return '';
+        return candidate;
+      }catch(_){return '';}
     }
-    if (/下周/.test(sentence)) return '';
+    if(/明天/.test(sentence))return addDays(today,1);
+    if(/后天/.test(sentence))return addDays(today,2);
+    const after=sentence.match(/([1-9]\d?|[一二两三四五六七八九十]{1,3})天后/);
+    if(after){
+      const chars={一:1,二:2,两:2,三:3,四:4,五:5,六:6,七:7,八:8,九:9,十:10};
+      let count=Number(after[1]);
+      if(!Number.isFinite(count)){
+        const word=after[1];count=word==='十'?10:word.startsWith('十')?10+(chars[word[1]]||0):
+          word.endsWith('十')?(chars[word[0]]||0)*10:(chars[word[0]]||0)*10+(chars[word[2]]||0);
+        if(word.length===1)count=chars[word]||0;
+      }
+      if(count>=1&&count<=30)return addDays(today,count);
+    }
+    const weekday=sentence.match(/(下下周|下周|本周|周|星期)([一二三四五六日天])/);
+    if(weekday){
+      const target='一二三四五六日'.indexOf(weekday[2].replace('天','日'))+1;
+      const current=new Date(today+'T12:00:00Z').getUTCDay()||7;
+      let offset=target-current;
+      if(weekday[1]==='下下周')offset+=14;
+      else if(weekday[1]==='下周')offset+=7;
+      else if(offset<=0)offset+=7;
+      return addDays(today,offset);
+    }
     return '';
   }
   function suggestNote(state, sentence, today) {
     const content = text(sentence); if (!content) throw new Error('请先记录内容');
     const hospitals = state.hospitals.filter(item => [item.name, ...item.aliases].some(name => content.includes(name)));
     const hospital = hospitals.length === 1 ? hospitals[0] : null;
-    const tokens = content.match(/核磁|开机率|铥激光|光纤|TOMO|磁共振|维保|CT|招标|质控/gi) || [];
-    const candidates = state.projects.filter(item => hospital && item.hospitalId === hospital.id).map(item => ({ projectId: item.id, name: item.name, score: tokens.reduce((score, token) => score + (item.name.toLowerCase().includes(token.toLowerCase()) ? token.length : 0), 0) })).filter(item => item.score >= 3).sort((first, second) => second.score - first.score).slice(0, 3);
-    const confident = candidates.length && (candidates.length === 1 || candidates[0].score > candidates[1].score);
+    const tokens=content.match(/核磁|开机率|铥激光|光纤|TOMO|磁共振|维保|维修|球管|CT|MR|MRI|PET.?CT|DSA|DR|加速器|放疗|招标|质控|报价|合同|耗材|回款|采购/gi)||[];
+    const hospitalProjects=state.projects.filter(item=>hospital&&item.hospitalId===hospital.id);
+    const candidates=hospitalProjects.map(item=>({projectId:item.id,name:item.name,
+      score:tokens.reduce((score,token)=>score+(item.name.toLowerCase().includes(token.toLowerCase())?token.length:0),0)}))
+      .filter(item=>item.score>=3).sort((a,b)=>b.score-a.score).slice(0,3);
+    const confident=candidates.length&&(candidates.length===1||candidates[0].score>candidates[1].score);
+    // A single hospital project is a useful preselection; user must still approve.
+    const oneProject=hospitalProjects.length===1?hospitalProjects[0]:null;
+    const action=/回款|付款|到账|财务/.test(content)?'确认回款及到账进度':
+      /报价|询价|价格/.test(content)?'确认报价和对方反馈':
+      /招标|挂网|报名|投标/.test(content)?'跟进招标与报名节点':
+      /质控|验收|检测/.test(content)?'确认质控或验收结果':
+      /合同|签约|续约/.test(content)?'核对合同签署及续约进度':
+      /维修|故障|报修/.test(content)?'确认维修处理进度':
+      /再联系|联系|回访|电话/.test(content)?'按约定时间联系对方':'核对本次进展并跟进';
     const department = content.match(/泌尿外科|神经外科|心胸外科|普外科|骨科|设备科|影像科|放射科|消化内科|呼吸内科|内科|外科/)?.[0] || '';
     const contact = content.match(/[\u4e00-\u9fa5]{1,3}(?:总|主任|科长)(?=说|表示|反馈|，|,|\s|$)/)?.[0] || '';
     const followupDate = resolveDate(content, today);
-    return { id: identifier(), text: content, hospitalId: hospital?.id || '', hospitalCandidates: hospitals.map(item => item.id), department, contact, projectId: confident ? candidates[0].projectId : '', candidates, progress: content, suggestedStatus: /给我|等待|再联系|回复/.test(content) ? '等待对方' : '进行中', nextAction: /再联系/.test(content) ? '联系客户确认下一步' : '核对本次进展并跟进', followupDate, dateUncertain: /下周/.test(content) && !followupDate, createdOn: date(today), source: '本地规则，需核对' };
+    return { id: identifier(), text: content, hospitalId: hospital?.id || '', hospitalCandidates: hospitals.map(item => item.id), department, contact, projectId: confident ? candidates[0].projectId : (oneProject?.id||''), candidates, progress: content, suggestedStatus: /给我|等待|再联系|回复/.test(content) ? '等待对方' : '进行中', nextAction: action, followupDate, dateUncertain: !followupDate && /下周|下个月|月底|过几天|这几天|近期|11?月底|\d{1,2}月\d{1,2}[号日]/.test(content), createdOn: date(today), source: '本地规则，需核对' };
   }
   // Split a spoken debrief at natural sentence boundaries and whenever the
   // speaker switches to a different explicitly named known hospital.
@@ -164,7 +198,11 @@
       return found.sort((a,b)=>a.start-b.start);
     }
     const pieces=[];
-    for(const paragraph of raw.split(/[。；;！？!?\n]+/).map(text).filter(Boolean)){
+    // Pause words after a comma frequently introduce another task at the
+    // same hospital even when speech-to-text omits sentence punctuation.
+    const sentences=raw.split(/[。；;！？!?\n]+/).flatMap(sentence=>
+      sentence.split(/[，,](?=另外|还有|其次|第二件|第二个项目|接着|再说一下)/).map(text).filter(Boolean));
+    for(const paragraph of sentences){
       const hits=hospitalMentions(paragraph);
       let start=0,active='';
       for(const hit of hits){

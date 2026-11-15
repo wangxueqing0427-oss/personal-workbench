@@ -97,6 +97,14 @@ async function main() {
     }));
     check(layout.nav === 'fixed' && layout.header === 'flex' && layout.cards >= 2 && layout.buttons === 5 && layout.viewport, 'mobile CSS applied without horizontal overflow');
 
+    if (process.env.PREVIEW_EXPECTED_SHA) {
+      check(await page.locator('.shortcut-grid button[data-start-voice]').count()===1,
+        'live home displays a single one-tap speech shortcut');
+      await page.locator('.shortcut-grid button[data-start-voice]').click();
+      check(await page.locator('form[data-form="note"] textarea[name="text"]').isVisible(),
+        'live one-tap speech opens a working fallback text input even when browser speech services are unavailable');
+      await page.locator('nav button[data-route="home"]').click();
+    }
     await page.locator('nav button[data-route="hospitals"]').click();
     check(await page.getByRole('heading', { name: '医院业务档案' }).isVisible(), 'hospital directory opens');
     check(await page.locator('[data-hospital]').count() === 3, 'three synthetic hospital examples');

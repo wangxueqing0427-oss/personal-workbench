@@ -59,7 +59,7 @@
     const stat=([target,count,label])=>`<div class="hero-metric"><button type="button" class="hero-metric-button" data-focus-target="${target}" aria-label="查看${label}，${count}项"${count?'':' disabled'}><strong>${count}</strong><span>${label}</span></button></div>`;
     const displayToday=today(),weekday=new Intl.DateTimeFormat('zh-CN',{timeZone:'UTC',month:'long',day:'numeric',weekday:'long'}).format(new Date(displayToday+'T12:00:00Z'));
     const greeting=`<section class="hero card"><p class="eyebrow">WORKBENCH · DAILY FOCUS</p><p class="hero-date" data-current-date="${escape(displayToday)}">${escape(weekday)}</p><h2>今天先办重要的事</h2><p class="hero-description">逾期先处理，今天要办的事情一眼看到。</p><div class="hero-metrics">${metrics.map(stat).join('')}</div></section>`;
-    const shortcuts=`<section class="card shortcut-panel">${sectionHead('QUICK ACTIONS','常用操作')}<div class="shortcut-grid"><button class="shortcut primary" data-route="note"><span class="shortcut-icon" aria-hidden="true">✎</span><span>随手记录</span></button><button class="shortcut" data-route="hospitals"><span class="shortcut-icon" aria-hidden="true">⌕</span><span>医院与项目</span></button><button class="shortcut" data-route="files"><span class="shortcut-icon" aria-hidden="true">▧</span><span>拍照 / 上传</span></button><button class="shortcut" data-route="supplies"><span class="shortcut-icon" aria-hidden="true">▤</span><span>耗材业务</span></button></div></section>`;
+    const shortcuts=`<section class="card shortcut-panel">${sectionHead('QUICK ACTIONS','常用操作')}<div class="shortcut-grid"><button class="shortcut primary shortcut-voice" data-route="note" data-start-voice="true" aria-label="一键语音速记，直接打开麦克风"><span class="shortcut-icon" aria-hidden="true">🎙</span><span>语音速记</span></button><button class="shortcut" data-route="hospitals"><span class="shortcut-icon" aria-hidden="true">⌕</span><span>医院与项目</span></button><button class="shortcut" data-route="files"><span class="shortcut-icon" aria-hidden="true">▧</span><span>拍照 / 上传</span></button><button class="shortcut" data-route="supplies"><span class="shortcut-icon" aria-hidden="true">▤</span><span>耗材业务</span></button></div></section>`;
     const categories=[
       ['OVERDUE','已逾期','overdue',view.overdue],
       ['TODAY','今天要办','today',view.today],
@@ -255,6 +255,12 @@
       else if (button.dataset.supplyFilter) { supplyFilter = button.dataset.supplyFilter; route = 'supplies'; render(); }
       else if (button.dataset.orderFollowup) { selection=button.dataset.orderFollowup; route='order-followup'; render(); window.scrollTo(0,0); }
       else if (button.dataset.confirmInvoice || button.dataset.confirmPayment) { selection=button.dataset.confirmInvoice||button.dataset.confirmPayment; route='order-confirm'; render(); window.scrollTo(0,0); }
+      else if (button.dataset.startVoice) {
+        stopSpeech();route='note';selection='';suggestion=null;briefing=null;quickTomorrow=false;quickIntent='edit';
+        render();window.scrollTo(0,0);
+        // Start synchronously within this click: iOS microphone permission requires a user gesture.
+        voiceToggle();
+      }
       else if (button.dataset.route) { stopSpeech(); route = button.dataset.route; selection = ''; suggestion = null; briefing = null; quickTomorrow = false; quickIntent = 'edit'; render(); window.scrollTo(0, 0); }
       else if (button.dataset.back) { route = button.dataset.back; quickTomorrow = false; quickIntent = 'edit'; if (route !== 'project') selection = ''; render(); }
       else if (button.hasAttribute('data-clear-search')) { searchQuery = ''; searchStatus = '全部'; render(); }
@@ -285,7 +291,17 @@
     } catch (error) { message(error.message); }
   });
   document.addEventListener('input', event => {
-    if (event.target.matches('form[data-form="note"] textarea[name="text"]'))noteDraft=event.target.value;
+    if (event.target.matches('form[data-form="note"] textarea[name="text"]')){
+      noteDraft=event.target.value;
+      if(speechSession){
+        // User edits take precedence over streaming interim speech results.
+        stopSpeech();
+        const status=document.getElementById('voice-status');
+        const toggle=document.querySelector('[data-voice-toggle]');
+        if(status)status.textContent='已停止听写并保留手工修改，请核对文字';
+        if(toggle)toggle.textContent='🎙 开始语音';
+      }
+    }
     if (event.target.id === 'business-search') {
       searchQuery = event.target.value;
       updateHospitalSearch();

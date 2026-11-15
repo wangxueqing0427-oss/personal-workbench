@@ -45,6 +45,53 @@ async function main(){
    }));
    check(visual.hero.includes('gradient')&&visual.nav==='fixed'&&visual.tap&&visual.width,
      'calm gradient dashboard, fixed bottom navigation and 44px mobile tap targets render without horizontal scroll');
+   await page.evaluate(()=>{
+     window.__quickVoiceStarts=0;
+     Object.defineProperty(window,'SpeechRecognition',{configurable:true,value:class HomeVoiceFixture{
+       start(){window.__quickVoiceStarts++;this.onstart?.();
+         this.onresult?.({results:[{0:{transcript:'示例秦皇岛医院今天报价。'},isFinal:true}]});this.onend?.();}
+       stop(){this.onend?.();}
+       abort(){this.onend?.();}
+     }});
+   });
+   check(await page.locator('.shortcut-grid [data-start-voice]').count()===1&&
+     await page.locator('.shortcut-grid [data-start-voice]').isVisible(),
+     'home offers a visible one-tap speech shortcut instead of requiring an extra page and microphone click');
+   await page.locator('.shortcut-grid [data-start-voice]').click();
+   const quickVoice=await page.evaluate(()=>({
+     starts:window.__quickVoiceStarts,
+     voicePage:!!document.querySelector('form[data-form="note"]'),
+     transcript:document.querySelector('form[data-form="note"] textarea[name="text"]')?.value||''
+   }));
+   check(quickVoice.starts===1&&quickVoice.voicePage&&quickVoice.transcript.includes('示例秦皇岛医院今天报价'),
+     'one home tap synchronously starts native speech API and shows editable Chinese transcription');
+   await page.locator('nav button[data-route="home"]').click();
+   await page.evaluate(()=>{
+     Object.defineProperty(window,'SpeechRecognition',{configurable:true,value:undefined});
+     Object.defineProperty(window,'webkitSpeechRecognition',{configurable:true,value:undefined});
+   });
+   await page.locator('.shortcut-grid [data-start-voice]').click();
+   check(await page.locator('form[data-form="note"] textarea[name="text"]').isFocused()&&
+     (await page.locator('#voice-status').innerText()).includes('键盘上的麦克风'),
+     'unsupported iPhone browser falls back to focused keyboard dictation and never pretends voice was captured');
+   await page.locator('nav button[data-route="home"]').click();
+   const spokenCases=await page.evaluate(()=>{
+     const core=WorkbenchBusiness,empty=core.empty();
+     let next=core.upsertHospital(empty,{name:'合成甲医院'}),s=next.state;
+     next=core.saveProject(s,{hospitalId:next.hospitalId,name:'核磁维保跟进',kind:'维保',followupDate:'',details:{}},'2026-11-15');s=next.state;
+     const action=core.suggestNote(s,'合成甲医院设备科说11月18号给报价','2026-11-15');
+     const bulk=core.splitBriefing(s,'合成甲医院设备科周三发报价，另外质控三天后给结果','2026-11-15');
+     return {date:action.followupDate,project:action.projectId,next:action.nextAction,
+       segments:bulk.map(x=>({date:x.followupDate,hospital:x.hospitalId,next:x.nextAction})),
+       year:core.suggestNote(s,'合成甲医院下下周二电话联系','2026-11-15').followupDate,
+       ambiguous:core.suggestNote(s,'合成甲医院月底联系','2026-11-15').dateUncertain};
+   });
+   check(spokenCases.date==='2026-11-18'&&!!spokenCases.project&&spokenCases.next.includes('报价')&&
+     spokenCases.segments.length===2&&spokenCases.segments.every(x=>x.hospital)&&
+     spokenCases.segments[1].date==='2026-11-18'&&spokenCases.segments[1].next.includes('质控')&&
+     spokenCases.year==='2026-11-24'&&spokenCases.ambiguous,
+     'single-hospital two-task debrief, month/day speech dates, second-week weekdays and cautious ambiguous dates produce reviewable suggestions');
+
    check(await page.locator('.work-item [data-quick-project]').count()>=1,
      'home project cards expose real quick follow-up action');
    check(await page.locator('.hero-metric-button').count()===4 &&

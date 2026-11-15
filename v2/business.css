@@ -220,3 +220,8 @@ form[data-form="file"] textarea[name="remark"]{min-height:96px;background:#f8fcf
 .briefing-item textarea{min-height:95px}
 .briefing-item .check{margin:10px 0;font-weight:630}
 .briefing-form>button.primary{width:100%;min-height:50px}
+
+/* One-touch mobile voice capture is the primary daily shortcut. */
+.shortcut-grid .shortcut-voice{background:linear-gradient(150deg,#155c75,#217e91);color:#fff;border:1px solid #176980;box-shadow:0 5px 14px rgba(21,88,111,.16)}
+.shortcut-grid .shortcut-voice:active{background:#164d65}
+.shortcut-grid .shortcut-voice .shortcut-icon{font-size:25px}
