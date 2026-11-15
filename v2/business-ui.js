@@ -10,12 +10,43 @@
   const options = (values, current) => values.map(value => `<option${value === current ? ' selected' : ''}>${escape(value)}</option>`).join('');
   const field = (name, label, value = '', type = 'text') => `<label>${label}<input name="${name}" type="${type}" value="${escape(value)}"></label>`;
   let state, route = 'home', selection = '', suggestion = null, briefing = null, noteDraft = '', speechSession = null, busy = false;
+  let draftStatus='', draftTimer=null, draftWriteChain=Promise.resolve(), clearDraftArmed=false;
   let searchQuery = '', searchStatus = '全部', quickTomorrow = false, quickIntent = 'edit', supplyFilter = 'all';
   function message(value) { notice.textContent = value; }
-  async function save(next, file) {
+  async function save(next, file, options) {
     if (!compatible()) throw new Error('版本不兼容 / 同步已暂停');
-    state = await storage.commit(next, state.revision, file);
+    state = await storage.commit(next, state.revision, file, options);
     message('已保存到独立开发测试区；正式数据未改动。');
+  }
+  function showDraftStatus(value){
+    draftStatus=value;
+    const target=document.querySelector('[data-draft-status]');
+    if(target)target.textContent=value;
+  }
+  // Serialize all local draft writes. Clearing at final submission waits for
+  // previous writes and joins the business commit atomically, so a late write
+  // cannot resurrect an already confirmed draft.
+  function flushDraft(){
+    if(draftTimer){clearTimeout(draftTimer);draftTimer=null;}
+    const value=noteDraft;
+    draftWriteChain=draftWriteChain.catch(()=>{}).then(()=>storage.writeDraft(value));
+    const write=draftWriteChain;
+    write.then(()=>{
+      if(value===noteDraft)showDraftStatus(value.trim()?'草稿已暂存本机 · 尚未成为业务记录':'没有未完成草稿');
+    },()=>{
+      showDraftStatus('草稿暂存未成功，请不要刷新或退出，避免文字丢失');
+    });
+    return write;
+  }
+  function scheduleDraftSave(immediately=false){
+    if(draftTimer){clearTimeout(draftTimer);draftTimer=null;}
+    showDraftStatus(noteDraft.trim()?'正在本机暂存草稿…':'正在清除旧草稿…');
+    if(immediately)return flushDraft();
+    draftTimer=setTimeout(flushDraft,200);
+  }
+  async function ensureDraftFlushed(){
+    if(draftTimer)await flushDraft();
+    await draftWriteChain;
   }
   function seed() {
     let result = core.empty();
@@ -132,7 +163,7 @@
       return `<form class="card briefing-form" data-form="briefing"><button type="button" data-cancel-briefing class="back-link">← 返回录音文字</button><p class="eyebrow">REVIEW SPLIT TASKS</p><h2>已拆分 ${briefing.length} 条事项</h2><p class="muted">本机按标点和医院名称拆分，医院、项目和日期可能识别不全。请逐条核对；没有匹配到项目的内容可先放收件箱。点击“采纳”只会预先勾选下一步和有明确日期的跟进项，不会直接保存，也不改变项目状态。</p><div class="briefing-bulk-apply"><button type="button" data-apply-all-briefing>采纳全部明确匹配的建议</button><p class="muted">只处理项目匹配明确、日期具体的事项；模糊项目留给你核对。</p><output id="briefing-apply-summary" aria-live="polite">目前尚未采纳待办更新；确认后默认只保存沟通记录。</output></div>${entries}<button class="primary">确认保存所选事项</button><button type="button" data-cancel-briefing>返回修改原文</button></form>`;
     }
     if (suggestion) return `<form class="card" data-form="confirm-note"><h2>核对后保存</h2><p class="muted">${escape(suggestion.source)}。默认只追加时间线；无项目则留在收件箱。</p><p>原记录：${escape(suggestion.text)}</p><label>关联项目<select name="projectId"><option value="">仅进入收件箱</option>${state.projects.map(item => `<option value="${escape(item.id)}"${suggestion.projectId === item.id ? ' selected' : ''}>${escape(state.hospitals.find(hospital => hospital.id === item.hospitalId)?.name)}｜${escape(item.name)}</option>`).join('')}</select></label><p>识别科室：${escape(suggestion.department || '待确认')} · 人物：${escape(suggestion.contact || '待确认')}</p><label>本次进展<textarea name="progress">${escape(suggestion.progress)}</textarea></label><details><summary>可选修改行动字段（逐项勾选）</summary><label class="check"><input name="changeStatus" type="checkbox">同时修改状态</label><select name="status">${options(core.statuses, suggestion.suggestedStatus)}</select><label class="check"><input name="changeDate" type="checkbox">同时修改日期</label>${field('followupDate', '建议日期', suggestion.followupDate, 'date')}${suggestion.dateUncertain ? '<p class="warning">“下周”没有具体星期，请手工确认日期。</p>' : ''}<label class="check"><input name="changeNextAction" type="checkbox">同时修改下一步</label>${field('nextAction', '建议下一步', suggestion.nextAction)}<label class="check"><input name="changeWaitingOn" type="checkbox">同时修改等待对象</label>${field('waitingOn', '建议等待对象', suggestion.contact)}</details><button class="primary">确认保存</button><button type="button" data-cancel-note>重新编辑</button></form>`;
-    return `<form class="card voice-note" data-form="note"><p class="eyebrow">VOICE CAPTURE</p><h2>医院出来，说一段就好</h2><div class="voice-panel"><button type="button" class="voice-button" data-voice-toggle>🎙 开始语音</button><p id="voice-status" class="muted" role="status" aria-live="polite">轻点麦克风开始口述，完成后点“拆分并核对”。</p></div><p class="muted">语音识别由手机浏览器提供，可能联网使用浏览器厂商的识别服务；点击麦克风才会请求使用。若相机内置浏览器或麦克风权限不支持，请在 Safari 打开，或点下方文字框使用 iPhone 键盘麦克风。业务拆分本机完成，不调用付费AI接口。</p><label>口述文字（可直接修改）<textarea name="text" required maxlength="5000" placeholder="例如：今天去示例秦皇岛医院，设备科说下周二发报价；另外示例石景山医院的核磁明细明天要送。">${escape(noteDraft)}</textarea></label><button class="primary">拆分事项并核对</button></form>`;
+    return `<form class="card voice-note" data-form="note"><p class="eyebrow">VOICE CAPTURE</p><h2>医院出来，说一段就好</h2><div class="voice-panel"><button type="button" class="voice-button" data-voice-toggle>🎙 开始语音</button><p id="voice-status" class="muted" role="status" aria-live="polite">轻点麦克风开始口述，完成后点“拆分并核对”。</p></div><p class="muted">语音识别由手机浏览器提供，可能联网使用浏览器厂商的识别服务；点击麦克风才会请求使用。若相机内置浏览器或麦克风权限不支持，请在 Safari 打开，或点下方文字框使用 iPhone 键盘麦克风。业务拆分本机完成，不调用付费AI接口。</p><label>口述文字（可直接修改）<textarea name="text" required maxlength="5000" placeholder="例如：今天去示例秦皇岛医院，设备科说下周二发报价；另外示例石景山医院的核磁明细明天要送。">${escape(noteDraft)}</textarea></label><div class="voice-draft-strip"><output data-draft-status role="status" aria-live="polite">${escape(draftStatus||'输入后将自动暂存本机，误刷新可找回；不是正式保存')}</output><button type="button" data-clear-note-draft>${clearDraftArmed?'再点一次，确认清空草稿':'清空这段草稿'}</button></div><p class="muted">草稿只存当前浏览器本机，不上传、不进入同步队列；清除浏览器数据或换设备不能恢复。返回页面可继续编辑，正式记录仍需最后确认。</p><button class="primary">拆分事项并核对</button></form>`;
   }
   function briefingField(index){
     return document.querySelector('.briefing-item[data-briefing-index="'+index+'"]');
@@ -190,6 +221,7 @@
   function stopSpeech() {
     if(!speechSession)return;
     const running=speechSession;speechSession=null;
+    if(noteDraft.trim())scheduleDraftSave(true);
     try{running.abort();}catch(_){}
   }
   function voiceToggle(){
@@ -213,6 +245,7 @@
       recognizer=new Recognition();recognizer.lang='zh-CN';recognizer.continuous=true;recognizer.interimResults=true;
       recognizer.onstart=()=>{if(status)status.textContent='正在听写中文…说完后点击“结束语音”';toggle.textContent='■ 结束语音';};
       recognizer.onresult=event=>{
+        if(speechSession!==recognizer)return; // Ignore late callbacks from canceled sessions.
         let final='',interim='';
         for(let i=0;i<event.results.length;i++){
           const result=event.results[i],phrase=result?.[0]?.transcript||'';
@@ -220,13 +253,17 @@
         }
         textarea.value=[before,final+interim].filter(Boolean).join(before?'\n':'');
         noteDraft=textarea.value;
+        scheduleDraftSave();
       };
       recognizer.onerror=event=>{
         const reason=event?.error||'unsupported';
         if(status)status.textContent='语音服务未成功（'+reason+'），已保留文字。可使用 iPhone 键盘麦克风，或在 Safari 重试。';
       };
       recognizer.onend=()=>{
-        if(speechSession===recognizer)speechSession=null;
+        if(speechSession===recognizer){
+          speechSession=null;
+          if(noteDraft.trim())scheduleDraftSave(true);
+        }
         if(toggle.isConnected)toggle.textContent='🎙 开始语音';
         if(status&&/正在听写|正在结束/.test(status.textContent||''))status.textContent='听写结束，请检查文字，点击“拆分事项并核对”';
       };
@@ -287,12 +324,17 @@
   let lastDrawnDay=today();
   function render() {
     lastDrawnDay=today();
+    if(route!=='note'||briefing)clearDraftArmed=false;
     const views = { home, hospitals, 'hospital-form': hospitalForm, 'project-form': projectForm, 'quick-project': quickProjectForm, 'order-followup':orderFollowupForm, 'order-confirm':orderConfirmForm, project: projectDetail, note, supplies, files, more, inbox: () => `<section class="card"><h2>记录收件箱</h2>${state.notes.filter(item => !item.projectId).map(item => `<p>${escape(item.progress)}</p>`).join('') || '<p>暂无待整理记录</p>'}</section>` };
     content.innerHTML = (views[route] || home)();
     document.querySelectorAll('nav button').forEach(button => button.classList.toggle('active', button.dataset.route === route));
   }
   document.addEventListener('visibilitychange', () => {
+    if(document.hidden&&draftTimer)flushDraft();
     if (!document.hidden && route === 'home' && today() !== lastDrawnDay) render();
+  });
+  window.addEventListener('pagehide',()=>{
+    if(draftTimer)flushDraft();
   });
   document.addEventListener('click', async event => {
     const button = event.target.closest('button'); if (!button || busy) return;
@@ -328,6 +370,16 @@
       else if (button.dataset.noteProject) { selection = button.dataset.noteProject; route = 'note'; suggestion = null; render(); }
       else if (button.dataset.filesProject || button.dataset.filesOrder) { selection = button.dataset.filesProject || button.dataset.filesOrder; route = 'files'; render(); }
       else if (button.hasAttribute('data-voice-toggle')) { voiceToggle(); }
+      else if (button.hasAttribute('data-clear-note-draft')){
+        if(!clearDraftArmed&&noteDraft.trim()){
+          clearDraftArmed=true;
+          button.textContent='再点一次，确认清空草稿';
+          showDraftStatus('这段文字尚未正式保存，确认后才会清空');
+        }else{
+          stopSpeech();clearDraftArmed=false;noteDraft='';briefing=null;suggestion=null;
+          scheduleDraftSave(true);render();
+        }
+      }
       else if (button.hasAttribute('data-apply-briefing')) { applyBriefingSuggestion(Number(button.dataset.applyBriefing)); }
       else if (button.hasAttribute('data-undo-briefing')) { undoBriefingSuggestion(Number(button.dataset.undoBriefing)); }
       else if (button.hasAttribute('data-apply-all-briefing')) {
@@ -354,6 +406,10 @@
   document.addEventListener('input', event => {
     if (event.target.matches('form[data-form="note"] textarea[name="text"]')){
       noteDraft=event.target.value;
+      clearDraftArmed=false;
+      const erase=document.querySelector('[data-clear-note-draft]');
+      if(erase)erase.textContent='清空这段草稿';
+      scheduleDraftSave();
       if(speechSession){
         // User edits take precedence over streaming interim speech results.
         stopSpeech();
@@ -405,6 +461,7 @@
       if (form.dataset.form === 'project') { const result = core.saveProject(state, { ...values, id: state.projects.some(item => item.id === selection) ? selection : '', details: Object.fromEntries(['device', 'brand', 'model', 'contractStart', 'contractEnd', 'bidDate', 'renewalDate', 'quoteDate', 'salesStage'].map(name => [name, values[name]])) }, today()); await save(result.state); selection = result.projectId; route = 'project'; }
       if (form.dataset.form === 'note') {
         stopSpeech();noteDraft=String(values.text||'');
+        await ensureDraftFlushed();
         briefing=core.splitBriefing(state,noteDraft,today());
         if(selection&&state.projects.some(item=>item.id===selection)){
           for(const item of briefing) if(!item.projectId&&(!item.hospitalId||state.projects.find(p=>p.id===selection)?.hospitalId===item.hospitalId))item.projectId=selection;
@@ -420,8 +477,9 @@
             changeNextAction:get('changeNextAction')==='yes',nextAction:get('nextAction'),
             changeWaitingOn:get('changeWaitingOn')==='yes',waitingOn:get('waitingOn')};
         });
-        await save(core.confirmBriefing(state,briefing,choices,today()));
-        briefing=null;noteDraft='';selection='';route='home';
+        await ensureDraftFlushed();
+        await save(core.confirmBriefing(state,briefing,choices,today()),undefined,{clearVisitDraft:true});
+        briefing=null;noteDraft='';draftStatus='';clearDraftArmed=false;selection='';route='home';
       }
       if (form.dataset.form === 'confirm-note') { await save(core.confirmNote(state, suggestion, values, today())); selection = values.projectId; suggestion = null; route = selection ? 'project' : 'inbox'; }
       if (form.dataset.form === 'quick-project') {
@@ -488,6 +546,19 @@
     } catch (error) { message(error.message); buttons.forEach(button => button.disabled = false); }
     finally { busy = false; }
   });
-  try { state = await storage.read(); if (!state) state = await storage.commit(seed(), -1); render(); }
+  try {
+    state=await storage.read();
+    if(!state)state=await storage.commit(seed(),-1);
+    try{
+      const recovered=await storage.readDraft();
+      if(recovered?.text){
+        noteDraft=recovered.text;
+        draftStatus='已找回上次未完成记录 · 尚未保存为业务记录';
+      }
+    }catch(_){
+      draftStatus='本机草稿读取失败，原有业务记录未受影响';
+    }
+    render();
+  }
   catch (error) { message(error.message); content.innerHTML = '<section class="card">开发存储不可用，未更改正式工作台数据。</section>'; }
 })();

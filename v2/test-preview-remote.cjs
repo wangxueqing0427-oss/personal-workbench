@@ -138,6 +138,22 @@ async function main() {
       'deployed speech-ready note screen and editable text fallback open');
 
     const marker = '自动化合成测试-' + crypto.randomUUID();
+    if(process.env.PREVIEW_EXPECTED_SHA){
+      const spokenDraft='合成口述未保存-'+crypto.randomUUID();
+      const revision=(await page.evaluate(async()=>(await WorkbenchBusinessStore.read()).revision));
+      await page.locator('[data-form="note"] textarea[name="text"]').fill(spokenDraft);
+      await page.waitForFunction(()=>document.querySelector('[data-draft-status]')?.textContent.includes('草稿已暂存本机'));
+      check((await page.evaluate(async()=>(await WorkbenchBusinessStore.readDraft())?.text))===spokenDraft,
+        'deployed speech input saves an isolated local draft');
+      await page.reload({waitUntil:'load'});
+      await page.waitForFunction(expected=>document.documentElement.dataset.releaseReady===expected,manifest.releaseId,{timeout:60000});
+      await page.locator('nav button[data-route="note"]').click();
+      check(await page.locator('[data-form="note"] textarea[name="text"]').inputValue()===spokenDraft &&
+        (await page.locator('[data-draft-status]').textContent()).includes('已找回'),
+        'deployed mobile preview restores unfinished speech after a full browser reload');
+      check((await page.evaluate(async()=>(await WorkbenchBusinessStore.read()).revision))===revision,
+        'draft recovery leaves actual business revision unchanged');
+    }
     await page.locator('[data-form="note"] textarea[name="text"]').fill(marker + '，仅用于独立预览验收');
     await page.locator('[data-form="note"] button.primary').click();
     await page.getByRole('heading', { name: '已拆分 1 条事项' }).waitFor();
@@ -161,6 +177,10 @@ async function main() {
       'deployed speech or text note requires explicit split-item review and confirmation');
     await page.locator('[data-form="briefing"] button.primary').click();
     await page.getByRole('heading', { name: '今天先办重要的事' }).waitFor();
+    if(process.env.PREVIEW_EXPECTED_SHA){
+      check((await page.evaluate(async()=>WorkbenchBusinessStore.readDraft()))===null,
+        'deployed final confirmation atomically deletes its local-only unfinished speech draft');
+    }
     await page.locator('nav button[data-route="more"]').click();
     await page.getByRole('button', { name: '记录收件箱' }).click();
     check((await page.locator('#content').innerText()).includes(marker),

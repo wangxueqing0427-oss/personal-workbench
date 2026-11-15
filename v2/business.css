@@ -241,3 +241,8 @@ form[data-form="file"] textarea[name="remark"]{min-height:96px;background:#f8fcf
 .briefing-bulk-apply button{width:100%;min-height:48px;background:#e7f2f7;color:#17566e;font-weight:700}
 .briefing-bulk-apply p{font-size:12px;margin:7px 0 5px}
 #briefing-apply-summary{font-size:12px;display:block;color:#245c72;line-height:1.5}
+
+/* Recoverable private-to-this-browser voice draft: status and destructive action. */
+.voice-draft-strip{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;margin:10px 0 6px}
+.voice-draft-strip output{flex:1 1 165px;font-size:12px;color:#256379;line-height:1.5}
+.voice-draft-strip button{flex:0 0 auto;min-height:44px;padding:9px 12px;font-size:12px;color:#9a4d40;border:1px solid #ebd5d0;background:#fff6f4;border-radius:12px}

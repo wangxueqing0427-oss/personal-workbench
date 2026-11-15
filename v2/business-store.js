@@ -3,6 +3,9 @@
   const name = 'personal-workbench-v2-demo';
   const protocol = 'workbench-sync-2';
   const paused = '版本不兼容 / 同步已暂停';
+  // This local-only draft key is not a business record and is never appended
+  // to the sync queue or to exported business-state snapshots.
+  const draftKey='draft:visit-note:v1';
   let syncModule = root.WorkbenchOfflineSync;
   const blockedSync = () => ({ protocol: 'incompatible', status: async () => ({ status: paused, pending: 0, configured: false, reason: '请联网重新打开完整版本；记录、队列和原件未修改。' }), create: () => ({ run: async () => root.dispatchEvent(new Event('workbench-sync-status')), start: () => root.dispatchEvent(new Event('workbench-sync-status')), stop() {} }), configure: async () => { throw new Error(paused); }, previewConflict: async () => { throw new Error(paused); }, inspectLocal: async () => { throw new Error(paused); }, applyReview: async () => { throw new Error(paused); }, saveReview: async () => { throw new Error(paused); }, reauthenticate: async () => { throw new Error(paused); } });
   const present = value => value && value.protocol !== protocol ? blockedSync() : value;
@@ -34,7 +37,38 @@
       });
     } finally { database.close(); }
   }
-  async function commit(state, expectedRevision, file) {
+  async function readDraft(){
+    const db=await open();
+    try{
+      return await new Promise((resolve,reject)=>{
+        const t=db.transaction('state','readonly');
+        const req=t.objectStore('state').get(draftKey);
+        req.onsuccess=()=>{
+          const record=req.result;
+          resolve(record?.format==='workbench-voice-draft-v1'&&typeof record.text==='string'&&record.text.length<=5000?
+            {text:record.text,updatedAt:record.updatedAt||''}:null);
+        };
+        req.onerror=()=>reject(req.error||new Error('暂存草稿读取失败'));
+      });
+    }finally{db.close();}
+  }
+  async function writeDraft(value){
+    ensureWritable();
+    const content=String(value??'');
+    if(content.length>5000)throw new Error('草稿已超过5000字，请分段记录');
+    const db=await open();
+    try{
+      return await new Promise((resolve,reject)=>{
+        const transaction=db.transaction('state','readwrite');
+        const state=transaction.objectStore('state');
+        if(content.trim())state.put({format:'workbench-voice-draft-v1',text:content,updatedAt:new Date().toISOString()},draftKey);
+        else state.delete(draftKey);
+        transaction.oncomplete=()=>resolve(true);
+        transaction.onabort=transaction.onerror=()=>reject(transaction.error||new Error('草稿暂存失败'));
+      });
+    }finally{db.close();}
+  }
+  async function commit(state, expectedRevision, file, options={}) {
     ensureWritable();
     const preparedFile = file ? { id: file.id, value: await packFile(file.value) } : null;
     const database = await open();
@@ -50,6 +84,7 @@
           if ((request.result?.revision ?? -1) !== expectedRevision) { problem = new Error('另一窗口已保存新内容，请刷新后重试，未覆盖其数据'); transaction.abort(); return; }
           saved = structuredClone(state); saved.revision = expectedRevision + 1;
           store.put(saved, 'current');
+          if (options.clearVisitDraft===true) store.delete(draftKey);
           if (preparedFile) transaction.objectStore('files').add(preparedFile.value, preparedFile.id);
           store.put({ id: crypto.randomUUID(), localRevision: saved.revision, snapshot: saved, status: '等待同步', attempts: 0, createdAt: new Date().toISOString() }, 'queue:' + String(saved.revision).padStart(12, '0'));
           } catch (error) { problem = error.name === 'QuotaExceededError' ? new Error('本地存储空间不足，记录、原件和队列均未部分保存；请保留上传原件，不要清空浏览器数据') : error; transaction.abort(); }
@@ -190,5 +225,5 @@
       });
     } finally { database.close(); }
   }
-  root.WorkbenchBusinessStore = { protocol, read, commit, readFile, fileKeys, name, queueData, changeQueue, resolveConflict, stageRemote };
+  root.WorkbenchBusinessStore = { protocol, read, commit, readDraft, writeDraft, readFile, fileKeys, name, queueData, changeQueue, resolveConflict, stageRemote };
 })(globalThis);

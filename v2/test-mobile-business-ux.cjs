@@ -864,6 +864,77 @@ async function main(){
    },proposed.projectId);
    check(retained.action===proposed.next&&retained.date===proposed.date,
      'adopted voice follow-up survives mobile app reopen with intact action and date');
+   // The real UI must recover unfinished local-only dictation after an
+   // interruption. No test content or draft may be sent to cloud sync.
+   const interruptedSpeech='合成未完成语音。示例肿瘤医院下周二确认TOMO资料。';
+   const visitDraftBefore=await page.evaluate(async()=>({
+     revision:(await WorkbenchBusinessStore.read()).revision,
+     jobs:(await WorkbenchBusinessStore.queueData()).jobs.length,
+     notes:(await WorkbenchBusinessStore.read()).notes.length
+   }));
+   await page.locator('nav button[data-route="note"]').click();
+   await page.locator('form[data-form="note"] textarea[name="text"]').fill(interruptedSpeech);
+   await page.waitForFunction(()=>document.querySelector('[data-draft-status]')?.textContent.includes('草稿已暂存本机'));
+   const draftData=await page.evaluate(async()=>({
+     draft:(await WorkbenchBusinessStore.readDraft())?.text,
+     revision:(await WorkbenchBusinessStore.read()).revision,
+     jobs:(await WorkbenchBusinessStore.queueData()).jobs.length,
+     notes:(await WorkbenchBusinessStore.read()).notes.length
+   }));
+   check(draftData.draft===interruptedSpeech&&draftData.revision===visitDraftBefore.revision&&
+     draftData.jobs===visitDraftBefore.jobs&&draftData.notes===visitDraftBefore.notes,
+     'unfinished speech saves locally without new business records, revisions or cloud jobs');
+   await page.locator('nav button[data-route="home"]').click();
+   await page.reload({waitUntil:'load'});
+   await page.locator('nav button[data-route="note"]').click();
+   check(await page.locator('form[data-form="note"] textarea[name="text"]').inputValue()===interruptedSpeech&&
+     (await page.locator('[data-draft-status]').textContent()).includes('已找回'),
+     'interrupted text survives homepage navigation and browser reload with recovery banner');
+   const revisedSpeech=interruptedSpeech+'再补充一句：周五给设备科回电。';
+   await page.locator('form[data-form="note"] textarea[name="text"]').fill('准备更改');
+   await page.locator('form[data-form="note"] textarea[name="text"]').fill(revisedSpeech);
+   await page.waitForFunction(()=>document.querySelector('[data-draft-status]')?.textContent.includes('草稿已暂存本机'));
+   check((await page.evaluate(async()=>WorkbenchBusinessStore.readDraft())).text===revisedSpeech,
+     'rapid successive edits keep the final version of the local voice draft');
+   await page.locator('form[data-form="note"] button.primary').click();
+   check(await page.locator('.briefing-item').count()===3,
+     'unsaved multi-item review is generated without losing the dictated text');
+   await page.reload({waitUntil:'load'});
+   await page.locator('nav button[data-route="note"]').click();
+   check(await page.locator('form[data-form="note"] textarea[name="text"]').inputValue()===revisedSpeech,
+     'reloading during multi-item review restores original speech for a safe re-review');
+   await page.locator('[data-clear-note-draft]').click();
+   check(await page.locator('[data-clear-note-draft]').innerText()==='再点一次，确认清空草稿'&&
+     await page.locator('form[data-form="note"] textarea[name="text"]').inputValue()===revisedSpeech,
+     'first clear request does not erase dictated text without explicit confirmation');
+   await page.locator('[data-clear-note-draft]').click();
+   await page.waitForFunction(()=>document.querySelector('[data-draft-status]')?.textContent.includes('没有未完成草稿'));
+   check((await page.evaluate(async()=>WorkbenchBusinessStore.readDraft()))===null&&
+     await page.locator('form[data-form="note"] textarea[name="text"]').inputValue()==='',
+     'second explicit clear removes only the unfinished draft');
+   await page.reload({waitUntil:'load'});
+   await page.locator('nav button[data-route="note"]').click();
+   check(await page.locator('form[data-form="note"] textarea[name="text"]').inputValue()==='',
+     'discarded draft cannot return after restarting the app');
+   const confirmedPhrase='合成现场反馈，明天联系设备科确认报价。';
+   await page.locator('form[data-form="note"] textarea[name="text"]').fill(confirmedPhrase);
+   await page.locator('form[data-form="note"] button.primary').click();
+   check(await page.locator('.briefing-item').count()===1&&
+     (await page.evaluate(async()=>WorkbenchBusinessStore.readDraft()))?.text===confirmedPhrase,
+     'before final review the original text stays recoverable and no business note is created');
+   await page.locator('form[data-form="briefing"] button.primary').click();
+   const afterFinal=await page.evaluate(async()=>{
+     const s=await WorkbenchBusinessStore.read();
+     return {revision:s.revision,draft:await WorkbenchBusinessStore.readDraft(),
+       count:s.notes.filter(n=>n.progress==='合成现场反馈，明天联系设备科确认报价。').length};
+   });
+   check(afterFinal.revision===visitDraftBefore.revision+1&&afterFinal.count===1&&afterFinal.draft===null,
+     'last confirmation atomically saves one note while removing its pending draft');
+   await page.reload({waitUntil:'load'});
+   await page.locator('nav button[data-route="note"]').click();
+   check(await page.locator('form[data-form="note"] textarea[name="text"]').inputValue()===''&&
+     (await page.evaluate(async()=>WorkbenchBusinessStore.readDraft()))===null,
+     'confirmed speech is never resurrected as an unfinished draft');
    const viewport=await page.evaluate(()=>({overflow:document.documentElement.scrollWidth>innerWidth+1}));
    check(!viewport.overflow,'original iPhone-width UI does not overflow horizontally');
    check(errors.length===0,'no script crashes or external network access during mobile business workflows');
