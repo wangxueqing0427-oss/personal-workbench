@@ -56,6 +56,22 @@ async function main() {
     check(await page.locator('h1').innerText() === '个人工作台', 'verified release initializes user interface');
     check(await page.locator('main h2').first().innerText() === '今天先办重要的事', 'home dashboard renders');
     if(process.env.PREVIEW_EXPECTED_SHA) {
+      check(await page.locator('.hero-metric-button').count()===4 &&
+        await page.locator('.hero-metric-button[data-focus-target="today"]').isEnabled() &&
+        await page.locator('.hero-metric-button[data-focus-target="overdue"]').isDisabled(),
+        'deployed overview metrics link only to available focus lanes');
+      await page.locator('.hero-metric-button[data-focus-target="today"]').click();
+      check(await page.locator('#focus-today').isVisible() &&
+        await page.locator('#focus-today').evaluate(el=>el.classList.contains('focus-flash')),
+        'deployed overview metric taps through to the actual today task section');
+      const uniqueTasks=await page.evaluate(()=>{
+        const ids=[...document.querySelectorAll('section[id^="focus-"] button[data-project]')].map(button=>button.dataset.project);
+        return ids.length===new Set(ids).size;
+      });
+      check(uniqueTasks,'deployed action lanes do not show the same project in multiple queues');
+    }
+
+    if(process.env.PREVIEW_EXPECTED_SHA) {
       check(await page.locator('.hero-metrics > div').count() === 4 &&
         await page.locator('.work-actions [data-follow-tomorrow]').count() > 0,
         'deployed mobile dashboard shows four summary metrics and one-tap follow-up proposals');
