@@ -601,6 +601,72 @@ async function main(){
      'verified invoice uses the normal next-stage rule and moves the order into unpaid list');
 
 
+   // Dictation source is optional: synthetic browser recognizer, no mic/cloud service.
+   await page.locator('nav button[data-route="note"]').click();
+   check(await page.locator('[data-voice-toggle]').isVisible()&&
+     await page.locator('form[data-form="note"] textarea[name="text"]').isVisible(),
+     'home note has a real voice-control affordance and editable keyboard dictation fallback');
+   await page.evaluate(()=>{
+     Object.defineProperty(window,'SpeechRecognition',{configurable:true,value:class SyntheticRecognizer{
+       start(){this.onstart?.();this.onresult?.({results:[{0:{transcript:'示例石景山医院核磁开机率明细明天再联系。'},isFinal:true}]});this.onend?.();}
+       stop(){this.onend?.();}
+       abort(){this.onend?.();}
+     }});
+   });
+   await page.locator('[data-voice-toggle]').click();
+   check((await page.locator('form[data-form="note"] textarea[name="text"]').inputValue()).includes('示例石景山医院核磁开机率'),
+     'explicit voice gesture converts synthetic recognized Chinese speech to editable draft with zero network requests');
+   const dictated='示例石景山医院核磁开机率明天联系。示例肿瘤医院TOMO销售下周二确认。';
+   await page.locator('form[data-form="note"] textarea[name="text"]').fill(dictated);
+   const beforeReview=await page.evaluate(async()=>({rev:(await WorkbenchBusinessStore.read()).revision,notes:(await WorkbenchBusinessStore.read()).notes.length}));
+   await page.locator('form[data-form="note"] button.primary').click();
+   check(await page.locator('.briefing-item').count()===2&&await page.getByText('已拆分 2 条事项').isVisible(),
+     'long spoken visit report is separated into two reviewable hospital/project records');
+   const afterReview=await page.evaluate(async()=>({rev:(await WorkbenchBusinessStore.read()).revision,notes:(await WorkbenchBusinessStore.read()).notes.length}));
+   check(JSON.stringify(beforeReview)===JSON.stringify(afterReview),
+     'AI-like local note splitting is only a draft and never modifies business data before confirmation');
+   await page.locator('[data-cancel-briefing]').first().click();
+   check(await page.locator('form[data-form="note"] textarea[name="text"]').inputValue()===dictated,
+     'canceling the split review restores the exact dictated draft without data loss');
+   await page.locator('form[data-form="note"] button.primary').click();
+   const reviewFields=await page.locator('.briefing-item').evaluateAll(items=>items.map(x=>({
+     hospital:x.querySelector('.briefing-matched')?.textContent,
+     project:x.querySelector('select[name$="projectId"]')?.value,
+     progress:x.querySelector('textarea')?.value
+   })));
+   check(reviewFields.length===2&&reviewFields[0].hospital.includes('示例石景山医院')&&
+     reviewFields[1].hospital.includes('示例肿瘤医院')&&reviewFields.every(x=>x.project&&x.progress),
+     'each separated statement shows a matching hospital and preselected relevant project for user approval');
+   const dry=await page.evaluate(()=>{
+     const core=WorkbenchBusiness,s=core.empty();
+     const a=core.upsertHospital(s,{name:'测试医院A'}),b=core.upsertHospital(a.state,{name:'测试医院B'});
+     const items=core.splitBriefing(b.state,'测试医院A设备科说明天回访，另外测试医院B下周二质控要确认。','2026-11-15');
+     let rejected=false;
+     try{core.confirmBriefing(b.state,items,[
+       {include:true,progress:items[0].progress,projectId:''},
+       {include:true,progress:items[1].progress,projectId:'invalid-project-id'}
+     ],'2026-11-15');}catch(_){rejected=true;}
+     return {length:items.length,distinct:items[0].hospitalId!==items[1].hospitalId,rejected,
+       unchanged:b.state.notes.length===0};
+   });
+   check(dry.length===2&&dry.distinct&&dry.rejected&&dry.unchanged,
+     'hospital switch within one spoken sentence splits correctly, while stale project mapping rejects the entire batch');
+   await page.locator('form[data-form="briefing"] button.primary').click();
+   const confirmed=await page.evaluate(async()=>{
+     const s=await WorkbenchBusinessStore.read();
+     const notes=s.notes.filter(x=>/示例石景山医院核磁开机率明天联系|示例肿瘤医院TOMO销售下周二确认/.test(x.progress||''));
+     return {count:notes.length,revision:s.revision,
+       linked:notes.every(n=>n.projectId&&s.projects.find(p=>p.id===n.projectId)?.timeline.some(t=>t.id===n.id)),
+       statuses:notes.map(n=>s.projects.find(p=>p.id===n.projectId)?.status)};
+   });
+   check(confirmed.count===2&&confirmed.revision===beforeReview.rev+1&&confirmed.linked,
+     'two reviewed hospital updates commit together in one durable revision with linked project timelines');
+   await page.reload({waitUntil:'load'});
+   const persisted=await page.evaluate(async()=>{
+     const s=await WorkbenchBusinessStore.read();
+     return s.notes.filter(x=>/示例石景山医院核磁开机率明天联系|示例肿瘤医院TOMO销售下周二确认/.test(x.progress||'')).length;
+   });
+   check(persisted===2,'after full offline reload both dictated notes remain intact in the local database');
    const viewport=await page.evaluate(()=>({overflow:document.documentElement.scrollWidth>innerWidth+1}));
    check(!viewport.overflow,'original iPhone-width UI does not overflow horizontally');
    check(errors.length===0,'no script crashes or external network access during mobile business workflows');

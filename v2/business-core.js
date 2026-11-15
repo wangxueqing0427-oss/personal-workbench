@@ -140,6 +140,78 @@
     const followupDate = resolveDate(content, today);
     return { id: identifier(), text: content, hospitalId: hospital?.id || '', hospitalCandidates: hospitals.map(item => item.id), department, contact, projectId: confident ? candidates[0].projectId : '', candidates, progress: content, suggestedStatus: /给我|等待|再联系|回复/.test(content) ? '等待对方' : '进行中', nextAction: /再联系/.test(content) ? '联系客户确认下一步' : '核对本次进展并跟进', followupDate, dateUncertain: /下周/.test(content) && !followupDate, createdOn: date(today), source: '本地规则，需核对' };
   }
+  // Split a spoken debrief at natural sentence boundaries and whenever the
+  // speaker switches to a different explicitly named known hospital.
+  // Project guesses are proposals, never writes to the business state.
+  function splitBriefing(state, spoken, today) {
+    const raw=text(spoken);
+    if(!raw)throw new Error('请先说出或输入本次业务情况');
+    if(raw.length>5000)throw new Error('一次记录最多5000字，建议分成两段再整理');
+    const labels=state.hospitals.flatMap(h=>[h.name,...(h.aliases||[])]
+      .filter(Boolean).map(name=>({name,hospitalId:h.id})))
+      .sort((a,b)=>b.name.length-a.name.length);
+    function hospitalMentions(phrase) {
+      const found=[];
+      for(const label of labels){
+        let start=0,index;
+        while((index=phrase.indexOf(label.name,start))>=0){
+          const end=index+label.name.length;
+          if(!found.some(item=>index<item.end&&end>item.start))
+            found.push({start:index,end,hospitalId:label.hospitalId});
+          start=end;
+        }
+      }
+      return found.sort((a,b)=>a.start-b.start);
+    }
+    const pieces=[];
+    for(const paragraph of raw.split(/[。；;！？!?\n]+/).map(text).filter(Boolean)){
+      const hits=hospitalMentions(paragraph);
+      let start=0,active='';
+      for(const hit of hits){
+        if(active&&hit.hospitalId!==active&&hit.start>start){
+          const section=text(paragraph.slice(start,hit.start).replace(/[，,、\s]+$/,''));
+          if(section)pieces.push(section);
+          start=hit.start;
+        }
+        active=hit.hospitalId;
+      }
+      const remainder=text(paragraph.slice(start));
+      if(remainder)pieces.push(remainder);
+    }
+    if(pieces.length>16)throw new Error('识别为超过16条事项，请分两次录入，避免遗漏');
+    let inherited='';
+    return pieces.map(phrase=>{
+      const direct=state.hospitals.filter(h=>[h.name,...(h.aliases||[])].some(name=>name&&phrase.includes(name)));
+      const context=direct.length===0&&inherited?state.hospitals.find(h=>h.id===inherited):null;
+      const proposed=suggestNote(state,context?context.name+'，'+phrase:phrase,today);
+      proposed.text=phrase;
+      proposed.progress=phrase;
+      proposed.source='语音/文字本地规则拆分，需逐条核对';
+      if(direct.length===1)inherited=direct[0].id;
+      else if(direct.length>1)inherited='';
+      return proposed;
+    });
+  }
+  // Batch confirmation has one storage.commit in the UI. Any invalid chosen
+  // item rejects the entire proposed batch before a storage write happens.
+  function confirmBriefing(state,briefing,choices,today) {
+    if(!Array.isArray(briefing)||!Array.isArray(choices)||briefing.length!==choices.length)
+      throw new Error('拆分记录已变化，请重新核对');
+    let current=copy(state),saved=0;
+    for(let index=0;index<briefing.length;index++){
+      const item=briefing[index],choice=choices[index];
+      if(!choice?.include)continue;
+      if(choice.projectId&&!current.projects.some(p=>p.id===choice.projectId))
+        throw new Error('第'+(index+1)+'条关联项目已变化，整批未保存');
+      if((choice.changeStatus||choice.changeDate||choice.changeNextAction||choice.changeWaitingOn)&&!choice.projectId)
+        throw new Error('第'+(index+1)+'条如需更新行动字段，请先选对应项目');
+      if(!text(choice.progress))throw new Error('第'+(index+1)+'条进展为空，整批未保存');
+      current=confirmNote(current,item,choice,today);
+      saved++;
+    }
+    if(!saved)throw new Error('至少勾选一条需要保存的事项');
+    return current;
+  }
   function confirmNote(state, suggestion, choices, today) {
     const next = copy(state);
     if (next.notes.some(item => item.id === suggestion.id)) throw new Error('该记录已经确认，不能重复追加');
@@ -238,5 +310,5 @@
   function finance(state) {
     return { uninvoiced: state.orders.filter(item => !item.invoiced), unpaid: state.orders.filter(item => item.invoiced && !item.received), balances: state.movements.reduce((result, item) => { result[item.inventoryKey] = (result[item.inventoryKey] || 0) + item.delta; return result; }, {}) };
   }
-  root.WorkbenchBusiness = { empty, statuses, kinds, stages, date, addDays, followupInfo, upsertHospital, searchBusiness, saveProject, fromLegacy, suggestNote, confirmNote, dashboard, focusBoard, saveOrder, logOrderFollowup, advanceOrder, stock, finance };
+  root.WorkbenchBusiness = { empty, statuses, kinds, stages, date, addDays, followupInfo, upsertHospital, searchBusiness, saveProject, fromLegacy, suggestNote, splitBriefing, confirmNote, confirmBriefing, dashboard, focusBoard, saveOrder, logOrderFollowup, advanceOrder, stock, finance };
 })(globalThis);

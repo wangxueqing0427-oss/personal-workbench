@@ -9,7 +9,7 @@
   const escape = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
   const options = (values, current) => values.map(value => `<option${value === current ? ' selected' : ''}>${escape(value)}</option>`).join('');
   const field = (name, label, value = '', type = 'text') => `<label>${label}<input name="${name}" type="${type}" value="${escape(value)}"></label>`;
-  let state, route = 'home', selection = '', suggestion = null, busy = false;
+  let state, route = 'home', selection = '', suggestion = null, briefing = null, noteDraft = '', speechSession = null, busy = false;
   let searchQuery = '', searchStatus = '全部', quickTomorrow = false, quickIntent = 'edit', supplyFilter = 'all';
   function message(value) { notice.textContent = value; }
   async function save(next, file) {
@@ -120,8 +120,70 @@
     return `<section class="card detail-head"><button data-back="hospitals" class="back-link">← 医院业务</button><p class="eyebrow">PROJECT DETAILS</p><h2>${escape(project.name)}</h2><p class="muted">${escape(hospital?.name||'未关联医院')} · ${escape(project.kind)}</p>${statusTag(project.status)}<div class="focus-box"><span class="field-label">下一步行动</span><strong>${escape(project.nextAction||'还没有设置下一步')}</strong><div class="focus-meta"><span>等待：${escape(project.waitingOn||'无')}</span><span>跟进：${escape(core.followupInfo(project.followupDate,today()).label)}${project.followupDate?' · '+escape(project.followupDate):''}</span><span>最近沟通：${escape(lastCommunicationOn(project)||'暂无记录')}</span></div></div><div class="detail-actions"><button class="primary" data-quick-project="${escape(project.id)}">更新状态 / 日期</button><button data-note-project="${escape(project.id)}">＋ 记录进展</button><button data-files-project="${escape(project.id)}">上传资料</button><button data-edit-project="${escape(project.id)}">编辑设备节点</button></div><p class="muted">负责人：${escape(project.owner||'未填写')}</p></section>${finance}<section class="card">${sectionHead('EQUIPMENT','设备与节点')}${details}</section><section class="card">${sectionHead('FILES','项目资料',`${project.fileIds.length} 份`)}${fileButtons(project.fileIds)||'<p class="muted">暂无资料</p>'}<button data-files-project="${escape(project.id)}">关联合同 / 报价 / 照片</button></section><section class="card">${sectionHead('ACTIVITY','跟进时间线')}${timeline}</section>`;
   }
   function note() {
+    if(briefing){
+      const entries=briefing.map((item,i)=>{
+        const hospital=state.hospitals.find(h=>h.id===item.hospitalId);
+        const available=item.hospitalId?state.projects.filter(p=>p.hospitalId===item.hospitalId):state.projects;
+        const opts='<option value="">暂存收件箱 / 未确认项目</option>'+available.map(project=>
+          `<option value="${escape(project.id)}"${item.projectId===project.id?' selected':''}>${escape(project.name)}</option>`).join('');
+        const prefix='item'+i;
+        return `<fieldset class="briefing-item" data-briefing-index="${i}"><legend>事项 ${i+1}</legend><label class="check"><input name="${prefix}include" type="checkbox" value="yes" checked>保留并保存这条</label><p class="briefing-matched">医院：${escape(hospital?.name||'暂未匹配，请核对')} · 科室：${escape(item.department||'待核对')} · 联系人：${escape(item.contact||'待核对')}</p><label>关联项目<select name="${prefix}projectId">${opts}</select></label><label>本次进展<textarea name="${prefix}progress">${escape(item.progress)}</textarea></label><details class="briefing-actions"><summary>建议的下一步 / 日期（可选更新）</summary><p class="muted">只勾选的字段才会修改项目待办。没有勾选时只保存沟通记录。</p><label class="check"><input name="${prefix}changeStatus" type="checkbox" value="yes">同步更新状态</label><select name="${prefix}status">${options(core.statuses,item.suggestedStatus)}</select><label class="check"><input name="${prefix}changeDate" type="checkbox" value="yes">同步更新跟进日期</label>${field(prefix+'followupDate','建议日期',item.followupDate,'date')}${item.dateUncertain?'<p class="warning">“下周”尚未确定具体日期，请手动选择后再勾选。</p>':''}<label class="check"><input name="${prefix}changeNextAction" type="checkbox" value="yes">同步修改下一步行动</label>${field(prefix+'nextAction','建议下一步',item.nextAction)}</details></fieldset>`;
+      }).join('');
+      return `<form class="card briefing-form" data-form="briefing"><button type="button" data-cancel-briefing class="back-link">← 返回录音文字</button><p class="eyebrow">REVIEW SPLIT TASKS</p><h2>已拆分 ${briefing.length} 条事项</h2><p class="muted">本机按标点和医院名称拆分，医院、项目和日期可能识别不全。请逐条核对；没有匹配到项目的内容可先放收件箱。全部确认后一次保存，未勾选的待办字段不会更改。</p>${entries}<button class="primary">确认保存所选事项</button><button type="button" data-cancel-briefing>返回修改原文</button></form>`;
+    }
     if (suggestion) return `<form class="card" data-form="confirm-note"><h2>核对后保存</h2><p class="muted">${escape(suggestion.source)}。默认只追加时间线；无项目则留在收件箱。</p><p>原记录：${escape(suggestion.text)}</p><label>关联项目<select name="projectId"><option value="">仅进入收件箱</option>${state.projects.map(item => `<option value="${escape(item.id)}"${suggestion.projectId === item.id ? ' selected' : ''}>${escape(state.hospitals.find(hospital => hospital.id === item.hospitalId)?.name)}｜${escape(item.name)}</option>`).join('')}</select></label><p>识别科室：${escape(suggestion.department || '待确认')} · 人物：${escape(suggestion.contact || '待确认')}</p><label>本次进展<textarea name="progress">${escape(suggestion.progress)}</textarea></label><details><summary>可选修改行动字段（逐项勾选）</summary><label class="check"><input name="changeStatus" type="checkbox">同时修改状态</label><select name="status">${options(core.statuses, suggestion.suggestedStatus)}</select><label class="check"><input name="changeDate" type="checkbox">同时修改日期</label>${field('followupDate', '建议日期', suggestion.followupDate, 'date')}${suggestion.dateUncertain ? '<p class="warning">“下周”没有具体星期，请手工确认日期。</p>' : ''}<label class="check"><input name="changeNextAction" type="checkbox">同时修改下一步</label>${field('nextAction', '建议下一步', suggestion.nextAction)}<label class="check"><input name="changeWaitingOn" type="checkbox">同时修改等待对象</label>${field('waitingOn', '建议等待对象', suggestion.contact)}</details><button class="primary">确认保存</button><button type="button" data-cancel-note>重新编辑</button></form>`;
-    return `<form class="card" data-form="note"><h2>随手记业务进展</h2><p>可以用iPhone键盘麦克风输入。无需付费AI接口，不发送到外部服务。</p><label>本次沟通<textarea name="text" required placeholder="示例：今天去示例秦皇岛医院，泌尿外科主任说下周再联系，铥激光光纤已经开始使用。"></textarea></label><button class="primary">提取并核对</button></form>`;
+    return `<form class="card voice-note" data-form="note"><p class="eyebrow">VOICE CAPTURE</p><h2>医院出来，说一段就好</h2><div class="voice-panel"><button type="button" class="voice-button" data-voice-toggle>🎙 开始语音</button><p id="voice-status" class="muted" role="status" aria-live="polite">轻点麦克风开始口述，完成后点“拆分并核对”。</p></div><p class="muted">语音识别由手机浏览器提供，可能联网使用浏览器厂商的识别服务；点击麦克风才会请求使用。若相机内置浏览器或麦克风权限不支持，请在 Safari 打开，或点下方文字框使用 iPhone 键盘麦克风。业务拆分本机完成，不调用付费AI接口。</p><label>口述文字（可直接修改）<textarea name="text" required maxlength="5000" placeholder="例如：今天去示例秦皇岛医院，设备科说下周二发报价；另外示例石景山医院的核磁明细明天要送。">${escape(noteDraft)}</textarea></label><button class="primary">拆分事项并核对</button></form>`;
+  }
+  function stopSpeech() {
+    if(!speechSession)return;
+    const running=speechSession;speechSession=null;
+    try{running.abort();}catch(_){}
+  }
+  function voiceToggle(){
+    const textarea=document.querySelector('form[data-form="note"] textarea[name="text"]');
+    const status=document.getElementById('voice-status');
+    const toggle=document.querySelector('[data-voice-toggle]');
+    if(!textarea||!toggle)return;
+    if(speechSession){
+      try{speechSession.stop();}catch(_){stopSpeech();}
+      if(status)status.textContent='正在结束本次听写，确认文字后可拆分';
+      return;
+    }
+    const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+    if(!Recognition){
+      if(status)status.textContent='当前浏览器不提供网页语音识别。请点击文字框，使用 iPhone 键盘上的麦克风口述；文字仍可自动拆分。';
+      textarea.focus();return;
+    }
+    const before=textarea.value.trim();
+    let recognizer;
+    try {
+      recognizer=new Recognition();recognizer.lang='zh-CN';recognizer.continuous=true;recognizer.interimResults=true;
+      recognizer.onstart=()=>{if(status)status.textContent='正在听写中文…说完后点击“结束语音”';toggle.textContent='■ 结束语音';};
+      recognizer.onresult=event=>{
+        let final='',interim='';
+        for(let i=0;i<event.results.length;i++){
+          const result=event.results[i],phrase=result?.[0]?.transcript||'';
+          if(result.isFinal)final+=phrase;else interim+=phrase;
+        }
+        textarea.value=[before,final+interim].filter(Boolean).join(before?'\n':'');
+        noteDraft=textarea.value;
+      };
+      recognizer.onerror=event=>{
+        const reason=event?.error||'unsupported';
+        if(status)status.textContent='语音服务未成功（'+reason+'），已保留文字。可使用 iPhone 键盘麦克风，或在 Safari 重试。';
+      };
+      recognizer.onend=()=>{
+        if(speechSession===recognizer)speechSession=null;
+        if(toggle.isConnected)toggle.textContent='🎙 开始语音';
+        if(status&&/正在听写|正在结束/.test(status.textContent||''))status.textContent='听写结束，请检查文字，点击“拆分事项并核对”';
+      };
+      speechSession=recognizer;
+      recognizer.start();
+    }catch(_){
+      speechSession=null;
+      if(status)status.textContent='当前网页未能启动语音，请使用 Safari 或 iPhone 键盘麦克风；已输入的文字不会丢失。';
+      textarea.focus();
+    }
   }
   function supplies() {
     const amounts=core.finance(state);
@@ -193,7 +255,7 @@
       else if (button.dataset.supplyFilter) { supplyFilter = button.dataset.supplyFilter; route = 'supplies'; render(); }
       else if (button.dataset.orderFollowup) { selection=button.dataset.orderFollowup; route='order-followup'; render(); window.scrollTo(0,0); }
       else if (button.dataset.confirmInvoice || button.dataset.confirmPayment) { selection=button.dataset.confirmInvoice||button.dataset.confirmPayment; route='order-confirm'; render(); window.scrollTo(0,0); }
-      else if (button.dataset.route) { route = button.dataset.route; selection = ''; suggestion = null; quickTomorrow = false; quickIntent = 'edit'; render(); window.scrollTo(0, 0); }
+      else if (button.dataset.route) { stopSpeech(); route = button.dataset.route; selection = ''; suggestion = null; briefing = null; quickTomorrow = false; quickIntent = 'edit'; render(); window.scrollTo(0, 0); }
       else if (button.dataset.back) { route = button.dataset.back; quickTomorrow = false; quickIntent = 'edit'; if (route !== 'project') selection = ''; render(); }
       else if (button.hasAttribute('data-clear-search')) { searchQuery = ''; searchStatus = '全部'; render(); }
       else if (button.hasAttribute('data-edit-hospital')) { selection = button.dataset.editHospital; route = 'hospital-form'; render(); }
@@ -206,6 +268,8 @@
       else if (button.dataset.quickProject) { selection = button.dataset.quickProject; quickTomorrow = false; quickIntent = 'edit'; route = 'quick-project'; render(); }
       else if (button.dataset.noteProject) { selection = button.dataset.noteProject; route = 'note'; suggestion = null; render(); }
       else if (button.dataset.filesProject || button.dataset.filesOrder) { selection = button.dataset.filesProject || button.dataset.filesOrder; route = 'files'; render(); }
+      else if (button.hasAttribute('data-voice-toggle')) { voiceToggle(); }
+      else if (button.hasAttribute('data-cancel-briefing')) { briefing = null; render(); }
       else if (button.hasAttribute('data-cancel-note')) { suggestion = null; render(); }
       else if (button.dataset.preview) {
         const file = await storage.readFile(button.dataset.preview); if (!file || !/^image\/(png|jpeg|webp|gif)$/.test(file.type)) throw new Error('图片原件不可用');
@@ -221,6 +285,7 @@
     } catch (error) { message(error.message); }
   });
   document.addEventListener('input', event => {
+    if (event.target.matches('form[data-form="note"] textarea[name="text"]'))noteDraft=event.target.value;
     if (event.target.id === 'business-search') {
       searchQuery = event.target.value;
       updateHospitalSearch();
@@ -248,7 +313,25 @@
     try {
       if (form.dataset.form === 'hospital') { const result = core.upsertHospital(state, { ...values, id: selection }); await save(result.state); selection = result.hospitalId; route = 'hospitals'; }
       if (form.dataset.form === 'project') { const result = core.saveProject(state, { ...values, id: state.projects.some(item => item.id === selection) ? selection : '', details: Object.fromEntries(['device', 'brand', 'model', 'contractStart', 'contractEnd', 'bidDate', 'renewalDate', 'quoteDate', 'salesStage'].map(name => [name, values[name]])) }, today()); await save(result.state); selection = result.projectId; route = 'project'; }
-      if (form.dataset.form === 'note') { suggestion = core.suggestNote(state, values.text, today()); if (selection && state.projects.some(item => item.id === selection)) suggestion.projectId = selection; message('建议未写入数据，请核对后确认。'); }
+      if (form.dataset.form === 'note') {
+        stopSpeech();noteDraft=String(values.text||'');
+        briefing=core.splitBriefing(state,noteDraft,today());
+        if(selection&&state.projects.some(item=>item.id===selection)){
+          for(const item of briefing) if(!item.projectId&&(!item.hospitalId||state.projects.find(p=>p.id===selection)?.hospitalId===item.hospitalId))item.projectId=selection;
+        }
+        message('已在本机拆分为'+briefing.length+'条草稿，尚未写入业务数据');
+      }
+      if (form.dataset.form === 'briefing') {
+        const choices=briefing.map((item,i)=>{
+          const get=name=>values['item'+i+name]||'';
+          return {include:get('include')==='yes',projectId:get('projectId'),progress:get('progress'),
+            changeStatus:get('changeStatus')==='yes',status:get('status'),
+            changeDate:get('changeDate')==='yes',followupDate:get('followupDate'),
+            changeNextAction:get('changeNextAction')==='yes',nextAction:get('nextAction')};
+        });
+        await save(core.confirmBriefing(state,briefing,choices,today()));
+        briefing=null;noteDraft='';selection='';route='home';
+      }
       if (form.dataset.form === 'confirm-note') { await save(core.confirmNote(state, suggestion, values, today())); selection = values.projectId; suggestion = null; route = selection ? 'project' : 'inbox'; }
       if (form.dataset.form === 'quick-project') {
         const current=state.projects.find(item=>item.id===selection);

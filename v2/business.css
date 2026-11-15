@@ -208,3 +208,15 @@ form[data-form="file"] textarea[name="remark"]{min-height:96px;background:#f8fcf
 .camera-choice:focus-within{outline:3px solid #e7c17a;outline-offset:2px}
 .camera-picked{display:block;padding:9px 12px;border-radius:10px;background:#f6fafb;color:#3b6474;font-size:12px;overflow-wrap:anywhere}
 @media(max-width:350px){.camera-choice{padding:10px 6px}.camera-choice strong{font-size:12px}}
+
+/* Voice dictation + reviewed multi-item extraction, fully mobile accessible. */
+.voice-panel{display:flex;flex-direction:column;gap:7px;margin:12px 0;background:#f4f9fb;border:1px solid #e2eef2;border-radius:16px;padding:12px}
+.voice-button{min-height:58px;width:100%;background:#186c81;color:white;border-color:#186c81;font-size:16px;font-weight:750}
+.voice-panel p{margin:0;font-size:12px;line-height:1.5}
+.voice-note textarea{min-height:168px}
+.briefing-item{min-width:0;border:1px solid #d9e8ee;border-radius:14px;padding:13px;margin:14px 0;background:#fcfeff}
+.briefing-item legend{padding:4px 10px;font-size:14px;font-weight:770;color:#205c74;background:#e6f3f6;border-radius:8px}
+.briefing-matched{background:#f2f8fa;padding:9px 10px;border-radius:9px;color:#426d7f;font-size:12px}
+.briefing-item textarea{min-height:95px}
+.briefing-item .check{margin:10px 0;font-weight:630}
+.briefing-form>button.primary{width:100%;min-height:50px}
