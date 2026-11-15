@@ -55,3 +55,12 @@
 GitHub Actions已保留两份核对后的**本机合成候选静态包**（[#43733834032](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43733834032)，产物约57.8KB，各保留7天），由GitHub构建，不是公开网站或正式手机安装包。通过的代码源是`acfead358405f25f83e5ca65db3d33ee3330276d`，完整细节见`v2/ENCRYPTED-CANDIDATE-BUILD-2026-11-15.md`。
 
 尚未发布正式版/恢复真实云端账号/测试真实iPhone；不迁移V1.5.7。正式main、旧数据、现有测试站点均不动。
+
+
+## 2026-11-16｜HTTPS独立手机测试准备
+
+新候选代码通过[CI #43775914123](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43775914123)：Chromium25+8、WebKit26+8，**共67项通过**。候选现在支持唯一独立Workers测试域名、PWA Service Worker、相机后置拍摄/相册入口、语音不支持时的iPhone键盘麦克风回退；新增远端HTTPS验收脚本和noindex/同源权限头。Worker配置为纯静态，无业务API、数据库或同步绑定。
+
+部署未发生：[CI #43776312936](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43776312936)确认当前Cloudflare Token无权访问尚未创建的专用Worker，工作流安全停止。先前9106是我把GitHub Actions表达式错误转义造成，已修复，不应据此判断用户Token过期。为避免扩大账户权限，后续采用“Dashboard先创建专用空Worker + 单Worker范围Workers Editor Token”的最小权限方式。详细操作和Secret名称见`v2/ENCRYPTED-CANDIDATE-HTTPS-DEPLOYMENT-2026-11-16.md`。
+
+未触碰main、V1.5.7、旧V2 staging、真实数据。部署前/后都不得录入真实医院资料；真实iPhone相机、麦克风、Safari/PWA和Face ID仍待真机验收。

@@ -226,3 +226,41 @@
 - **可复验构建输出已经保存在GitHub Actions产物**：成功后在工作流上传两个浏览器矩阵各自通过验证的相同候选静态包：Chromium artifact ID`14169890520`、WebKit artifact ID`14169700494`，各约57.8KB；均包含加密业务脚本、密码首启、离线缓存、SHA/字节清单的`candidate-public`静态内容，2026-11-22 UTC到期。仅作为发布候选源码归档与审计，不支持直接在iPhone安装成正式App。它们在GitHub内部不是生产部署。
 - **生产边界**：`main=c3d9ebec26b94ef056eaad649447b3ad2dba31bc`，V1.5.7、原V2 staging、公开合成preview和全部真实医院/报价/发票/文件均未改动。候选仅在localhost/127.0.0.1运行，明确标记`productionReady:false`、`deployAllowed:false`，**尚不能在正式站点录入真实资料**。
 - **后续剩余阻断（按用户时间优先）**：将可复验候选适配为真实iPhone可访问的**独立测试入口**进行Safari/PWA硬件实测（不打通生产、不录真实业务），必要时完成可信设备身份与实际云端密文恢复；在发布前执行最终稳定性/备份恢复和回退演练，并由用户确认正式上线。用户已经明确**不要迁移旧版V1数据，正式从零录入**；不要反复将旧版迁移重新列为门槛或无限扩展安全PoC。开发和自动测试都由助手处理，用户只需设备上手阶段参与。
+
+
+## 2026-11-16｜iPhone HTTPS 独立测试入口准备与 Cloudflare 最小权限门禁
+
+### 1. 本轮代码完成
+
+- 候选静态包现在允许的生产外域名仅为`personal-workbench-v2-encrypted-candidate.wangxueqing0427.workers.dev`，并继续允许本地自动化测试的`localhost/127.0.0.1`。加密存储、首次解锁、Service Worker 注册三处使用同一精确主机白名单；其他任何域名（包括生产、旧V2预览、其他Workers域名）拒绝启动。
+- 新增`v2/wrangler.encrypted-preview.jsonc`：Worker名称唯一；仅静态资产目录；无`main`脚本、KV、D1、R2、Durable Objects、变量、routes/custom domains和业务API。Workers.dev只负责发放HTML/JS/CSS等静态文件；医院、项目、笔记、原件、加密备份回执均保留在用户浏览器本机AES-GCM加密IndexedDB，不向Cloudflare上传。
+- 构建器同时生成Cloudflare专用`_headers`：noindex、nosniff、拒绝iframe、禁止向外泄露Referer，并仅允许同源页面请求相机/麦克风。它不是登录墙；测试地址是公开静态页面，任何人打开都会在自己的浏览器里得到独立空白本机库。**测试阶段严禁输入真实医院、客户、合同、报价、发票和其他工作数据。**
+- 现有手机端相机入口保留后置相机`capture=environment`和相册独立入口；语音入口支持浏览器SpeechRecognition，若浏览器不支持，明确回退到iPhone键盘麦克风，不丢失文本草稿。自动化仅验证DOM能力和不支持时的回退，没有假称真实iPhone相机/麦克风权限已通过。
+- 新增`v2/test-encrypted-candidate-remote.cjs`，用于真实HTTPS Worker部署后核对远端8个资产的SHA-256/字节、release/sourceCommit、noindex/Permissions-Policy、PWA范围、首次加密初始化、语音回退、相机入口和Chromium离线启动。部署后还会在Chromium与WebKit分别做远端冒烟测试。
+
+### 2. 本地自动化验收
+
+[GitHub Actions #43775914123](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43775914123) SUCCESS，源代码提交`95a70ae2154e80d22b242fdae60166beea05ca50`，`releaseId=068236667a5cd8186a6f795f06acbaa1944b2a82596729a64a15dbc574952a10`。
+
+- Chromium：浏览器业务/加密/相机入口/语音回退/备份恢复25项 + Service Worker完整性8项。
+- WebKit：浏览器业务/加密/相机入口/语音回退/备份恢复26项 + Service Worker完整性8项。
+- **合计67项断言通过、0失败**。Chromium使用Playwright真正离线；WebKit用服务源503验证页面完全从已核验Service Worker缓存恢复。两者都是CI浏览器，不是iPhone真机。
+
+GitHub Actions保留了本轮候选产物：Chromium artifact `14186221614`，WebKit artifact `14186221692`，每份58,284 bytes，2026-11-22 UTC到期。
+
+### 3. Cloudflare部署尝试与根因
+
+- 第一次部署尝试[CI #43775767960](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43775767960)因我在YAML生成时把GitHub Actions表达式错误转义，CI把占位符当成Token使用，Cloudflare返回9106。**这不是用户Token过期的证据；该错误由本轮工作流代码引起，已修正。**
+- 修正后[CI #43776312936](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43776312936)已正确传入Token，但Cloudflare返回HTTP 403 `No access to the specified resource`。这说明当前`CLOUDFLARE_PREVIEW_API_TOKEN`不能访问尚未创建的专用Worker（很可能仅被授权给现有预览Worker）。部署步骤在此门禁前停止，**没有执行Wrangler deploy，没有创建或覆盖任何Worker**。
+- 为避免扩大现有Token权限，不请求账户级Workers Admin。改用更小权限路径：用户先在Cloudflare Dashboard手动创建一个专用空Worker，再生成仅对该Worker有`Workers Editor`权限的API Token；部署工作流只使用新GitHub Secret `CLOUDFLARE_ENCRYPTED_CANDIDATE_API_TOKEN`，不会改动原`CLOUDFLARE_PREVIEW_API_TOKEN`。Cloudflare官方说明：新建Worker需要产品级Admin；已有Worker可用单Worker范围Editor进行更新部署。
+
+### 4. 仍需用户完成的唯一云端准备
+
+1. Cloudflare Dashboard → Workers & Pages → Create → Worker，名称必须为`personal-workbench-v2-encrypted-candidate`；保持空白、不要添加KV/D1/R2/DO/环境变量/自定义域名或routes，启用`workers.dev`。
+2. 创建新的API Token，权限选择该**单个Worker**的`Workers Editor`，不要给整个账户Workers Admin。
+3. GitHub仓库`wangxueqing0427-oss/personal-workbench` → Settings → Secrets and variables → Actions，新建Secret：`CLOUDFLARE_ENCRYPTED_CANDIDATE_API_TOKEN`。现有`CLOUDFLARE_ACCOUNT_ID`保持不变；不要覆盖旧的预览Token。
+4. 完成后告诉助手“专用Worker和新Token已准备”，由助手触发部署、检查远端资产和两个浏览器；成功后再给iPhone真机验收链接。
+
+### 5. 不变的边界
+
+`main=c3d9ebec26b94ef056eaad649447b3ad2dba31bc`未改；V1.5.7、旧V2 staging、旧公开合成preview、真实工作数据均未改。当前尚无可用的HTTPS候选URL；不应提前提供假链接。即使部署后，测试域名仍是公开静态入口而非账号登录系统，禁止录入真实业务。iPhone Safari/PWA、真实相机、麦克风权限和Face ID/WebAuthn仍需设备实测；正式生产发布另行验收，不在本轮自动进行。
