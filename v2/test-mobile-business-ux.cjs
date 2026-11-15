@@ -667,6 +667,7 @@ async function main(){
    await page.locator('form[data-form="note"] textarea[name="text"]').fill(dictated);
    const beforeReview=await page.evaluate(async()=>({rev:(await WorkbenchBusinessStore.read()).revision,notes:(await WorkbenchBusinessStore.read()).notes.length}));
    await page.locator('form[data-form="note"] button.primary').click();
+   await page.locator('form[data-form="briefing"]').waitFor();
    await page.getByText('已拆分 2 条事项').waitFor();
    check(await page.locator('.briefing-item').count()===2,
      'long spoken visit report is separated into two reviewable hospital/project records');
@@ -677,6 +678,7 @@ async function main(){
    check(await page.locator('form[data-form="note"] textarea[name="text"]').inputValue()===dictated,
      'canceling the split review restores the exact dictated draft without data loss');
    await page.locator('form[data-form="note"] button.primary').click();
+   await page.locator('form[data-form="briefing"]').waitFor();
    const reviewFields=await page.locator('.briefing-item').evaluateAll(items=>items.map(x=>({
      hospital:x.querySelector('.briefing-matched')?.textContent,
      project:x.querySelector('select[name$="projectId"]')?.value,
@@ -700,6 +702,7 @@ async function main(){
    check(dry.length===2&&dry.distinct&&dry.rejected&&dry.unchanged,
      'hospital switch within one spoken sentence splits correctly, while stale project mapping rejects the entire batch');
    await page.locator('form[data-form="briefing"] button.primary').click();
+   await page.getByRole('heading',{name:'今天先办重要的事'}).waitFor();
    const confirmed=await page.evaluate(async()=>{
      const s=await WorkbenchBusinessStore.read();
      const notes=s.notes.filter(x=>/示例石景山医院核磁开机率明天联系|示例肿瘤医院TOMO销售下周二确认/.test(x.progress||''));
@@ -760,6 +763,7 @@ async function main(){
    await page.locator('nav button[data-route="note"]').click();
    await page.locator('form[data-form="note"] textarea[name="text"]').fill('示例石景山医院核磁开机率明细明天再联系');
    await page.locator('form[data-form="note"] button.primary').click();
+   await page.locator('form[data-form="briefing"]').waitFor();
    check(await page.locator('.briefing-item .briefing-match-hint').isVisible()&&
      await page.locator('.briefing-item .briefing-proposal').isVisible()&&
      await page.locator('.briefing-item input[name="item0changeWaitingOn"]').count()===1,
@@ -768,6 +772,7 @@ async function main(){
    await page.locator('.briefing-item input[name="item0changeWaitingOn"]').check();
    await page.locator('.briefing-item input[name="item0waitingOn"]').fill('张主任');
    await page.locator('form[data-form="briefing"] button.primary').click();
+   await page.getByRole('heading',{name:'今天先办重要的事'}).waitFor();
    const contactSaved=await page.evaluate(async()=>{
      const s=await WorkbenchBusinessStore.read();
      const note=s.notes.find(n=>n.progress==='示例石景山医院核磁开机率明细明天再联系');
@@ -788,6 +793,7 @@ async function main(){
      }))};
    });
    await page.locator('form[data-form="note"] button.primary').click();
+   await page.locator('form[data-form="briefing"]').waitFor();
    const draftBefore=await page.locator('.briefing-item').evaluateAll(rows=>rows.map(row=>({
      action:row.querySelector('input[name$="changeNextAction"]').checked,
      date:row.querySelector('input[name$="changeDate"]').checked,
@@ -842,6 +848,7 @@ async function main(){
      date:row.querySelector('input[name$="followupDate"]').value
    }));
    await page.locator('form[data-form="briefing"] button.primary').click();
+   await page.getByRole('heading',{name:'今天先办重要的事'}).waitFor();
    const saved=await page.evaluate(async projectId=>{
      const s=await WorkbenchBusinessStore.read(),project=s.projects.find(p=>p.id===projectId);
      const other=s.projects.find(p=>p.id!==projectId&&p.name==='核磁开机率明细');
@@ -899,6 +906,7 @@ async function main(){
      'rapid successive edits keep the final version of the local voice draft');
    await page.locator('form[data-form="note"] button.primary').click();
    await page.locator('form[data-form="briefing"]').waitFor();
+   await page.locator('form[data-form="briefing"]').waitFor();
    check(await page.locator('.briefing-item').count()===3,
      'unsaved multi-item review is generated without losing the dictated text');
    await page.reload({waitUntil:'load'});
@@ -922,10 +930,12 @@ async function main(){
    await page.locator('form[data-form="note"] textarea[name="text"]').fill(confirmedPhrase);
    await page.locator('form[data-form="note"] button.primary').click();
    await page.locator('form[data-form="briefing"]').waitFor();
+   await page.locator('form[data-form="briefing"]').waitFor();
    check(await page.locator('.briefing-item').count()===1&&
      (await page.evaluate(async()=>WorkbenchBusinessStore.readDraft()))?.text===confirmedPhrase,
      'before final review the original text stays recoverable and no business note is created');
    await page.locator('form[data-form="briefing"] button.primary').click();
+   await page.getByRole('heading',{name:'今天先办重要的事'}).waitFor();
    const afterFinal=await page.evaluate(async()=>{
      const s=await WorkbenchBusinessStore.read();
      return {revision:s.revision,draft:await WorkbenchBusinessStore.readDraft(),
