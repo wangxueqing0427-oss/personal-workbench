@@ -47,7 +47,8 @@ jobs:
           ! grep -Ei 'wrangler deploy|CLOUDFLARE_API_TOKEN|PRODUCTION_API_TOKEN' v2/build-encrypted-candidate.cjs v2/test-encrypted-candidate.cjs
           node v2/build-encrypted-candidate.cjs | tee /tmp/encrypted-candidate-build.log
           grep -F 'ENCRYPTED_CANDIDATE_BUILD_PASS' /tmp/encrypted-candidate-build.log
-          grep -F '"deployAllowed":false' /tmp/encrypted-candidate-build.log
+          grep -F '"productionDeployAllowed":false' /tmp/encrypted-candidate-build.log
+          grep -F '"isolatedTestDeployAllowed":true' /tmp/encrypted-candidate-build.log
       - name: Verify offline asset SHA256 install rollback without browser or network
         shell: bash
         run: |
