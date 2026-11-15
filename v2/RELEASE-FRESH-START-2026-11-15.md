@@ -46,3 +46,12 @@
 ## 2026-11-15｜独立离线加密上线候选包已构建并通过两套移动浏览器
 
 [GitHub Actions #43730959602](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43730959602) SUCCESS，Chromium15/15、WebKit16/16，**31项通过、0失败**；完整证据、测试的不同断网机制和源提交/发布ID详见`v2/ENCRYPTED-CANDIDATE-BUILD-2026-11-15.md`。新增的`build-encrypted-candidate.cjs`支持以SHA256受保护的9文件本机离线候选包、独立AES-GCM对象/队列/原件/草稿加密及首次解锁、换机恢复，且包含硬编码的localhost-only及`deployAllowed:false`。**尚未生产上线、没有云账号、没有真机Safari/Face ID验收，仍禁止录入真实业务。** 生产main/V1.5.7、旧V2 staging、公有合成preview均没有改动。
+
+
+## 2026-11-15｜加密备份状态、离线更新回滚、可复验候选安装包
+
+验收：[CI #43733834032](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43733834032) SUCCESS，**Chromium28项 + WebKit29项 = 57项通过**（含两端各8项Service Worker文件SHA256/失败回滚测试）。新增加密备份人工回执与备份过期提醒；下载成功不再自动声称“已备份”，新医院记录或未完成语音草稿变化需重新备份。加密回执仅存在本机，不跟随密文备份恢复。更新包缺文件或SHA不符时保留旧已验证的PWA缓存。
+
+GitHub Actions已保留两份核对后的**本机合成候选静态包**（[#43733834032](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43733834032)，产物约57.8KB，各保留7天），由GitHub构建，不是公开网站或正式手机安装包。通过的代码源是`acfead358405f25f83e5ca65db3d33ee3330276d`，完整细节见`v2/ENCRYPTED-CANDIDATE-BUILD-2026-11-15.md`。
+
+尚未发布正式版/恢复真实云端账号/测试真实iPhone；不迁移V1.5.7。正式main、旧数据、现有测试站点均不动。
