@@ -5,10 +5,6 @@ on:
       - dev/v2-preview-isolated-20261111
     paths:
       - v2/encrypted-candidate-preview.trigger
-      - .github/workflows/v2-encrypted-candidate-preview.yml
-      - v2/wrangler.encrypted-preview.jsonc
-      - v2/build-encrypted-candidate.cjs
-      - v2/test-encrypted-candidate-remote.cjs
   workflow_dispatch:
 permissions:
   contents: read
