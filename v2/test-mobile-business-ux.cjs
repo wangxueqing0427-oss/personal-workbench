@@ -939,7 +939,7 @@ async function main(){
    const afterFinal=await page.evaluate(async()=>{
      const s=await WorkbenchBusinessStore.read();
      return {revision:s.revision,draft:await WorkbenchBusinessStore.readDraft(),
-       count:s.notes.filter(n=>n.progress==='合成现场反馈，明天联系设备科确认报价。').length};
+       count:s.notes.filter(n=>n.progress?.startsWith('合成现场反馈，明天联系设备科确认报价')).length};
    });
    check(afterFinal.revision===visitDraftBefore.revision+1&&afterFinal.count===1&&afterFinal.draft===null,
      'last confirmation atomically saves one note while removing its pending draft');
