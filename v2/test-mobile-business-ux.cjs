@@ -104,7 +104,7 @@ async function main(){
        absolute:cell?.querySelector('time')?.getAttribute('datetime'),
        tone:cell?.dataset.dateTone,overflow:document.documentElement.scrollWidth>innerWidth+1};
    });
-   check(/^\\d{4}-\\d{2}-\\d{2}$/.test(visualDates.hero||'')&&
+   check(/^\d{4}-\d{2}-\d{2}$/.test(visualDates.hero||'')&&
      visualDates.summary==='今天跟进'&&visualDates.absolute===visualDates.hero&&
      visualDates.tone==='today'&&!visualDates.overflow,
      'homepage shows current local date plus readable follow-up priority and retains exact date on 390px iPhone');
