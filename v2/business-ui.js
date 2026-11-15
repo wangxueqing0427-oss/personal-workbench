@@ -11,12 +11,36 @@
   const field = (name, label, value = '', type = 'text') => `<label>${label}<input name="${name}" type="${type}" value="${escape(value)}"></label>`;
   let state, route = 'home', selection = '', suggestion = null, briefing = null, noteDraft = '', speechSession = null, busy = false;
   let freshLabStatus = '';
+  let backupInfo=null, pendingExternalBackup=null;
+  const hasPrivateBackupStatus=()=>typeof storage.backupStatus==='function' &&
+    typeof storage.confirmExternalBackup==='function';
+  function backupReminder(){
+    if(!hasPrivateBackupStatus())return '';
+    const anyData=state?.hospitals?.length||state?.projects?.length||
+      state?.notes?.length||state?.files?.length||state?.orders?.length||
+      noteDraft.trim();
+    if(!anyData)return '';
+    const needs=backupInfo?.needsBackup!==false;
+    const prior=backupInfo?.confirmedAt?
+      '上次人工确认：'+escape(backupInfo.confirmedAt.slice(0,16).replace('T',' ')):'尚未确认任何外部备份';
+    return `<section class="card backup-reminder" data-backup-reminder>
+      <p class="eyebrow">DATA RECOVERY</p><h2>加密备份</h2>
+      <p data-backup-status>${needs?'当前资料尚未确认已备份到手机文件中':'已人工确认当前版本的外部加密备份'}</p>
+      <small>${prior}。本机加密不等于云端备份，文件丢失或忘记密码将无法恢复。</small>
+      <button type="button" data-route="more">${needs?'前往生成加密备份':'查看备份信息'}</button>
+    </section>`;
+  }
   let draftStatus='', draftTimer=null, draftWriteChain=Promise.resolve(), clearDraftArmed=false;
   let searchQuery = '', searchStatus = '全部', quickTomorrow = false, quickIntent = 'edit', supplyFilter = 'all';
   function message(value) { notice.textContent = value; }
   async function save(next, file, options) {
     if (!compatible()) throw new Error('版本不兼容 / 同步已暂停');
     state = await storage.commit(next, state.revision, file, options);
+    pendingExternalBackup=null;
+    if(hasPrivateBackupStatus()){
+      try{backupInfo=await storage.backupStatus();}
+      catch(_){backupInfo=null;message('业务已保存，但备份状态暂时无法核验，请勿认为已有外部备份。');return;}
+    }
     message('已保存到独立开发测试区；正式数据未改动。');
   }
   function showDraftStatus(value){
@@ -34,6 +58,15 @@
     const write=draftWriteChain;
     write.then(()=>{
       if(value===noteDraft)showDraftStatus(value.trim()?'草稿已暂存本机 · 尚未成为业务记录':'没有未完成草稿');
+      if(hasPrivateBackupStatus()){
+        pendingExternalBackup=null;
+        storage.backupStatus().then(status=>{
+          backupInfo=status;
+          const text=document.querySelector('[data-backup-status]');
+          if(text)text.textContent=status.needsBackup?
+            '当前资料尚未确认已备份到手机文件中':'已人工确认当前版本的外部加密备份';
+        }).catch(()=>{backupInfo=null;});
+      }
     },()=>{
       showDraftStatus('草稿暂存未成功，请不要刷新或退出，避免文字丢失');
     });
@@ -128,7 +161,7 @@
       <button type="button" data-route="note">先记一条沟通</button></div>
       <small>正式使用前仍需完成身份保护、备份恢复与真实 iPhone 验收；请勿在当前测试版录入真实资料。</small>
     </section>`:'';
-    return greeting+shortcuts+welcome+pendingEntry+sections+week+latest+`<details class="card quiet-details"><summary>最近跟进 / 长时间未跟进</summary>${projectButtons(view.recent)}<h3>超过14天未跟进</h3>${projectButtons(view.stale)}</details>`;
+    return greeting+shortcuts+welcome+backupReminder()+pendingEntry+sections+week+latest+`<details class="card quiet-details"><summary>最近跟进 / 长时间未跟进</summary>${projectButtons(view.recent)}<h3>超过14天未跟进</h3>${projectButtons(view.stale)}</details>`;
   }
   function hospitalSearchResults() {
     const found=core.searchBusiness(state,searchQuery,searchStatus);
@@ -397,7 +430,9 @@
       <button type="button" data-route="files">文件与拍照</button>
       <button type="button" data-route="inbox">记录收件箱</button>
       ${syntheticLab}${encryptedCandidate}
-      <p class="muted">正式版仍需完成本机加密存储、长期设备身份、真实 iPhone 和离线终验。全新正式版无需导入 V1.5.7。</p></section>`;
+      ${pendingExternalBackup&&hasPrivateBackupStatus()?'<p class="backup-download-warning">文件下载已触发，但不能自动确认已保存。请先在手机「文件」App找到刚导出的加密 JSON，再点下面确认。</p><button type="button" data-confirm-external-backup>我已检查文件确实保存</button>':''}
+      <p class="muted">正式版仍需完成本机加密存储、长期设备身份、真实 iPhone 和离线终验。全新正式版无需导入 V1.5.7。</p></section>
+      ${backupReminder()}`;
   }
   function recoveryLab(){
     if(!globalThis.WorkbenchFreshRecoveryLab)return '<section class="card"><p>此功能尚未开放，业务数据未修改。</p></section>';
@@ -505,18 +540,43 @@
         const image = document.createElement('img'), url = URL.createObjectURL(file); image.src = url; image.alt = file.name; image.style.cssText = 'display:block;max-width:100%;height:auto';
         dialog.append(close, image); document.body.append(dialog); dialog.onclose = () => { URL.revokeObjectURL(url); dialog.remove(); }; dialog.showModal();
       }
+      else if(button.hasAttribute('data-confirm-external-backup')){
+        if(!hasPrivateBackupStatus()||!pendingExternalBackup)
+          throw Error('没有本次会话刚生成的加密备份，请重新导出并检查文件');
+        const check=await storage.backupStatus();
+        if(check.revision!==pendingExternalBackup.revision||
+          check.draftFingerprint!==pendingExternalBackup.draftFingerprint)
+          throw Error('资料已改变，本次备份确认已作废，请重新导出');
+        await storage.confirmExternalBackup(pendingExternalBackup);
+        backupInfo=await storage.backupStatus();
+        pendingExternalBackup=null;
+        route='more';render();
+        message('已记录你对外部文件的人工确认；这不是云端自动备份，恢复密码和文件仍需自行妥善保存。');
+      }
       else if(button.hasAttribute('data-export-encrypted-candidate')){
         if(globalThis.__WORKBENCH_ENCRYPTED_BOOT_LAB__!==true||
           typeof storage.exportEncryptedBackup!=='function')throw Error('加密测试模式未启用');
+        pendingExternalBackup=null;
+        const statusBefore=hasPrivateBackupStatus()?await storage.backupStatus():null;
         const archive=await storage.exportEncryptedBackup();
-        const blob=new Blob([JSON.stringify(archive)],{type:'application/json'});
+        const statusAfter=hasPrivateBackupStatus()?await storage.backupStatus():null;
+        if(statusBefore&&(statusBefore.revision!==statusAfter.revision||
+          statusBefore.draftFingerprint!==statusAfter.draftFingerprint))
+          throw Error('导出期间资料发生变化，请重新生成加密备份');
+        const json=JSON.stringify(archive),blob=new Blob([json],{type:'application/json'});
+        const digest=new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(json)));
+        const fileSha256=Array.from(digest,v=>v.toString(16).padStart(2,'0')).join('');
         const url=URL.createObjectURL(blob);
         const link=document.createElement('a');
         try{
           link.href=url;link.download='workbench-encrypted-v2-test-'+today()+'.json';
           document.body.append(link);link.click();link.remove();
         }finally{setTimeout(()=>URL.revokeObjectURL(url),60000);}
-        message('完整的AES-GCM加密试验备份已生成；请自行保管恢复密码与文件，尚非正式生产备份。');
+        if(statusAfter)pendingExternalBackup={
+          revision:statusAfter.revision,draftFingerprint:statusAfter.draftFingerprint,fileSha256};
+        backupInfo=statusAfter;
+        route='more';render();
+        message('已触发加密文件下载。请到手机「文件」App确认保存成功后，再点击确认按钮。');
       }
       else if (button.dataset.download) {
         const file = await storage.readFile(button.dataset.download); if (!file) throw new Error('原件不可用，关联信息未删除');
@@ -709,6 +769,10 @@
   try {
     state=await storage.read();
     if(!state)state=await storage.commit(seed(),-1);
+    if(hasPrivateBackupStatus()){
+      try{backupInfo=await storage.backupStatus();}
+      catch(_){backupInfo=null;message('备份确认状态无法验证，请先不要依赖旧备份。');}
+    }
     try{
       const recovered=await storage.readDraft();
       if(recovered?.text){

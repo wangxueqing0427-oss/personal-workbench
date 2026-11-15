@@ -158,6 +158,38 @@ async function main(){
       a.locator('[data-export-encrypted-candidate]').click()]);
     const backup=await fs.readFile(await download.path());
     const archive=JSON.parse(backup.toString('utf8'));
+    const beforeConfirmed=await a.evaluate(async()=>WorkbenchBusinessStore.backupStatus());
+    check(beforeConfirmed.needsBackup&&beforeConfirmed.confirmed===false&&
+      await a.locator('button[data-confirm-external-backup]').isVisible(),
+      'browser download alone is not falsely recorded as a complete external backup');
+    await a.locator('button[data-confirm-external-backup]').click();
+    const acknowledged=await a.evaluate(async()=>{
+      const s=await WorkbenchBusinessStore.backupStatus();
+      const db=await new Promise((resolve,reject)=>{
+        const req=indexedDB.open(WorkbenchBusinessStore.name);
+        req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);
+      });
+      const raw=await new Promise((resolve,reject)=>{
+        const tx=db.transaction('state','readonly');
+        const request=tx.objectStore('state').get('meta:verified-external-backup:v1');
+        tx.oncomplete=()=>resolve(request.result||null);
+        tx.onabort=tx.onerror=()=>reject(tx.error);
+      });db.close();
+      return {s,raw,revision:(await WorkbenchBusinessStore.read()).revision};
+    });
+    check(acknowledged.s.confirmed&&acknowledged.s.needsBackup===false&&
+      acknowledged.s.confirmedRevision===3&&acknowledged.raw?.ciphertext&&
+      !JSON.stringify(acknowledged.raw).includes('合成候选独立医院')&&
+      acknowledged.revision===3,
+      'explicit file-check action writes encrypted device-only receipt, not business revision or plaintext');
+    check(!JSON.stringify(archive).includes('meta:verified-external-backup:v1'),
+      'the portable archive never inherits another device backup-confirmation receipt');
+    await a.locator('nav button[data-route="note"]').click();
+    await a.locator('form[data-form="note"] textarea[name="text"]').fill(draft+' 新沟通补充');
+    await a.waitForFunction(()=>document.querySelector('[data-draft-status]')?.textContent.includes('草稿已暂存本机'));
+    check((await a.evaluate(async()=>WorkbenchBusinessStore.backupStatus())).needsBackup,
+      'newly dictated unsaved text marks the previously confirmed external backup stale automatically');
+
     check(!backup.toString().includes('合成候选独立医院')&&
       !backup.toString().includes('candidate-synthetic-document.bin')&&
       !backup.toString().includes(draft)&&!!archive.body?.draft,
@@ -181,6 +213,9 @@ async function main(){
     check(restored.hospitals===1&&restored.projects===1&&restored.files===1&&
       restored.draft===draft&&restored.hash===sha(data)&&restored.jobs===4,
       'separate candidate device restores original hospital/project, revision history, file bytes and unsaved speech');
+    const restoredBackupStatus=await b.evaluate(async()=>WorkbenchBusinessStore.backupStatus());
+    check(restoredBackupStatus.needsBackup&&restoredBackupStatus.confirmed===false,
+      'a recovered phone cannot falsely inherit the source phone backup receipt');
     await b.reload({waitUntil:'load'});
     await b.getByRole('heading',{name:'解锁加密工作台'}).waitFor();
     check(!await b.locator('form[data-boot="restore"]').count()&&

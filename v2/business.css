@@ -296,3 +296,12 @@ form[data-form="file"] textarea[name="remark"]{min-height:96px;background:#f8fcf
 .encrypted-boot-shell .encrypted-boot-confirm input{width:20px;height:20px;flex:0 0 auto}
 .encrypted-boot-shell button.primary{min-height:49px;width:100%;font-size:15px}
 .encrypted-boot-shell small{display:block;margin:14px 0 0;color:#698292;line-height:1.5}
+
+/* Candidate backup freshness: deliberately neutral, no false cloud-backed success. */
+.backup-reminder{border:1px solid #d8e5ec;background:linear-gradient(135deg,#f4f9fb,#fff 80%)}
+.backup-reminder h2{font-size:18px;margin:5px 0 9px;color:#1d4a62}
+.backup-reminder [data-backup-status]{font-size:14px;font-weight:600;line-height:1.6;margin:0 0 6px}
+.backup-reminder small{display:block;line-height:1.6;color:#5e7886}
+.backup-reminder button{margin-top:12px;min-height:44px}
+.backup-download-warning{padding:11px 12px;background:#f2f7f9;border-radius:12px;line-height:1.65;font-size:14px}
+[data-confirm-external-backup]{min-height:48px;width:100%;margin:8px 0}

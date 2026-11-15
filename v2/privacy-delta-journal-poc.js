@@ -13,6 +13,8 @@
   const UUID=/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/;
   const CHUNK=256*1024,MAX_FILE=16*1024*1024,MAX_FILES=50,MAX_JOBS=200;
   const DRAFT_KEY='draft:visit-note:v1', DRAFT_FORMAT='workbench-voice-draft-v1';
+  const BACKUP_RECEIPT_KEY='meta:verified-external-backup:v1';
+  const BACKUP_RECEIPT_FORMAT='workbench-verified-external-backup-v1';
   const COLLECTIONS=['hospitals','projects','notes','inventory','movements','orders','files'];
   const ENC=new TextEncoder(),DEC=new TextDecoder();
   const copy=x=>structuredClone(x),makeId=()=>crypto.randomUUID(),random=n=>crypto.getRandomValues(new Uint8Array(n));
@@ -259,6 +261,71 @@
         tx.onabort=tx.onerror=()=>reject(tx.error||Error('加密草稿暂存失败，原有数据不变'));
       });
     }
+    // Explicit external-backup receipt is encrypted in the local vault ONLY.
+    // It is deliberately excluded from exportEncryptedBackup and never
+    // transported to another device: recovering data is not proof a second
+    // independent backup exists.
+    async function backupStatus(){
+      unlocked();
+      const [current,draftRow,receiptRow]=await Promise.all([
+        read(),get(db,'state',DRAFT_KEY),get(db,'state',BACKUP_RECEIPT_KEY)]);
+      const draftFingerprint=draftRow?
+        await digest(ENC.encode(JSON.stringify(draftRow))):'';
+      let receipt=null;
+      if(receiptRow){
+        receipt=await readJson(key,receiptRow,label(h,'backup-receipt',BACKUP_RECEIPT_KEY));
+        if(!receipt||receipt.format!==BACKUP_RECEIPT_FORMAT||
+          !Number.isSafeInteger(receipt.revision)||receipt.revision<0||
+          typeof receipt.draftFingerprint!=='string'||
+          !/^[a-f0-9]{64}$/.test(receipt.fileSha256||'')||
+          typeof receipt.confirmedAt!=='string')fail('本机备份确认密文损坏，请重新核验');
+      }
+      const revision=current?.revision??-1;
+      return {revision,draftFingerprint,
+        confirmed:!!receipt,confirmedRevision:receipt?.revision??null,
+        confirmedAt:receipt?.confirmedAt||'',
+        needsBackup:!receipt||receipt.revision!==revision||
+          receipt.draftFingerprint!==draftFingerprint};
+    }
+    async function confirmExternalBackup(proof){
+      unlocked();
+      if(!proof||!Number.isSafeInteger(proof.revision)||proof.revision<0||
+        !/^[a-f0-9]{64}$/.test(proof.fileSha256||'')||
+        typeof proof.draftFingerprint!=='string'||proof.draftFingerprint.length>64)
+        fail('缺少人工核对的加密下载文件证明');
+      const rawDraft=await get(db,'state',DRAFT_KEY);
+      const current=await backupStatus();
+      if(current.revision!==proof.revision||
+        current.draftFingerprint!==proof.draftFingerprint)
+        fail('业务数据或未保存草稿已更新，请重新导出加密备份');
+      const payload={format:BACKUP_RECEIPT_FORMAT,revision:proof.revision,
+        draftFingerprint:proof.draftFingerprint,fileSha256:proof.fileSha256,
+        confirmedAt:new Date().toISOString()};
+      const encrypted=await sealJson(key,payload,label(h,'backup-receipt',BACKUP_RECEIPT_KEY));
+      unlocked();
+      return new Promise((resolve,reject)=>{
+        const tx=db.transaction('state','readwrite'),state=tx.objectStore('state');
+        const sr=state.get('current'),dr=state.get(DRAFT_KEY);
+        let problem;
+        const check=()=>{
+          if(sr.readyState!=='done'||dr.readyState!=='done')return;
+          const revision=sr.result?.revision??-1;
+          const raw=dr.result;
+          // The authenticated draft fingerprint is cryptographically checked
+          // again before entering the transaction. During commit, the draft
+          // ciphertext itself is additionally compared to avoid racing writes.
+          if(revision!==proof.revision||
+            JSON.stringify(raw||null)!==JSON.stringify(rawDraft||null)){
+            problem=Error('备份核对期间资料已更新，尚未确认外部备份');
+            tx.abort();return;
+          }
+          state.put(encrypted,BACKUP_RECEIPT_KEY);
+        };
+        sr.onsuccess=check;dr.onsuccess=check;
+        tx.oncomplete=()=>resolve({confirmedAt:payload.confirmedAt,revision:payload.revision});
+        tx.onabort=tx.onerror=()=>reject(problem||tx.error||Error('加密备份确认失败，未修改业务'));
+      });
+    }
     async function commit(input,expected,file,options={}){
       unlocked();
       if(!input||input.schema!==2||!Number.isSafeInteger(expected)||expected< -1)fail('业务入参或版本错误');
@@ -387,7 +454,7 @@
     }
     const noCloud=async()=>fail('分块密文原型禁止云端身份和同步写入');
     return Object.freeze({name,protocol:'workbench-sync-2',mode:'synthetic-sharded-local-only',chunkBytes:CHUNK,maxFileBytes:MAX_FILE,
-      read,commit,readDraft,writeDraft,readFile,queueData,fileKeys:async()=>{unlocked();return listKeys(db,'files');},
+      read,commit,readDraft,writeDraft,backupStatus,confirmExternalBackup,readFile,queueData,fileKeys:async()=>{unlocked();return listKeys(db,'files');},
       exportEncryptedBackup:backup,changeQueue:noCloud,stageRemote:noCloud,resolveConflict:noCloud,
       lock(){key=null;},close(){key=null;db.close();}});
   }
