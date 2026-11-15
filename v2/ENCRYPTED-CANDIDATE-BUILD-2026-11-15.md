@@ -83,3 +83,12 @@ GitHub Actions保留了本轮候选产物：Chromium artifact `14186221614`，We
 ### 5. 不变的边界
 
 `main=c3d9ebec26b94ef056eaad649447b3ad2dba31bc`未改；V1.5.7、旧V2 staging、旧公开合成preview、真实工作数据均未改。当前尚无可用的HTTPS候选URL；不应提前提供假链接。即使部署后，测试域名仍是公开静态入口而非账号登录系统，禁止录入真实业务。iPhone Safari/PWA、真实相机、麦克风权限和Face ID/WebAuthn仍需设备实测；正式生产发布另行验收，不在本轮自动进行。
+
+
+## 2026-11-16｜最新候选代码复验与部署门禁状态
+
+- 最新完整CI：[Run #43776764921](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43776764921) SUCCESS。Chromium 25浏览器断言 + 8个Service Worker完整性断言；WebKit 26浏览器断言 + 8个Service Worker完整性断言，合计**67项通过、0失败**。
+- 本轮最新复验源码提交：`9760f7cbfcc0b5a4f3ceded82d16bc7bdb11b275`；releaseId：`3aef91aa426d4739dc0e487ea91bffd5bda94dfae4b8fe2c652ce4bd90b2ba19`。
+- 最新候选产物：Chromium artifact `14186422381`，WebKit artifact `14186473705`，各58,282 bytes，保留至2026-11-22 UTC。
+- 部署工作流现在只会由专用文件`v2/encrypted-candidate-preview.trigger`或手动workflow_dispatch触发，普通代码/文档修改不会自动发起云端部署。专用Worker尚未创建，新Secret尚未配置；Run #43776649147在检查到新Secret为空时停止，未请求Cloudflare API、未执行部署。
+- 用户创建专用空Worker并添加`CLOUDFLARE_ENCRYPTED_CANDIDATE_API_TOKEN`后，助手再触发部署。旧`CLOUDFLARE_PREVIEW_API_TOKEN`和旧预览Worker保持不动。

@@ -59,3 +59,12 @@ Cloudflare官方说明：
 - 用户iPhone Safari添加到主屏幕、首次加密库创建、相机拍摄、相册选择、语音识别/键盘麦克风、锁定解锁、离线重启的真机验收。
 - Face ID/WebAuthn尚未实现或验收，不得声称已支持原生Face ID。
 - 正式发布批准尚未发生；不得把本测试Worker升级为生产，不得迁移V1数据或录入真实资料。
+
+
+## 2026-11-16｜最新候选代码复验与部署门禁状态
+
+- 最新完整CI：[Run #43776764921](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43776764921) SUCCESS。Chromium 25浏览器断言 + 8个Service Worker完整性断言；WebKit 26浏览器断言 + 8个Service Worker完整性断言，合计**67项通过、0失败**。
+- 本轮最新复验源码提交：`9760f7cbfcc0b5a4f3ceded82d16bc7bdb11b275`；releaseId：`3aef91aa426d4739dc0e487ea91bffd5bda94dfae4b8fe2c652ce4bd90b2ba19`。
+- 最新候选产物：Chromium artifact `14186422381`，WebKit artifact `14186473705`，各58,282 bytes，保留至2026-11-22 UTC。
+- 部署工作流现在只会由专用文件`v2/encrypted-candidate-preview.trigger`或手动workflow_dispatch触发，普通代码/文档修改不会自动发起云端部署。专用Worker尚未创建，新Secret尚未配置；Run #43776649147在检查到新Secret为空时停止，未请求Cloudflare API、未执行部署。
+- 用户创建专用空Worker并添加`CLOUDFLARE_ENCRYPTED_CANDIDATE_API_TOKEN`后，助手再触发部署。旧`CLOUDFLARE_PREVIEW_API_TOKEN`和旧预览Worker保持不动。

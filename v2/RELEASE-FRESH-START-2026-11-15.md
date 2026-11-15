@@ -64,3 +64,8 @@ GitHub Actions已保留两份核对后的**本机合成候选静态包**（[#437
 部署未发生：[CI #43776312936](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43776312936)确认当前Cloudflare Token无权访问尚未创建的专用Worker，工作流安全停止。先前9106是我把GitHub Actions表达式错误转义造成，已修复，不应据此判断用户Token过期。为避免扩大账户权限，后续采用“Dashboard先创建专用空Worker + 单Worker范围Workers Editor Token”的最小权限方式。详细操作和Secret名称见`v2/ENCRYPTED-CANDIDATE-HTTPS-DEPLOYMENT-2026-11-16.md`。
 
 未触碰main、V1.5.7、旧V2 staging、真实数据。部署前/后都不得录入真实医院资料；真实iPhone相机、麦克风、Safari/PWA和Face ID仍待真机验收。
+
+
+## 2026-11-16｜最新验收结果
+
+[CI #43776764921](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43776764921) SUCCESS：Chromium25+Service Worker8、WebKit26+Service Worker8，**67项通过、0失败**。最新releaseId `3aef91aa426d4739dc0e487ea91bffd5bda94dfae4b8fe2c652ce4bd90b2ba19`。HTTPS部署还需Cloudflare专用空Worker和新的单WorkerEditor Token；未执行部署、未触碰生产数据。
