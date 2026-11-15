@@ -1,0 +1,55 @@
+name: V2 fresh-start encrypted backup recovery - isolated mobile simulation
+on:
+  push:
+    branches:
+      - dev/v2-preview-isolated-20261111
+    paths:
+      - .github/workflows/v2-fresh-recovery-lab.yml
+      - v2/fresh-recovery-lab.js
+      - v2/test-fresh-recovery-lab.cjs
+      - v2/privacy-crypto-poc.js
+      - v2/business-store.js
+      - v2/business-core.js
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  new-device-recovery:
+    if: github.ref == 'refs/heads/dev/v2-preview-isolated-20261111'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, webkit]
+    env:
+      NODE_PATH: /tmp/workbench-v2-fresh-recovery/node_modules
+      WB_BROWSER: ${{ matrix.browser }}
+    steps:
+      - name: Checkout isolated dev source
+        uses: actions/checkout@v4
+      - name: Fail closed if any public or production path entered laboratory
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "wangxueqing0427-oss/personal-workbench"
+          test "$GITHUB_REF" = "refs/heads/dev/v2-preview-isolated-20261111"
+          node --check v2/fresh-recovery-lab.js
+          node --check v2/test-fresh-recovery-lab.cjs
+          node --check v2/privacy-crypto-poc.js
+          node --check v2/business-core.js
+          node --check v2/business-store.js
+          ! grep -Ei 'wrangler deploy|CLOUDFLARE_API_TOKEN|https?://|localStorage.getItem' v2/fresh-recovery-lab.js
+      - name: Install pinned browser only in temporary isolated CI location
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --prefix /tmp/workbench-v2-fresh-recovery --no-save --no-package-lock playwright@1.56.1
+          /tmp/workbench-v2-fresh-recovery/node_modules/.bin/playwright install --with-deps "$WB_BROWSER"
+      - name: Verify new empty device encrypted backup and byte-perfect recovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          node v2/test-fresh-recovery-lab.cjs | tee /tmp/fresh-recovery-result.log
+          grep -F 'FRESH_CROSS_DEVICE_RECOVERY_PASS' /tmp/fresh-recovery-result.log
+          grep -F '"productionReady":false' /tmp/fresh-recovery-result.log
