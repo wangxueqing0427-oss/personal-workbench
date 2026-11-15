@@ -68,6 +68,9 @@ async function main(){
  if(seedStart<0||seedEnd<=seedStart||ui.slice(seedStart,seedEnd).split('function seed()').length!==2)
    throw Error('Unrecognized seed code: refuse to package synthetic hospitals');
  ui=ui.slice(0,seedStart)+'  function seed(){return core.empty();}\n'+ui.slice(seedEnd);
+ ui=patch(ui,'例如：今天去示例秦皇岛医院，设备科说下周二发报价；另外示例石景山医院的核磁明细明天要送。',
+   '例如：今天到某医院沟通，设备科说下周二发报价；另外核磁明细明天要送。',
+   'remove demo placeholder before candidate package');
  ui=ui.replaceAll('globalThis.__WORKBENCH_ENCRYPTED_BOOT_LAB__===true',
    "storage.mode==='encrypted-candidate-local-only'");
  ui=ui.replaceAll('已保存到独立开发测试区；正式数据未改动。',
