@@ -6,6 +6,7 @@
 const fs=require('node:fs/promises');
 const path=require('node:path');
 const crypto=require('node:crypto');
+const zlib=require('node:zlib');
 const vm=require('node:vm');
 const {execFileSync}=require('node:child_process');
 const dir=__dirname,root=path.resolve(dir,'..');
@@ -15,6 +16,38 @@ const sources=['business-core.js','business-ui.js','business.css',
   'privacy-delta-journal-poc.js','fresh-encrypted-boot-lab.js',
   'build-encrypted-candidate.cjs'];
 const hash=s=>crypto.createHash('sha256').update(s).digest('hex');
+function pngChunk(type,data){
+ const name=Buffer.from(type),len=Buffer.alloc(4),crcInput=Buffer.concat([name,data]);
+ let crc=0xffffffff;
+ for(const byte of crcInput){crc^=byte;for(let bit=0;bit<8;bit++)crc=(crc>>>1)^((crc&1)?0xedb88320:0);}
+ crc=(crc^0xffffffff)>>>0;
+ const crcBuf=Buffer.alloc(4);crcBuf.writeUInt32BE(crc);
+ len.writeUInt32BE(data.length);
+ return Buffer.concat([len,name,data,crcBuf]);
+}
+function appIcon(size){
+ const raw=Buffer.alloc((size*4+1)*size);
+ const radius=size*.19;
+ for(let y=0;y<size;y++){
+   const row=y*(size*4+1);raw[row]=0;
+   for(let x=0;x<size;x++){
+     const dx=Math.max(radius-x,0,x-(size-1-radius));
+     const dy=Math.max(radius-y,0,y-(size-1-radius));
+     const inside=dx*dx+dy*dy<=radius*radius;
+     const t=(x+y)/(2*(size-1));
+     let r=Math.round(22+(42-22)*t),g=Math.round(94+(157-94)*t),b=Math.round(120+(147-120)*t),a=inside?255:0;
+     const nx=x/size,ny=y/size;
+     const cross=(nx>=.425&&nx<=.575&&ny>=.27&&ny<=.73)||
+       (nx>=.27&&nx<=.73&&ny>=.425&&ny<=.575);
+     if(cross){r=255;g=255;b=255;a=255;}
+     const p=row+1+x*4;raw[p]=r;raw[p+1]=g;raw[p+2]=b;raw[p+3]=a;
+   }
+ }
+ const ihdr=Buffer.alloc(13);ihdr.writeUInt32BE(size,0);ihdr.writeUInt32BE(size,4);
+ ihdr[8]=8;ihdr[9]=6;ihdr[10]=0;ihdr[11]=0;ihdr[12]=0;
+ return Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]),
+   pngChunk('IHDR',ihdr),pngChunk('IDAT',zlib.deflateSync(raw)),pngChunk('IEND',Buffer.alloc(0))]);
+}
 function patch(source,needle,replacement,label){
  const count=source.split(needle).length-1;
  if(count!==1)throw Error('Build blocked: '+label+' expected 1, got '+count);
@@ -92,13 +125,19 @@ async function main(){
    'business-core.js':inputs['business-core.js'],
    'business-ui.js':ui,
    'business.css':inputs['business.css'],
+   'apple-touch-icon.png':appIcon(180),
+   'icon-512.png':appIcon(512),
    'encrypted-store.js':encrypted,
    'encrypted-boot.js':boot
  };
  output['candidate.webmanifest']=JSON.stringify({
    id:'./business.html',name:'个人工作台 V2 独立加密候选',
    short_name:'V2候选',start_url:'./business.html',scope:'./',
-   display:'standalone',background_color:'#f4f7fb',theme_color:'#176fc7'
+   display:'standalone',background_color:'#f4f7fb',theme_color:'#176fc7',
+   icons:[
+     {src:'./icon-512.png',sizes:'512x512',type:'image/png',purpose:'any'},
+     {src:'./apple-touch-icon.png',sizes:'180x180',type:'image/png',purpose:'any'}
+   ]
  },null,2);
  const id=hash(sha+'\n'+Object.entries(output).map(([name,value])=>name+':'+hash(value)).join('\n'));
  output['business.html']=[
@@ -106,6 +145,7 @@ async function main(){
  '<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">',
  '<meta name="theme-color" content="#176fc7"><title>个人工作台 V2 · 独立加密候选</title>',
  '<link rel="manifest" href="./candidate.webmanifest">',
+ '<link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">',
  '<link rel="stylesheet" href="./business.css"></head><body>',
  '<header><div><small>医疗业务 · 加密候选验收</small><h1>个人工作台</h1></div>',
  '<span class="badge">非正式版</span></header>',

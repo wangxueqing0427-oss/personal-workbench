@@ -35,7 +35,7 @@ async function main(){
     assert.equal(bytes.length,spec.bytes,'deployed byte length '+name);
     assert.equal(sha(bytes),spec.sha256,'deployed SHA256 '+name);
   }
-  check(true,'all eight deployed app assets match the local SHA256 and byte manifest');
+  check(true,'all ten deployed app assets match the local SHA256 and byte manifest');
   const home=await fetch(base+'business.html',{redirect:'error'});
   const h=home.headers;
   check((h.get('x-robots-tag')||'').includes('noindex')&&
@@ -46,8 +46,9 @@ async function main(){
     'live host sends noindex, nosniff, frame protection and same-origin camera/microphone permissions');
   const manifest=JSON.parse(await (await fetch(base+'candidate.webmanifest')).text());
   check(manifest.start_url==='./business.html'&&manifest.scope==='./'&&
-    manifest.display==='standalone',
-    'deployed PWA manifest keeps an independent root scope and standalone launch');
+    manifest.display==='standalone'&&
+    manifest.icons?.some(x=>x.src==='./icon-512.png'&&x.sizes==='512x512'),
+    'deployed PWA manifest keeps an independent root scope, standalone launch and home-screen icon');
   const browser=await (engine==='webkit'?webkit:chromium).launch({headless:true});
   const ctx=await browser.newContext({viewport:{width:390,height:844},isMobile:true,
     hasTouch:true,locale:'zh-CN',acceptDownloads:true});

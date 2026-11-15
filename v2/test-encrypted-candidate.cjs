@@ -22,7 +22,7 @@ async function main(){
     manifest.allowedHosts?.includes('personal-workbench-v2-encrypted-candidate.wangxueqing0427.workers.dev')&&
     !manifest.cloudConnected,'candidate manifest allows only the isolated test host, never production or cloud data');
   const names=Object.keys(manifest.files);
-  check(names.length===8&&
+  check(names.length===10&&
     !names.some(name=>/business-store|offline-sync|staging|preview-privacy|legacy/i.test(name)),
     'encrypted candidate asset whitelist excludes plaintext IndexedDB and legacy V1 or staging sync');
   for(const [name,expected] of Object.entries(manifest.files)){
@@ -30,7 +30,7 @@ async function main(){
     if(sha(bytes)!==expected.sha256||bytes.length!==expected.bytes)
       throw Error('Candidate asset mutated after committed source build: '+name);
   }
-  check(true,'each of eight built candidate assets matches SHA-256 and byte manifest');
+  check(true,'each of ten built candidate assets matches SHA-256 and byte manifest');
   const ui=await fs.readFile(path.join(dir,'business-ui.js'),'utf8');
   const store=await fs.readFile(path.join(dir,'encrypted-store.js'),'utf8');
   const boot=await fs.readFile(path.join(dir,'encrypted-boot.js'),'utf8');
@@ -50,6 +50,15 @@ async function main(){
   const html=await fs.readFile(path.join(dir,'business.html'),'utf8');
   check(html.includes('personal-workbench-v2-encrypted-candidate.wangxueqing0427.workers.dev')&&html.includes('navigator.serviceWorker.register'),
     'PWA service worker is enabled only for the exact isolated HTTPS host and localhost');
+  const appleIcon=await fs.readFile(path.join(dir,'apple-touch-icon.png'));
+  const pwaIcon=await fs.readFile(path.join(dir,'icon-512.png'));
+  const pngSig=Buffer.from([137,80,78,71,13,10,26,10]);
+  const webmanifest=JSON.parse(await fs.readFile(path.join(dir,'candidate.webmanifest'),'utf8'));
+  check(appleIcon.subarray(0,8).equals(pngSig)&&appleIcon.readUInt32BE(16)===180&&appleIcon.readUInt32BE(20)===180&&
+    pwaIcon.subarray(0,8).equals(pngSig)&&pwaIcon.readUInt32BE(16)===512&&pwaIcon.readUInt32BE(20)===512&&
+    webmanifest.icons?.some(x=>x.src==='./icon-512.png'&&x.sizes==='512x512')&&
+    html.includes('rel="apple-touch-icon"'),
+    'iPhone home-screen icon and Android/PWA 512px icon are generated, sized and linked correctly');
   const allowed=new Set([...names,'build-info.json']);
   let denyOrigin=false,deniedRequests=0;
   const server=http.createServer(async(req,res)=>{
@@ -57,7 +66,7 @@ async function main(){
     const name=new URL(req.url,'http://127.0.0.1').pathname.slice(1);
     if(!allowed.has(name)){res.writeHead(404).end();return;}
     const types={html:'text/html; charset=utf-8',css:'text/css',js:'application/javascript',
-      webmanifest:'application/manifest+json',json:'application/json'};
+      webmanifest:'application/manifest+json',json:'application/json',png:'image/png'};
     const extension=name.split('.').at(-1);
     res.writeHead(200,{'Content-Type':types[extension]||'application/octet-stream','Cache-Control':'no-store'});
     res.end(await fs.readFile(path.join(dir,name)));
