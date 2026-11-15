@@ -1,0 +1,39 @@
+name: V2 production readiness - non-destructive legacy gate
+on:
+  push:
+    branches:
+      - dev/v2-preview-isolated-20261111
+    paths:
+      - .github/workflows/v2-release-readiness.yml
+      - v2/release-readiness-audit.cjs
+      - v2/test-release-readiness.cjs
+      - v2/business-core.js
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  synthetic-readiness-gate:
+    if: github.ref == 'refs/heads/dev/v2-preview-isolated-20261111'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout isolated source without production credentials
+        uses: actions/checkout@v4
+      - name: Enforce synthetic-only and no production migration actions
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "wangxueqing0427-oss/personal-workbench"
+          test "$GITHUB_REF" = "refs/heads/dev/v2-preview-isolated-20261111"
+          node --check v2/release-readiness-audit.cjs
+          node --check v2/test-release-readiness.cjs
+          node --check v2/business-core.js
+          ! grep -Ei 'https?://|wrangler deploy|CLOUDFLARE_API_TOKEN|github_token|indexedDB.open|localStorage.getItem|fetch\(' v2/release-readiness-audit.cjs
+      - name: Prove old-version copy verifier refuses data loss
+        shell: bash
+        run: |
+          set -euo pipefail
+          node v2/test-release-readiness.cjs | tee /tmp/v2-release-gate.txt
+          grep -F 'RELEASE_READINESS_GUARD_PASS' /tmp/v2-release-gate.txt
+          grep -F '"label":"BLOCKED_NOT_FOR_PRODUCTION"' /tmp/v2-release-gate.txt
+          echo 'GATE_TEST_GREEN_BUT_PRODUCTION_PROMOTION_STILL_BLOCKED'
