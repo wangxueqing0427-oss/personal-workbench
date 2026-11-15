@@ -667,7 +667,14 @@ async function main(){
    await page.locator('form[data-form="note"] textarea[name="text"]').fill(dictated);
    const beforeReview=await page.evaluate(async()=>({rev:(await WorkbenchBusinessStore.read()).revision,notes:(await WorkbenchBusinessStore.read()).notes.length}));
    await page.locator('form[data-form="note"] button.primary').click();
-   check(await page.locator('.briefing-item').count()===2&&await page.getByText('已拆分 2 条事项').isVisible(),
+   const splitDiagnostic={items:await page.locator('.briefing-item').count(),
+     heading:await page.locator('#content h2').allTextContents(),
+     notice:await page.locator('#notice').textContent(),
+     draft:await page.evaluate(async()=>WorkbenchBusinessStore.readDraft()),
+     value:await page.locator('form[data-form="note"] textarea[name="text"]').count()?
+       await page.locator('form[data-form="note"] textarea[name="text"]').inputValue():null};
+   if(splitDiagnostic.items!==2)console.log('VOICE_SPLIT_DIAGNOSTIC '+JSON.stringify(splitDiagnostic));
+   check(splitDiagnostic.items===2&&await page.getByText('已拆分 2 条事项').isVisible(),
      'long spoken visit report is separated into two reviewable hospital/project records');
    const afterReview=await page.evaluate(async()=>({rev:(await WorkbenchBusinessStore.read()).revision,notes:(await WorkbenchBusinessStore.read()).notes.length}));
    check(JSON.stringify(beforeReview)===JSON.stringify(afterReview),
