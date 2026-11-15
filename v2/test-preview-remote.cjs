@@ -122,20 +122,33 @@ async function main() {
     await page.locator('nav button[data-route="supplies"]').click();
     check(await page.getByRole('heading', { name: '耗材业务' }).isVisible(), 'consumables section opens');
     await page.locator('nav button[data-route="note"]').click();
-    check(await page.getByRole('heading', { name: '随手记业务进展' }).isVisible(), 'note capture screen opens');
+    check(await page.getByRole('heading', { name: '医院出来，说一段就好' }).isVisible() &&
+      await page.locator('[data-voice-toggle]').isVisible(),
+      'deployed speech-ready note screen and editable text fallback open');
 
     const marker = '自动化合成测试-' + crypto.randomUUID();
     await page.locator('[data-form="note"] textarea[name="text"]').fill(marker + '，仅用于独立预览验收');
     await page.locator('[data-form="note"] button.primary').click();
-    await page.getByRole('heading', { name: '核对后保存' }).waitFor();
-    check(true, 'note suggestions require explicit confirmation');
-    await page.locator('[data-form="confirm-note"] button.primary').click();
-    await page.getByRole('heading', { name: '记录收件箱' }).waitFor();
-    check((await page.locator('#content').innerText()).includes(marker), 'confirmed note saved in isolated local store');
+    await page.getByRole('heading', { name: '已拆分 1 条事项' }).waitFor();
+    check(await page.locator('.briefing-item').count() === 1 &&
+      await page.locator('[data-form="briefing"]').isVisible(),
+      'deployed speech or text note requires explicit split-item review and confirmation');
+    await page.locator('[data-form="briefing"] button.primary').click();
+    await page.getByRole('heading', { name: '今天先办重要的事' }).waitFor();
+    await page.locator('nav button[data-route="more"]').click();
+    await page.getByRole('button', { name: '记录收件箱' }).click();
+    check((await page.locator('#content').innerText()).includes(marker),
+      'confirmed split note persists in the isolated local inbox');
 
     await page.locator('nav button[data-route="more"]').click();
     await page.locator('[data-route="files"]').last().click();
     check(await page.getByRole('heading', { name: '拍照 / 上传原件' }).isVisible(), 'file/photo screen opens');
+    if (process.env.PREVIEW_EXPECTED_SHA) {
+      check(await page.locator('.camera-choice').count() === 3 &&
+        await page.locator('.camera-choice input[name="photo"][capture="environment"]').count() === 1 &&
+        await page.locator('.camera-choice input[name="gallery"][accept="image/*"]').count() === 1,
+        'deployed page contains direct rear camera, photo library and document controls');
+    }
     const sample = Buffer.from('SYNTHETIC_PREVIEW_FILE_' + marker);
     await page.locator('[data-form="file"] input[name="file"]').setInputFiles({ name: 'synthetic-preview.txt', mimeType: 'text/plain', buffer: sample });
     if(process.env.PREVIEW_EXPECTED_SHA) {
