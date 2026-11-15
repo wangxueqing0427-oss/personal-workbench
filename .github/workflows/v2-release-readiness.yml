@@ -7,6 +7,8 @@ on:
       - .github/workflows/v2-release-readiness.yml
       - v2/release-readiness-audit.cjs
       - v2/test-release-readiness.cjs
+      - v2/legacy-shadow-planner.cjs
+      - v2/test-legacy-shadow-planner.cjs
       - v2/business-core.js
   workflow_dispatch:
 permissions:
@@ -27,6 +29,8 @@ jobs:
           test "$GITHUB_REF" = "refs/heads/dev/v2-preview-isolated-20261111"
           node --check v2/release-readiness-audit.cjs
           node --check v2/test-release-readiness.cjs
+          node --check v2/legacy-shadow-planner.cjs
+          node --check v2/test-legacy-shadow-planner.cjs
           node --check v2/business-core.js
           ! grep -Ei 'https?://|wrangler deploy|CLOUDFLARE_API_TOKEN|github_token|indexedDB.open|localStorage.getItem|fetch\(' v2/release-readiness-audit.cjs
       - name: Prove old-version copy verifier refuses data loss
@@ -37,3 +41,11 @@ jobs:
           grep -F 'RELEASE_READINESS_GUARD_PASS' /tmp/v2-release-gate.txt
           grep -F '"label":"BLOCKED_NOT_FOR_PRODUCTION"' /tmp/v2-release-gate.txt
           echo 'GATE_TEST_GREEN_BUT_PRODUCTION_PROMOTION_STILL_BLOCKED'
+      - name: Verify a fully reversible synthetic legacy shadow copy
+        shell: bash
+        run: |
+          set -euo pipefail
+          node v2/test-legacy-shadow-planner.cjs | tee /tmp/v2-legacy-shadow.txt
+          grep -F 'SYNTHETIC_LEGACY_SHADOW_PASS' /tmp/v2-legacy-shadow.txt
+          grep -F '"productionReady":false' /tmp/v2-legacy-shadow.txt
+          echo 'SYNTHETIC_SHADOW_VERIFIED_REAL_PRODUCTION_STILL_BLOCKED'
