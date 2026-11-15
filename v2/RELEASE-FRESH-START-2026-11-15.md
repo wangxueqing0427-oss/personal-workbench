@@ -21,3 +21,13 @@
 - 正式发布前用户明确授权。
 
 `fresh-start-readiness.cjs` 与 CI `v2-release-readiness.yml` 将此策略设为标准上线门禁。**旧版数据迁移不再拖延发布，但仍不能把公有合成预览误认为可以放入真实医院资料的正式系统。**
+
+
+## 2026-11-15｜全新工作台：加密备份界面 + 草稿密文存储双阶段已回归
+
+本轮将恢复实验推进到可在**实际V2手机界面**操作的合成导出/恢复页（不进入公开预览），并将**未完成语音草稿**加入对象增量AES-GCM加密原型、同事务清理及认证备份。
+
+- 用户不必迁移V1.5.7，正式版必须继续空白启用。实验导出／导入在隔离localhost运行，不允许在公共Worker或生产使用。
+- [手机真实点击备份/导入专项 #43723870620](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43723870620) Chromium14 + WebKit14 新UI断言全部通过；[草稿密文/事务/恢复专项 #43724482429](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43724482429) Chromium14 + WebKit14 新加密草稿断言全部通过，新增56断言0失败。
+- 加密实验无法替代目前业务UI仍使用的明文本机`business-store.js`；缺安全启用/解锁、永久设备身份、可信云端备份、真实iPhone及Face ID验证。**productionReady=false**。不在此时开放真实资料或发布正式域名。
+- 工程细节及完整限制参见`v2/FRESH-RECOVERY-LAB-2026-11-15.md`、`v2/DELTA-JOURNAL-REVIEW-2026-11-13.md`，完整交接参见`v2/CONTINUATION-HANDOFF-2026-11-13.md`。
