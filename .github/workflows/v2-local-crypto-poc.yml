@@ -17,6 +17,7 @@ on:
       - v2/test-privacy-object-store-poc.cjs
       - v2/privacy-delta-journal-poc.js
       - v2/test-privacy-delta-journal-poc.cjs
+      - v2/test-encrypted-voice-draft-ui.cjs
       - v2/privacy-e2e-cloud-poc.js
       - v2/test-privacy-e2e-cloud-poc.cjs
       - v2/privacy-device-trust-poc.js
@@ -59,6 +60,7 @@ jobs:
           node --check v2/test-privacy-object-store-poc.cjs
           node --check v2/privacy-delta-journal-poc.js
           node --check v2/test-privacy-delta-journal-poc.cjs
+          node --check v2/test-encrypted-voice-draft-ui.cjs
           node --check v2/privacy-e2e-cloud-poc.js
           node --check v2/test-privacy-e2e-cloud-poc.cjs
           node --check v2/privacy-device-trust-poc.js
@@ -83,5 +85,6 @@ jobs:
           node v2/test-privacy-sharded-store-poc.cjs
           node v2/test-privacy-object-store-poc.cjs
           node v2/test-privacy-delta-journal-poc.cjs
+          node v2/test-encrypted-voice-draft-ui.cjs
           node v2/test-privacy-e2e-cloud-poc.cjs
           node v2/test-privacy-device-trust-poc.cjs

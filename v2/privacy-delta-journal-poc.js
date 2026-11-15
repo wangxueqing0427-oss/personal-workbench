@@ -12,6 +12,7 @@
   const PREFIX='personal-workbench-v2-delta-poc-';
   const UUID=/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/;
   const CHUNK=256*1024,MAX_FILE=16*1024*1024,MAX_FILES=50,MAX_JOBS=200;
+  const DRAFT_KEY='draft:visit-note:v1', DRAFT_FORMAT='workbench-voice-draft-v1';
   const COLLECTIONS=['hospitals','projects','notes','inventory','movements','orders','files'];
   const ENC=new TextEncoder(),DEC=new TextDecoder();
   const copy=x=>structuredClone(x),makeId=()=>crypto.randomUUID(),random=n=>crypto.getRandomValues(new Uint8Array(n));
@@ -53,6 +54,7 @@
         const tx=q.transaction;
         tx.objectStore('header').put(header,'current');
         tx.objectStore('state').put(initial,'current');
+        if(restore?.draft)tx.objectStore('state').put(restore.draft,DRAFT_KEY);
         if(restore)for(const type of ['objects','jobs','files','chunks'])
           for(const row of restore[type])tx.objectStore(type).add(row.value,row.key);
       };
@@ -99,6 +101,7 @@
         const st=tx.objectStore(s);
         req[s]=['header','state'].includes(s)?[st.get('current')]:[st.getAll(),st.getAllKeys()];
       }
+      req.draft=[tx.objectStore('state').get(DRAFT_KEY)];
       tx.oncomplete=()=>{
         const out={};
         for(const [s,a]of Object.entries(req))out[s]=a.length===1?a[0].result:
@@ -203,6 +206,11 @@
     return {jobs:out,current};
   }
   async function validateBundle(key,h,shot){
+    if(shot.draft){
+      const draft=await readJson(key,shot.draft,label(h,'draft',DRAFT_KEY));
+      if(!draft||draft.format!==DRAFT_FORMAT||typeof draft.text!=='string'||draft.text.length>5000||
+        typeof draft.updatedAt!=='string')fail('加密草稿损坏或与文件版本不兼容');
+    }
     const state=await decodeState(key,h,shot.state,shot.objects);
     if(shot.files.length>MAX_FILES||shot.jobs.length>MAX_JOBS||
        shot.chunks.length>MAX_FILES*Math.ceil(MAX_FILE/CHUNK))fail('备份超过合成试验容量限制');
@@ -227,6 +235,30 @@
     let key=initialKey;
     const unlocked=()=>{if(!key)fail('本机数据已锁定，需要使用恢复口令重新解锁');};
     const read=async()=>{unlocked();const shot=await readStateParts(db);return copy(await decodeState(key,h,shot.state,shot.objects));};
+    async function readDraft(){
+      unlocked();
+      const row=await get(db,'state',DRAFT_KEY);
+      if(!row)return null;
+      const draft=await readJson(key,row,label(h,'draft',DRAFT_KEY));
+      if(!draft||draft.format!==DRAFT_FORMAT||typeof draft.text!=='string'||
+        draft.text.length>5000||typeof draft.updatedAt!=='string')
+        fail('加密语音草稿损坏，停止读取');
+      return {text:draft.text,updatedAt:draft.updatedAt};
+    }
+    async function writeDraft(value){
+      unlocked();
+      const text=String(value??'');
+      if(text.length>5000)fail('合成语音草稿超过5000字，拒绝写入');
+      const encrypted=text.trim()?await sealJson(key,{format:DRAFT_FORMAT,text,
+        updatedAt:new Date().toISOString()},label(h,'draft',DRAFT_KEY)):null;
+      unlocked();
+      return new Promise((resolve,reject)=>{
+        const tx=db.transaction('state','readwrite'),state=tx.objectStore('state');
+        if(encrypted)state.put(encrypted,DRAFT_KEY);else state.delete(DRAFT_KEY);
+        tx.oncomplete=()=>resolve(true);
+        tx.onabort=tx.onerror=()=>reject(tx.error||Error('加密草稿暂存失败，原有数据不变'));
+      });
+    }
     async function commit(input,expected,file,options={}){
       unlocked();
       if(!input||input.schema!==2||!Number.isSafeInteger(expected)||expected< -1)fail('业务入参或版本错误');
@@ -316,6 +348,7 @@
             }
             for(const entry of updates)tx.objectStore('objects').put(entry.value,entry.id);
             states.put(encryptedState,'current');
+            if(options.clearVisitDraft===true)states.delete(DRAFT_KEY);
             tx.objectStore('jobs').add(encryptedJob,state.revision);
           }catch(error){problem=error;tx.abort();}
         };
@@ -346,14 +379,15 @@
       unlocked();const shot=await all(db);
       if(JSON.stringify(shot).length>38*1024*1024)fail('加密备份超过试验上限');
       await validateBundle(key,h,shot);
-      const body={state:shot.state,objects:shot.objects,jobs:shot.jobs,files:shot.files,chunks:shot.chunks};
+      const body={state:shot.state,objects:shot.objects,jobs:shot.jobs,files:shot.files,chunks:shot.chunks,
+        draft:shot.draft||null};
       const checksum=await digest(ENC.encode(JSON.stringify(body)));
       return {format:FORMAT,version:1,header:copy(h),body:copy(body),
         proof:await sealJson(key,{checksum,revision:shot.state.revision},label(h,'backup','complete'))};
     }
     const noCloud=async()=>fail('分块密文原型禁止云端身份和同步写入');
     return Object.freeze({name,protocol:'workbench-sync-2',mode:'synthetic-sharded-local-only',chunkBytes:CHUNK,maxFileBytes:MAX_FILE,
-      read,commit,readFile,queueData,fileKeys:async()=>{unlocked();return listKeys(db,'files');},
+      read,commit,readDraft,writeDraft,readFile,queueData,fileKeys:async()=>{unlocked();return listKeys(db,'files');},
       exportEncryptedBackup:backup,changeQueue:noCloud,stageRemote:noCloud,resolveConflict:noCloud,
       lock(){key=null;},close(){key=null;db.close();}});
   }
