@@ -47,6 +47,38 @@ async function main(){
      'calm gradient dashboard, fixed bottom navigation and 44px mobile tap targets render without horizontal scroll');
    check(await page.locator('.work-item [data-quick-project]').count()>=1,
      'home project cards expose real quick follow-up action');
+   check(await page.locator('.hero-metric-button').count()===4 &&
+     await page.locator('.hero-metric-button[data-focus-target="today"]').isEnabled() &&
+     await page.locator('.hero-metric-button[data-focus-target="overdue"]').isDisabled(),
+     'home summary numbers are accessible tappable category shortcuts, with empty lanes disabled');
+   await page.locator('.hero-metric-button[data-focus-target="today"]').click();
+   check(await page.locator('#focus-today').isVisible() &&
+     await page.locator('#focus-today').evaluate(el=>el.classList.contains('focus-flash')),
+     'tapping a today summary jumps to the real actionable list instead of opening an empty page');
+   const isolatedLanes=await page.evaluate(async()=>{
+     const core=WorkbenchBusiness,source=await WorkbenchBusinessStore.read(),sample=structuredClone(source);
+     const date=new Intl.DateTimeFormat('sv-SE',{year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+     sample.projects[0].followupDate=core.addDays(date,-2);sample.projects[0].status='待处理';
+     sample.projects[1].followupDate=date;sample.projects[1].status='等待对方';
+     sample.projects[2].followupDate=core.addDays(date,3);sample.projects[2].status='等待对方';
+     const coming=structuredClone(sample.projects[0]);coming.id=crypto.randomUUID();coming.status='进行中';
+     coming.followupDate=core.addDays(date,2);coming.details={};sample.projects.push(coming);
+     const completed=structuredClone(sample.projects[0]);completed.id=crypto.randomUUID();completed.status='已完成';
+     completed.followupDate=core.addDays(date,1);completed.details={};sample.projects.push(completed);
+     const view=core.focusBoard(sample,date);
+     const groups=[view.overdue,view.today,view.waiting,view.week],ids=groups.flatMap(x=>x.map(p=>p.id));
+     return {counts:groups.map(g=>g.length),unique:new Set(ids).size===ids.length,
+       future:view.week[0]?.id===coming.id,overdue:view.overdue[0]?.id===sample.projects[0].id,
+       waiting:view.waiting[0]?.id===sample.projects[2].id,
+       today:view.today[0]?.id===sample.projects[1].id,
+       completedExcluded:!ids.includes(completed.id),sourceRevision:source.revision};
+   });
+   check(JSON.stringify(isolatedLanes.counts)==='[1,1,1,1]'&&isolatedLanes.unique &&
+     isolatedLanes.future&&isolatedLanes.overdue&&isolatedLanes.waiting&&isolatedLanes.today,
+     'overdue, today, waiting and next-week focus lanes are stable, prioritized and disjoint');
+   check(isolatedLanes.completedExcluded,
+     'finished projects never reappear among urgent, waiting or scheduled actions');
+
    check(await page.locator('.work-item [data-follow-tomorrow]').count()>=1,
      'each daily project includes a thumb-friendly tomorrow shortcut');
    await page.locator('.work-item [data-follow-tomorrow]').first().click();
