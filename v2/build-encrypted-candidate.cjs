@@ -145,7 +145,7 @@ async function main(){
  '   await cache.put(url,response);',
  ' }',
  ' await self.skipWaiting();',
- '})().catch(async error=>{await caches.delete(cacheName);throw error;}))));',
+ '})().catch(async error=>{await caches.delete(cacheName);throw error;})));',
  'self.addEventListener("activate",event=>event.waitUntil((async()=>{',
  ' for(const key of await caches.keys())',
  '  if(key.startsWith("workbench-v2-encrypted-candidate-")&&key!==cacheName)',
