@@ -141,6 +141,12 @@ async function main() {
     await page.locator('[data-form="note"] textarea[name="text"]').fill(marker + '，仅用于独立预览验收');
     await page.locator('[data-form="note"] button.primary').click();
     await page.getByRole('heading', { name: '已拆分 1 条事项' }).waitFor();
+    if (process.env.PREVIEW_EXPECTED_SHA) {
+      check(await page.locator('.briefing-item [data-match-hint]').count()===1 &&
+        await page.locator('.briefing-item .briefing-proposal').isVisible() &&
+        await page.locator('.briefing-item input[name="item0changeWaitingOn"]').count()===1,
+        'live voice review exposes project match explanation, suggested action/date, and optional follow-up contact');
+    }
     check(await page.locator('.briefing-item').count() === 1 &&
       await page.locator('[data-form="briefing"]').isVisible(),
       'deployed speech or text note requires explicit split-item review and confirmation');
