@@ -208,8 +208,8 @@ async function main(){
  ].join('\n');
  output['offline-sw.js']=sw;
  const whitelist=['business-core.js','business-ui.js','business.css',
-   'encrypted-store.js','encrypted-boot.js','business.html',
-   'candidate.webmanifest','offline-sw.js'];
+   'apple-touch-icon.png','icon-512.png','encrypted-store.js',
+   'encrypted-boot.js','business.html','candidate.webmanifest','offline-sw.js'];
  if(Object.keys(output).sort().join(',')!==whitelist.sort().join(','))
    throw Error('Candidate whitelist mismatch');
  for(const [name,source]of Object.entries(output)){
@@ -220,7 +220,7 @@ async function main(){
  const manifest={kind:'encrypted-fresh-start-candidate',sourceCommit:sha,
    releaseId:id,freshEmpty:true,legacyMigration:false,cloudConnected:false,
    localhostOnly:false,allowedHosts:['localhost','127.0.0.1',CANDIDATE_HOST],
-   syntheticOnly:true,cloudConnected:false,productionReady:false,
+   syntheticOnly:true,productionReady:false,
    productionDeployAllowed:false,isolatedTestDeployAllowed:true,
    files:Object.fromEntries(Object.entries(output).map(([name,contents])=>[
      name,{sha256:hash(contents),bytes:Buffer.byteLength(contents,'utf8')}
