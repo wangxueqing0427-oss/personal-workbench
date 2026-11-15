@@ -98,6 +98,9 @@ async function main() {
     check(layout.nav === 'fixed' && layout.header === 'flex' && layout.cards >= 2 && layout.buttons === 5 && layout.viewport, 'mobile CSS applied without horizontal overflow');
 
     if (process.env.PREVIEW_EXPECTED_SHA) {
+      // Earlier follow-up actions intentionally leave the screen on project detail.
+      // Return to the real homepage before asserting its quick shortcuts.
+      await page.locator('nav button[data-route="home"]').click();
       check(await page.locator('.shortcut-grid button[data-start-voice]').count()===1,
         'live home displays a single one-tap speech shortcut');
       await page.locator('.shortcut-grid button[data-start-voice]').click();
