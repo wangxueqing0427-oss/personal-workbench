@@ -152,3 +152,15 @@
 - **本地独立合成手机回归**：[CI #43715387269](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43715387269) SUCCESS，Chromium 130/130 + WebKit 130/130，**260项通过、0失败**。涵盖同医院/跨医院判断、无效项目、重复笔记、文件原件关联、首页未归档提醒、收件箱记录导航、取消、一次关联、独立项目时间线、原始日期保留、整个项目 status/date/nextAction 不变、离线刷新保留。源代码预检 [#43715387202](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43715387202) SUCCESS，原有本地加密存储兼容 [#43715387287](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43715387287) SUCCESS。
 - **已上线独立合成预览 + 发布后验收**：[Deploy isolated V2 preview #43715605656](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43715605656) SUCCESS，线上 Chromium 140/140 + WebKit 136/136，**276通过、0失败**；20文件完整性门禁 `PREVIEW_ASSET_GATE_PASS`、移动端全流程 `PREVIEW_LIVE_MOBILE_GATE_PASS`。实际部署 `sourceCommit=72fcf96286cfd18533b49035acb085c20dfb80b8`，`releaseId=61ee6bd340acaac09f4ed8932d0ce4b0d5483fbfa8bb1cdb75bb7e40b15bcfa4`，`productionAccessed=false`。
 - **预览 URL**：`https://personal-workbench-v2-preview.wangxueqing0427.workers.dev/business.html`；它在公开的合成数据环境中，禁止录入真实医院客户、耗材、合同、发票、报价或上传真实原件。实际 iPhone 摄像头和麦克风权限不由模拟浏览器验证，仍需最终设备上手确认。正式 `main` 和 V1.5.7、旧 V2 staging、真实数据、资料原件保持不变，无付费API变更；目前还不是正式生产替换发布。
+
+
+## 2026-11-15｜正式上线准备：旧版资料迁移只读检查与合成影子预演（未上线）
+
+- **用户当前目标**：尽快完成正式 V2 交付、不要再无限扩充功能；所有代码、模拟测试、备份恢复试验均由 Assistant 自行完成，用户只做真实 iPhone 最终上手。不得擅自迁移任何真实资料、替换 V1.5.7、改原 staging/production/main 或使用公有合成预览录入业务信息。
+- **核查到 V1 真实代码路径**：仓库旧版 app.js 从 localStorage 的 `personalWorkbench` 读取业务 JSON；app-v151t.js 把上传的原始文件保存在同源 IndexedDB `personal-workbench-originals/files`，收件箱 inbox 只是文件元信息；项目、行动、附件关联在 `contractProjectsV138`、`businessProjectsV140`、`contractActionsV139`、`projectFilesV150`。原始 V1.5.7 手机数据未读取。
+- **查出真实代码缺口**：当前 `WorkbenchBusiness.fromLegacy` 只转换合同/业务医院项目，无法作为完整正式迁移工具；它没有复制 V1 inbox、原件字节、早期 notes/tasks/finance/health 等非项目内容。这是可证实的代码限制，未丢用户数据，因尚未运行真实迁移。
+- **上线阻断门禁**：`v2/release-readiness-audit.cjs`、`v2/test-release-readiness.cjs`、`.github/workflows/v2-release-readiness.yml`；对完全虚构的旧版业务快照构造 SHA256、原件逐字节清单，审查多项目/附件引用、重复 ID、缺原件、错误长度、损坏备份；从不打开 localStorage、IndexedDB、生产网站。CI 成功只证明明确地**BLOCKED_NOT_FOR_PRODUCTION**，不是允许发布。
+- **合成只读影子预演**：`v2/legacy-shadow-planner.cjs` 和 `v2/test-legacy-shadow-planner.cjs` 仅在 `syntheticOnly:true,origin:'synthetic-ci'` 下运行，建立**内存**候选业务档案、原件字节复制、旧版完整原始 JSON 存档、设备/合同/时间线元数据；自动阻断缺文件、重复/孤儿引用、转换器少项目、同一原件需归档到两家项目等情况。严格标记 `SHADOW_ONLY_REVIEW_REQUIRED`，**未进行持久化写入、独立库解密恢复、真正 iPhone 数据读取或正式迁移**。
+- **自动化绿色证据**：[第一轮门禁 #43717207631](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43717207631) SUCCESS 19/19；[最新两个合成专项 #43717559251](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43717559251) SUCCESS，安全阻断 19项 + 可逆内存影子 15项，共34项通过、0失败。最新分支代码提交 `033e25e682e83ad9c7c8e57785de314b2845b634`。技术报告 `v2/RELEASE-READINESS-2026-11-15.md`。
+- **目前正式上线阻断依旧**：真实 Safari/PWA/域名和 V2 来源审计；完整数据与原件导入；集成的实际本机加密和可靠身份；真实独立加密备份恢复/回滚；生产正式发布授权；真实 iPhone 相机/语音/离线/Face ID 核验。既有实验性分对象加密/跨设备同步有合成验证但尚未进入正式业务存储接口。**代码功能模拟绿色不等于真实用户资料可以上线。**
+- **生产保持**：`main=c3d9ebec26b94ef056eaad649447b3ad2dba31bc`，没有改动正式主线，V1.5.7与既有 V2 staging/真实数据不变；本轮也没有部署合成 Worker、无新费用、无需用户运行技术验收。
