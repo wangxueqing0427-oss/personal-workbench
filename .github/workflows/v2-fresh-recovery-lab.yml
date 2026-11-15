@@ -10,6 +10,9 @@ on:
       - v2/privacy-crypto-poc.js
       - v2/business-store.js
       - v2/business-core.js
+      - v2/business-ui.js
+      - v2/business.css
+      - v2/test-fresh-recovery-mobile-ui.cjs
   workflow_dispatch:
 permissions:
   contents: read
@@ -36,6 +39,8 @@ jobs:
           test "$GITHUB_REF" = "refs/heads/dev/v2-preview-isolated-20261111"
           node --check v2/fresh-recovery-lab.js
           node --check v2/test-fresh-recovery-lab.cjs
+          node --check v2/test-fresh-recovery-mobile-ui.cjs
+          node --check v2/business-ui.js
           node --check v2/privacy-crypto-poc.js
           node --check v2/business-core.js
           node --check v2/business-store.js
@@ -53,3 +58,10 @@ jobs:
           node v2/test-fresh-recovery-lab.cjs | tee /tmp/fresh-recovery-result.log
           grep -F 'FRESH_CROSS_DEVICE_RECOVERY_PASS' /tmp/fresh-recovery-result.log
           grep -F '"productionReady":false' /tmp/fresh-recovery-result.log
+      - name: Test actual touch-screen V2 backup download and replacement-device upload restore
+        shell: bash
+        run: |
+          set -euo pipefail
+          node v2/test-fresh-recovery-mobile-ui.cjs | tee /tmp/fresh-recovery-ui.log
+          grep -F 'FRESH_RECOVERY_MOBILE_UI_PASS' /tmp/fresh-recovery-ui.log
+          grep -F '"productionReady":false' /tmp/fresh-recovery-ui.log

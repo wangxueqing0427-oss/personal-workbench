@@ -10,6 +10,7 @@
   const options = (values, current) => values.map(value => `<option${value === current ? ' selected' : ''}>${escape(value)}</option>`).join('');
   const field = (name, label, value = '', type = 'text') => `<label>${label}<input name="${name}" type="${type}" value="${escape(value)}"></label>`;
   let state, route = 'home', selection = '', suggestion = null, briefing = null, noteDraft = '', speechSession = null, busy = false;
+  let freshLabStatus = '';
   let draftStatus='', draftTimer=null, draftWriteChain=Promise.resolve(), clearDraftArmed=false;
   let searchQuery = '', searchStatus = '全部', quickTomorrow = false, quickIntent = 'edit', supplyFilter = 'all';
   function message(value) { notice.textContent = value; }
@@ -386,12 +387,48 @@
       <button type="button" data-back="inbox">取消，暂时留在收件箱</button>
     </form>`;
   }
-  function more() { return `<section class="card"><h2>更多</h2><p>V2.0 手机验收测试版。仅合成数据，独立加密同步。</p><button data-route="files">文件与拍照</button> <button data-route="inbox">记录收件箱</button><p>完整备份及隔离恢复已自动测试；未开放生产资料接入。</p><p class="muted">iPhone真实Safari/PWA、供应链批次追溯和旧版文件迁移仍需后续验收。</p></section>`; }
+  function more() {
+    const syntheticLab = globalThis.WorkbenchFreshRecoveryLab?
+      '<button type="button" data-route="recovery-lab">合成加密备份 / 空白设备恢复实验</button>':'';
+    return `<section class="card"><h2>更多</h2><p>V2.0 手机验收测试版。当前只允许使用合成数据，不代表已开通正式加密存储。</p>
+      <button type="button" data-route="files">文件与拍照</button>
+      <button type="button" data-route="inbox">记录收件箱</button>
+      ${syntheticLab}<p class="muted">正式版仍需完成本机加密存储、长期设备身份、真实 iPhone 和离线终验。全新正式版无需导入 V1.5.7。</p></section>`;
+  }
+  function recoveryLab(){
+    if(!globalThis.WorkbenchFreshRecoveryLab)return '<section class="card"><p>此功能尚未开放，业务数据未修改。</p></section>';
+    return `<section class="card lab-recovery-head">
+      <button type="button" data-back="more" class="back-link">← 返回更多</button>
+      <p class="eyebrow">SYNTHETIC-ONLY RECOVERY LAB</p><h2>加密备份与换机恢复实验</h2>
+      <p><strong>仅隔离的合成演示数据。</strong> 本地 IndexedDB 尚未完整加密，导出的文件经过加密认证；这不等于正式版已具备隐私保护或 Face ID。</p>
+      <p class="muted">恢复只能写入尚无医院、项目、文件的全新空白测试库；绝不会覆盖已保存记录。</p>
+      <output class="lab-recovery-status" data-lab-recovery-status role="status" aria-live="polite">${escape(freshLabStatus||'尚未进行备份或恢复操作')}</output>
+    </section>
+    <form class="card lab-recovery-form" data-form="lab-backup">
+      <h3>1. 生成加密备份文件</h3>
+      <label>独立恢复密码（至少16个字符）
+        <input type="password" name="phrase" minlength="16" maxlength="256" autocomplete="new-password" required></label>
+      <label>再次填写恢复密码
+        <input type="password" name="confirmPhrase" minlength="16" maxlength="256" autocomplete="new-password" required></label>
+      <p class="muted">请自行妥善保存恢复密码。这里只将加密包保存到浏览器下载目录，不上传到云端。</p>
+      <button class="primary" type="submit">导出加密测试备份</button>
+    </form>
+    <form class="card lab-recovery-form" data-form="lab-restore">
+      <h3>2. 将加密备份恢复到全新设备</h3>
+      <label>选择先前下载的加密备份 JSON
+        <input type="file" name="backup" accept=".json,application/json" required></label>
+      <label>恢复密码
+        <input type="password" name="phrase" minlength="16" maxlength="256" autocomplete="off" required></label>
+      <label class="lab-confirm"><input type="checkbox" name="confirmed" value="yes" required>
+        我确认这是一台空白的合成测试设备，并且理解恢复会被数据校验阻断</label>
+      <button class="primary" type="submit">校验并恢复到空白测试库</button>
+    </form>`;
+  }
   let lastDrawnDay=today();
   function render() {
     lastDrawnDay=today();
     if(route!=='note'||briefing)clearDraftArmed=false;
-    const views = { home, hospitals, 'hospital-form': hospitalForm, 'project-form': projectForm, 'quick-project': quickProjectForm, 'order-followup':orderFollowupForm, 'order-confirm':orderConfirmForm, project: projectDetail, note, supplies, files, more, inbox, 'archive-note':archiveNoteForm };
+    const views = { home, hospitals, 'hospital-form': hospitalForm, 'project-form': projectForm, 'quick-project': quickProjectForm, 'order-followup':orderFollowupForm, 'order-confirm':orderConfirmForm, project: projectDetail, note, supplies, files, more, inbox, 'archive-note':archiveNoteForm, 'recovery-lab':recoveryLab };
     content.innerHTML = (views[route] || home)();
     document.querySelectorAll('nav button').forEach(button => button.classList.toggle('active', button.dataset.route === route));
   }
@@ -524,6 +561,39 @@
     busy = true; const values = Object.fromEntries(new FormData(form));
     const buttons = [...form.querySelectorAll('button')]; buttons.forEach(button => button.disabled = true);
     try {
+      if(form.dataset.form==='lab-backup'){
+        if(!globalThis.WorkbenchFreshRecoveryLab)throw new Error('加密实验未启用，未读取记录');
+        const phrase=String(values.phrase||'');
+        if(phrase!==String(values.confirmPhrase||''))throw new Error('两次恢复密码不一致，未生成备份');
+        if(phrase.length<16)throw new Error('恢复密码长度不足16个字符，未生成备份');
+        const result=await globalThis.WorkbenchFreshRecoveryLab.exportBackup(phrase);
+        const content=JSON.stringify({format:'workbench-fresh-lab-backup-envelope-v1',
+          backup:result.backup,manifestId:result.manifestId});
+        const file=new Blob([content],{type:'application/json'});
+        const url=URL.createObjectURL(file),link=document.createElement('a');
+        try{
+          link.href=url;
+          link.download='workbench-encrypted-test-backup-'+today()+'.json';
+          document.body.append(link);link.click();link.remove();
+        }finally{setTimeout(()=>URL.revokeObjectURL(url),60000);}
+        freshLabStatus='已生成加密备份：'+result.originals+'份原件 / '+result.originalBytes+'字节。请核对浏览器下载文件，密码不会保存在系统中。';
+        route='recovery-lab';
+      }
+      if(form.dataset.form==='lab-restore'){
+        if(!globalThis.WorkbenchFreshRecoveryLab)throw new Error('加密实验未启用，未读取文件');
+        if(values.confirmed!=='yes')throw new Error('需要先确认这是全新空白合成测试设备');
+        const source=values.backup;
+        if(!source||typeof source.text!=='function'||!source.size)throw new Error('请选择加密备份文件');
+        if(source.size>40*1024*1024)throw new Error('备份文件超出合成测试上限，未读取或修改原记录');
+        let payload;
+        try{payload=JSON.parse(await source.text());}catch(_){throw new Error('备份JSON格式错误，未修改本机数据');}
+        if(!payload||payload.format!=='workbench-fresh-lab-backup-envelope-v1')
+          throw new Error('备份格式或来源不兼容，未修改本机记录');
+        const result=await globalThis.WorkbenchFreshRecoveryLab.restoreEmpty(payload,String(values.phrase||''));
+        state=await storage.read();selection='';route='home';suggestion=null;briefing=null;noteDraft='';
+        freshLabStatus='已从加密备份恢复 '+result.files+' 份原件；全部校验通过。';
+        message('加密测试备份已恢复到这台空白设备，原医院与项目已完整核对。');
+      }
       if (form.dataset.form === 'hospital') { const result = core.upsertHospital(state, { ...values, id: selection }); await save(result.state); selection = result.hospitalId; route = 'hospitals'; }
       if (form.dataset.form === 'project') { const result = core.saveProject(state, { ...values, id: state.projects.some(item => item.id === selection) ? selection : '', details: Object.fromEntries(['device', 'brand', 'model', 'contractStart', 'contractEnd', 'bidDate', 'renewalDate', 'quoteDate', 'salesStage'].map(name => [name, values[name]])) }, today()); await save(result.state); selection = result.projectId; route = 'project'; }
       if (form.dataset.form === 'note') {

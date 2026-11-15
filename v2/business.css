@@ -272,3 +272,15 @@ form[data-form="file"] textarea[name="remark"]{min-height:96px;background:#f8fcf
 .first-use-actions{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0}
 .first-use-actions button{min-height:48px;flex:1 1 175px}
 .first-use-welcome small{display:block;line-height:1.5;color:#698291}
+
+/* Isolated synthetic encrypted-recovery laboratory only; absent from public preview. */
+.lab-recovery-head{background:linear-gradient(135deg,#f1f8fa,#fff 78%);border:1px solid #d4e7eb}
+.lab-recovery-head h2{font-size:20px;margin:7px 0 12px}
+.lab-recovery-head>p:not(.eyebrow){font-size:14px;line-height:1.6}
+.lab-recovery-status{display:block;background:#eef5f8;border-radius:12px;padding:11px;color:#20536b;font-size:13px;line-height:1.6}
+.lab-recovery-form h3{font-size:17px;margin:3px 0 15px}
+.lab-recovery-form>label{display:block;margin:12px 0}
+.lab-recovery-form input[type=password],.lab-recovery-form input[type=file]{display:block;width:100%;margin-top:7px;min-height:43px}
+.lab-recovery-form .lab-confirm{display:flex;gap:10px;align-items:flex-start;line-height:1.6}
+.lab-recovery-form .lab-confirm input{flex-shrink:0;width:20px;height:20px;margin-top:2px}
+.lab-recovery-form button.primary{width:100%;min-height:48px}
