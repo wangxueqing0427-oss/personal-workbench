@@ -58,7 +58,7 @@ async function run(sabotage={}){
 async function main(){
   const good=await run();
   await good.wait('install');
-  const keys=await good.names.keys();
+  const keys=[...good.names.keys()];
   check(good.counts.skip===1&&keys.length===2,
     'complete verified install is eligible for activate only after all assets are cached');
   const current=keys.find(key=>key!=='workbench-v2-encrypted-candidate-older-release');
