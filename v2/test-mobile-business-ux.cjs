@@ -667,14 +667,8 @@ async function main(){
    await page.locator('form[data-form="note"] textarea[name="text"]').fill(dictated);
    const beforeReview=await page.evaluate(async()=>({rev:(await WorkbenchBusinessStore.read()).revision,notes:(await WorkbenchBusinessStore.read()).notes.length}));
    await page.locator('form[data-form="note"] button.primary').click();
-   const splitDiagnostic={items:await page.locator('.briefing-item').count(),
-     heading:await page.locator('#content h2').allTextContents(),
-     notice:await page.locator('#notice').textContent(),
-     draft:await page.evaluate(async()=>WorkbenchBusinessStore.readDraft()),
-     value:await page.locator('form[data-form="note"] textarea[name="text"]').count()?
-       await page.locator('form[data-form="note"] textarea[name="text"]').inputValue():null};
-   if(splitDiagnostic.items!==2)console.log('VOICE_SPLIT_DIAGNOSTIC '+JSON.stringify(splitDiagnostic));
-   check(splitDiagnostic.items===2&&await page.getByText('已拆分 2 条事项').isVisible(),
+   await page.getByText('已拆分 2 条事项').waitFor();
+   check(await page.locator('.briefing-item').count()===2,
      'long spoken visit report is separated into two reviewable hospital/project records');
    const afterReview=await page.evaluate(async()=>({rev:(await WorkbenchBusinessStore.read()).revision,notes:(await WorkbenchBusinessStore.read()).notes.length}));
    check(JSON.stringify(beforeReview)===JSON.stringify(afterReview),
@@ -904,6 +898,7 @@ async function main(){
    check((await page.evaluate(async()=>WorkbenchBusinessStore.readDraft())).text===revisedSpeech,
      'rapid successive edits keep the final version of the local voice draft');
    await page.locator('form[data-form="note"] button.primary').click();
+   await page.locator('form[data-form="briefing"]').waitFor();
    check(await page.locator('.briefing-item').count()===3,
      'unsaved multi-item review is generated without losing the dictated text');
    await page.reload({waitUntil:'load'});
@@ -926,6 +921,7 @@ async function main(){
    const confirmedPhrase='合成现场反馈，明天联系设备科确认报价。';
    await page.locator('form[data-form="note"] textarea[name="text"]').fill(confirmedPhrase);
    await page.locator('form[data-form="note"] button.primary').click();
+   await page.locator('form[data-form="briefing"]').waitFor();
    check(await page.locator('.briefing-item').count()===1&&
      (await page.evaluate(async()=>WorkbenchBusinessStore.readDraft()))?.text===confirmedPhrase,
      'before final review the original text stays recoverable and no business note is created');
