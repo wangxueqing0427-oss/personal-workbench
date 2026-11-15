@@ -173,3 +173,13 @@
 - **独立浏览器模拟**：[mobile CI #43720167639](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43720167639) SUCCESS：Chromium 136/136 + WebKit 136/136，**272通过、0失败**。验证全新模拟浏览器真实 IndexedDB 首启所有七类业务记录为零，且即使同源存在伪造 `localStorage.personalWorkbench` 也绝不读取/改动；新建首家合成医院、刷新保留、旧版数据键保持、同 origin 载入不同 demo 模式不会覆写已有 V2 记录。旧样例预览仍只使用合成数据。Cloudflare 预览构建预检 [#43720167667](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43720167667)、密文兼容原型 [#43720167684](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43720167684) SUCCESS。
 - **新上线门禁已替换旧迁移路径**：[release gate commit `7be5f3396e4e0923fb51c6f8ac5f32ccdd3f2c70`](https://github.com/wangxueqing0427-oss/personal-workbench/commit/7be5f3396e4e0923fb51c6f8ac5f32ccdd3f2c70)、[CI #43720479900](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43720479900) SUCCESS，6项 fresh-start 专项断言通过，`requiresLegacyMigration=false`，`productionReady=false`。正式尚需生产独立入口与数据库、无演示数据、真实业务资料本机加密、可恢复备份及附件原件核验、持久设备认证/断网恢复、真机 Safari+PWA 终验、用户正式发布批准。详细文档 `v2/RELEASE-FRESH-START-2026-11-15.md`，之前 `RELEASE-READINESS-2026-11-15.md` 仅作旧迁移计划历史。
 - **安全范围**：未部署生产或原 V2 staging；未迁移/读取/删除用户 V1 数据；未重置已存在的合成预览业务数据，亦未部署新代码到公开预览 Worker（该入口继续显示合成示例）。`main` 仍为 `c3d9ebec26b94ef056eaad649447b3ad2dba31bc`，正式用户数据、附件及现有图标原样保留。下一轮**不要再推进旧版迁移**，优先攻克全新正式版的安全存储、备份恢复、上线候选构建和手机可用性。
+
+
+## 2026-11-15｜全新空白工作台跨设备加密备份恢复实验（双引擎通过、未发布）
+
+- **用户当前目标不变**：V2.0全新空白正式启用，无需迁移只用一两次的V1.5.7数据；只让用户最终上手，不让用户做开发测试。当前仍**未获正式生产部署授权**，保留V1.5.7`main`/原V2 staging/真数据、资料与合成 preview Worker不动。
+- **新实验代码（只限localhost合成测试）**：`v2/fresh-recovery-lab.js`、`v2/test-fresh-recovery-lab.cjs`、`.github/workflows/v2-fresh-recovery-lab.yml`、`v2/FRESH-RECOVERY-LAB-2026-11-15.md`，提交 `258a85896b4902cb146ed87525a951c49182bee6`。沿用已通过检验的`WorkbenchCryptoPOC` AES-GCM/PBKDF2高强度独立恢复密码，使用现有`WorkbenchBusinessStore`的真正业务schema及原件存储接口，不碰任何旧版数据或云服务。
+- **端到端已证明（虚构资料）**：模拟手机A从空白V2开始新增医院、磁共振维保项目、状态/下一步、笔记、历史队列/本机修订和1MiB+17字节原件。备份前/后逐条及逐字节核对，认证加密备份不会泄露医院名称、笔记、原件名。模拟手机B独立空白IndexedDB：使用正确独立密码先解密并校验全部状态/历史队列/原件SHA256，再一笔事务写入初始空库，重新读回确认业务/原件一致，刷新页面后保持。错误密码、篡改密文、重复恢复和已经包含医院业务的第三台手机均全部拒绝，源手机也始终原样保留。
+- **自动化证据**：[GitHub Actions 新全新手机加密恢复 #43722887876](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43722887876) SUCCESS，Chromium **14/14** + WebKit **14/14**，合计**28断言通过、0失败**，均仅自动访问本机127.0.0.1；公有Worker资产清单`build-preview.cjs`不包含该实验模块。
+- **当前不能夸大**：这只是**可验证的加密备份/恢复实验模块**，没有真正的手机端“导出/恢复”按钮、没有替换生产的明文IndexedDB、没有绑定真实Face ID或系统硬件认证、也没有云端长期设备身份/授权。现有公共合成preview仍不能录入真实医院资料。正式仍需完成本地全量加密、可操作的恢复界面、正式身份和离线恢复/可退回、真实iPhone Safari/PWA确认，独立正式域名及用户发版许可；旧版迁移仍不在路线中。
+- **生产范围复核**：`main=c3d9ebec26b94ef056eaad649447b3ad2dba31bc`保持未改，旧正式入口与独立预览没有部署新代码。本轮所有自动验收由Assistant完成，用户无须参与。下一阶段建议聚焦把这一跨设备恢复机制和正式本机加密存储连接，避免只重复PoC演示。
