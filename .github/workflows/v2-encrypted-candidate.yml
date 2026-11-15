@@ -65,3 +65,11 @@ jobs:
           grep -F 'ENCRYPTED_CANDIDATE_BROWSER_PASS' /tmp/encrypted-candidate-browser.log
           grep -F '"productionReady":false' /tmp/encrypted-candidate-browser.log
           echo 'ENCRYPTED_CANDIDATE_VERIFIED_BUT_PRODUCTION_NOT_AUTHORIZED'
+      - name: Retain verified synthetic candidate package for controlled release review
+        uses: actions/upload-artifact@v4
+        with:
+          name: v2-encrypted-candidate-${{ matrix.browser }}-${{ github.sha }}
+          path: v2/candidate-public/
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 6
