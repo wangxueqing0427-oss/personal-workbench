@@ -177,6 +177,12 @@ async function main(){
       });db.close();
       return {s,raw,revision:(await WorkbenchBusinessStore.read()).revision};
     });
+    console.log('BACKUP_RECEIPT_DEBUG '+JSON.stringify({
+      confirmed:acknowledged.s.confirmed,needsBackup:acknowledged.s.needsBackup,
+      receiptRevision:acknowledged.s.confirmedRevision,currentRevision:acknowledged.revision,
+      rawEncrypted:!!acknowledged.raw?.ciphertext,
+      rawHasHospital:!!JSON.stringify(acknowledged.raw).includes('合成候选独立医院'),
+      notice:(await a.locator('#notice').innerText()).slice(0,140)}));
     check(acknowledged.s.confirmed&&acknowledged.s.needsBackup===false&&
       acknowledged.s.confirmedRevision===3&&acknowledged.raw?.ciphertext&&
       !JSON.stringify(acknowledged.raw).includes('合成候选独立医院')&&
