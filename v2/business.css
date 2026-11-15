@@ -161,3 +161,9 @@ form[data-form="file"] textarea[name="remark"]{min-height:96px;background:#f8fcf
 .focus-flash{box-shadow:0 0 0 2px #a2c8d7,0 9px 28px rgba(21,68,91,.1)}
 @media(max-width:420px){.hero .hero-metric-button{padding:7px 2px;min-height:73px}.hero .hero-metric-button strong{font-size:23px}.urgency-section{padding-left:13px}}
 @media(prefers-reduced-motion:reduce){.focus-flash{transition:none}}
+
+/* Waiting feedback and daily completion: two thumb-sized actions per row. */
+.project-contact{display:block;font-size:12px;color:#56778a;line-height:1.5;margin:4px 0 2px}
+.work-actions{grid-template-columns:repeat(2,minmax(0,1fr))}
+.work-actions button{min-height:44px}
+.work-actions [data-feedback-project],.work-actions [data-complete-project]{background:#e4f4f6;color:#176778;font-weight:700}

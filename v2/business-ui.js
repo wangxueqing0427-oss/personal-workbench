@@ -10,7 +10,7 @@
   const options = (values, current) => values.map(value => `<option${value === current ? ' selected' : ''}>${escape(value)}</option>`).join('');
   const field = (name, label, value = '', type = 'text') => `<label>${label}<input name="${name}" type="${type}" value="${escape(value)}"></label>`;
   let state, route = 'home', selection = '', suggestion = null, busy = false;
-  let searchQuery = '', searchStatus = '全部', quickTomorrow = false;
+  let searchQuery = '', searchStatus = '全部', quickTomorrow = false, quickIntent = 'edit';
   function message(value) { notice.textContent = value; }
   async function save(next, file) {
     if (!compatible()) throw new Error('版本不兼容 / 同步已暂停');
@@ -28,12 +28,23 @@
   }
   const statusTag = status => `<span class="status-pill" data-status="${escape(status)}">${escape(status)}</span>`;
   const sectionHead = (eyebrow,title,detail='') => `<div class="section-head"><div><p class="eyebrow">${escape(eyebrow)}</p><h2>${escape(title)}</h2></div>${detail ? `<span class="section-detail">${escape(detail)}</span>` : ''}</div>`;
-  function projectButtons(items,{actions=false}={}) {
+  function lastCommunicationOn(project) {
+    return (project.timeline || []).filter(item => !item.fileId)
+      .map(item => item.occurredOn || item.createdAt || '')
+      .filter(value => /^\d{4}-\d{2}-\d{2}$/.test(value))
+      .sort().at(-1) || '';
+  }
+  function projectButtons(items,{actions=false,mode=''}={}) {
     return items.length ? items.map(project => {
       const hospital=state.hospitals.find(item=>item.id===project.hospitalId);
       const date=project.followupDate?escape(project.followupDate):'日期待定';
-      const main=`<button class="project-button" data-project="${escape(project.id)}"><span class="project-title">${escape(project.name)}</span><span class="project-subtitle">${escape(hospital?.name||'未关联医院')} · ${escape(project.kind)}</span><span class="project-summary">${escape(project.nextAction||'尚未填写下一步')}</span><span class="project-foot">${statusTag(project.status)}<span class="project-date">${date}</span></span></button>`;
-      return `<div class="work-item">${main}${actions?`<div class="work-actions"><button type="button" data-quick-project="${escape(project.id)}">更新跟进</button><button type="button" data-follow-tomorrow="${escape(project.id)}">明天跟进</button><button type="button" data-note-project="${escape(project.id)}">记录进展</button><button type="button" data-files-project="${escape(project.id)}">拍照上传</button></div>`:''}</div>`;
+      const lastContact=mode==='waiting'?`<span class="project-contact" data-last-contact>最近沟通：${escape(lastCommunicationOn(project)||'暂无记录')}</span>`:'';
+      const main=`<button class="project-button" data-project="${escape(project.id)}"><span class="project-title">${escape(project.name)}</span><span class="project-subtitle">${escape(hospital?.name||'未关联医院')} · ${escape(project.kind)}</span><span class="project-summary">${escape(project.nextAction||'尚未填写下一步')}</span>${lastContact}<span class="project-foot">${statusTag(project.status)}<span class="project-date">${date}</span></span></button>`;
+      const common=`<button type="button" data-quick-project="${escape(project.id)}">更新跟进</button><button type="button" data-follow-tomorrow="${escape(project.id)}">明天跟进</button><button type="button" data-note-project="${escape(project.id)}">记录进展</button><button type="button" data-files-project="${escape(project.id)}">拍照上传</button>`;
+      const waiting=`<button type="button" data-feedback-project="${escape(project.id)}">收到反馈</button><button type="button" data-quick-project="${escape(project.id)}">修改日期 / 下一步</button><button type="button" data-note-project="${escape(project.id)}">记录进展</button><button type="button" data-files-project="${escape(project.id)}">拍照上传</button>`;
+      const dueToday=`<button type="button" data-complete-project="${escape(project.id)}">确认完成</button><button type="button" data-quick-project="${escape(project.id)}">更新跟进</button><button type="button" data-follow-tomorrow="${escape(project.id)}">明天跟进</button><button type="button" data-files-project="${escape(project.id)}">拍照上传</button>`;
+      const actionMarkup=mode==='waiting'?waiting:mode==='today'?dueToday:common;
+      return `<div class="work-item">${main}${actions?`<div class="work-actions">${actionMarkup}</div>`:''}</div>`;
     }).join('') : '<div class="empty-state"><span aria-hidden="true">✓</span><p>目前没有需要处理的事项</p><small>新进展可以随时从下方快捷入口记录</small></div>';
   }
   function home() {
@@ -53,7 +64,7 @@
       ['WAITING','等待反馈','waiting',view.waiting]
     ];
     const sections=categories.filter(([,label,,items])=>label==='今天要办'||items.length)
-      .map(([eyebrow,label,id,items])=>`<section id="focus-${id}" class="card task-section${id==='overdue'?' urgency-section':''}">${sectionHead(eyebrow,label,`${items.length} 项`)}${projectButtons(items,{actions:true})}</section>`).join('');
+      .map(([eyebrow,label,id,items])=>`<section id="focus-${id}" class="card task-section${id==='overdue'?' urgency-section':''}">${sectionHead(eyebrow,label,`${items.length} 项`)}${projectButtons(items,{actions:true,mode:id})}</section>`).join('');
     const nodes=view.nodes.map(node=>`<div class="milestone"><span class="milestone-date">${escape(node.date)}</span><span>${escape(node.project.name)} · ${escape(({bidDate:'招标',contractEnd:'合同到期',renewalDate:'续约',quoteDate:'报价'})[node.field])}</span></div>`).join('');
     const week=view.weekTotal?`<section id="focus-week" class="card task-section">${sectionHead('AHEAD','未来7天节点',`${view.weekTotal} 项`)}${view.week.length?projectButtons(view.week,{actions:true}):''}${nodes}</section>`:'';
     return greeting+shortcuts+sections+week+`<details class="card quiet-details"><summary>最近跟进 / 长时间未跟进</summary>${projectButtons(view.recent)}<h3>超过14天未跟进</h3>${projectButtons(view.stale)}</details>`;
@@ -89,7 +100,13 @@
   function quickProjectForm() {
     const project=state.projects.find(item=>item.id===selection);
     if(!project)return '<section class="card">项目不存在，请返回医院列表。</section>';
-    return `<form class="card quick-edit" data-form="quick-project"><button type="button" data-back="project" class="back-link">← 返回项目</button><p class="eyebrow">QUICK UPDATE</p><h2>快速更新跟进</h2><p class="muted">${escape(project.name)}${quickTomorrow?' · 日期已预填为明天，确认保存后生效':''}</p><div class="form-grid"><label>当前状态<select name="status">${options(core.statuses,project.status)}</select></label>${field('followupDate','下次跟进日期',quickTomorrow?core.addDays(today(),1):project.followupDate,'date')}${field('nextAction','下一步行动',project.nextAction)}${field('waitingOn','等待谁',project.waitingOn)}</div><label>本次沟通进展（选填）<textarea name="progress" placeholder="如：已联系设备科，待确认报价单"></textarea></label><button class="primary">保存本次更新</button></form>`;
+    const feedback=quickIntent==='feedback',complete=quickIntent==='complete';
+    const suggestedStatus=complete?'已完成':feedback&&project.status==='等待对方'?'进行中':project.status;
+    const suggestedWaiting=feedback&&project.status==='等待对方'?'':project.waitingOn;
+    const title=feedback?'记录收到的反馈':complete?'确认项目完成':'快速更新跟进';
+    const advice=feedback?'建议将等待状态改为进行中，按实际情况核对；未点保存不会修改。':complete?'拟标记为已完成，必须确认并填写结果后才会保存。':quickTomorrow?'日期已预填为明天，确认保存后生效':'状态与日期均需确认保存才生效。';
+    const noteLabel=feedback?'本次收到的反馈（必填）':complete?'完成情况（必填）':'本次沟通进展（选填）';
+    return `<form class="card quick-edit" data-form="quick-project"><button type="button" data-back="project" class="back-link">← 返回项目</button><p class="eyebrow">QUICK UPDATE</p><h2>${title}</h2><p class="muted">${escape(project.name)} · ${escape(advice)}</p><div class="form-grid"><label>当前状态<select name="status">${options(core.statuses,suggestedStatus)}</select></label>${field('followupDate','下次跟进日期',quickTomorrow?core.addDays(today(),1):project.followupDate,'date')}${field('nextAction','下一步行动',project.nextAction)}${field('waitingOn','等待谁',suggestedWaiting)}</div><label>${noteLabel}<textarea name="progress" placeholder="如：已联系设备科，待确认报价单"${feedback||complete?' required':''}></textarea></label><button class="primary">核对并保存</button></form>`;
   }
   function projectDetail() {
     const project=state.projects.find(item=>item.id===selection);
@@ -98,7 +115,7 @@
     const finance=project.financials?`<section class="card">${sectionHead('FINANCIALS','合同与回款')}<div class="finance-strip"><span>合同 <strong>¥${escape(project.financials.contractAmount)}</strong></span><span>已收 <strong>¥${escape(project.financials.receivedAmount)}</strong></span><span>未收 <strong>¥${escape(project.financials.unpaidAmount)}</strong></span></div></section>`:'';
     const details=Object.entries(project.details||{}).filter(([,value])=>value).map(([name,value])=>`<div class="info-row"><span>${escape(({device:'设备',brand:'品牌',model:'型号',salesStage:'销售进度',contractStart:'合同开始',contractEnd:'合同结束',bidDate:'招标',renewalDate:'续约',quoteDate:'报价'})[name]||name)}</span><strong>${escape(value)}</strong></div>`).join('')||'<p class="muted">暂无设备或节点记录</p>';
     const timeline=[...project.timeline].reverse().map(item=>`<div class="timeline"><small>${escape(item.occurredOn||item.createdAt||'')}</small><p>${escape(item.text)}</p>${item.fileId?`<div class="timeline-file">${fileButtons([item.fileId])}</div>`:''}</div>`).join('')||'<div class="empty-state"><p>还没有跟进记录</p><small>点击“记录进展”，第一次沟通就能留下完整时间线</small></div>';
-    return `<section class="card detail-head"><button data-back="hospitals" class="back-link">← 医院业务</button><p class="eyebrow">PROJECT DETAILS</p><h2>${escape(project.name)}</h2><p class="muted">${escape(hospital?.name||'未关联医院')} · ${escape(project.kind)}</p>${statusTag(project.status)}<div class="focus-box"><span class="field-label">下一步行动</span><strong>${escape(project.nextAction||'还没有设置下一步')}</strong><div class="focus-meta"><span>等待：${escape(project.waitingOn||'无')}</span><span>跟进：${escape(project.followupDate||'未设置')}</span></div></div><div class="detail-actions"><button class="primary" data-quick-project="${escape(project.id)}">更新状态 / 日期</button><button data-note-project="${escape(project.id)}">＋ 记录进展</button><button data-files-project="${escape(project.id)}">上传资料</button><button data-edit-project="${escape(project.id)}">编辑设备节点</button></div><p class="muted">负责人：${escape(project.owner||'未填写')}</p></section>${finance}<section class="card">${sectionHead('EQUIPMENT','设备与节点')}${details}</section><section class="card">${sectionHead('FILES','项目资料',`${project.fileIds.length} 份`)}${fileButtons(project.fileIds)||'<p class="muted">暂无资料</p>'}<button data-files-project="${escape(project.id)}">关联合同 / 报价 / 照片</button></section><section class="card">${sectionHead('ACTIVITY','跟进时间线')}${timeline}</section>`;
+    return `<section class="card detail-head"><button data-back="hospitals" class="back-link">← 医院业务</button><p class="eyebrow">PROJECT DETAILS</p><h2>${escape(project.name)}</h2><p class="muted">${escape(hospital?.name||'未关联医院')} · ${escape(project.kind)}</p>${statusTag(project.status)}<div class="focus-box"><span class="field-label">下一步行动</span><strong>${escape(project.nextAction||'还没有设置下一步')}</strong><div class="focus-meta"><span>等待：${escape(project.waitingOn||'无')}</span><span>跟进：${escape(project.followupDate||'未设置')}</span><span>最近沟通：${escape(lastCommunicationOn(project)||'暂无记录')}</span></div></div><div class="detail-actions"><button class="primary" data-quick-project="${escape(project.id)}">更新状态 / 日期</button><button data-note-project="${escape(project.id)}">＋ 记录进展</button><button data-files-project="${escape(project.id)}">上传资料</button><button data-edit-project="${escape(project.id)}">编辑设备节点</button></div><p class="muted">负责人：${escape(project.owner||'未填写')}</p></section>${finance}<section class="card">${sectionHead('EQUIPMENT','设备与节点')}${details}</section><section class="card">${sectionHead('FILES','项目资料',`${project.fileIds.length} 份`)}${fileButtons(project.fileIds)||'<p class="muted">暂无资料</p>'}<button data-files-project="${escape(project.id)}">关联合同 / 报价 / 照片</button></section><section class="card">${sectionHead('ACTIVITY','跟进时间线')}${timeline}</section>`;
   }
   function note() {
     if (suggestion) return `<form class="card" data-form="confirm-note"><h2>核对后保存</h2><p class="muted">${escape(suggestion.source)}。默认只追加时间线；无项目则留在收件箱。</p><p>原记录：${escape(suggestion.text)}</p><label>关联项目<select name="projectId"><option value="">仅进入收件箱</option>${state.projects.map(item => `<option value="${escape(item.id)}"${suggestion.projectId === item.id ? ' selected' : ''}>${escape(state.hospitals.find(hospital => hospital.id === item.hospitalId)?.name)}｜${escape(item.name)}</option>`).join('')}</select></label><p>识别科室：${escape(suggestion.department || '待确认')} · 人物：${escape(suggestion.contact || '待确认')}</p><label>本次进展<textarea name="progress">${escape(suggestion.progress)}</textarea></label><details><summary>可选修改行动字段（逐项勾选）</summary><label class="check"><input name="changeStatus" type="checkbox">同时修改状态</label><select name="status">${options(core.statuses, suggestion.suggestedStatus)}</select><label class="check"><input name="changeDate" type="checkbox">同时修改日期</label>${field('followupDate', '建议日期', suggestion.followupDate, 'date')}${suggestion.dateUncertain ? '<p class="warning">“下周”没有具体星期，请手工确认日期。</p>' : ''}<label class="check"><input name="changeNextAction" type="checkbox">同时修改下一步</label>${field('nextAction', '建议下一步', suggestion.nextAction)}<label class="check"><input name="changeWaitingOn" type="checkbox">同时修改等待对象</label>${field('waitingOn', '建议等待对象', suggestion.contact)}</details><button class="primary">确认保存</button><button type="button" data-cancel-note>重新编辑</button></form>`;
@@ -139,15 +156,17 @@
           window.setTimeout(()=>section.classList.remove('focus-flash'),850);
         }
       }
-      else if (button.dataset.route) { route = button.dataset.route; selection = ''; suggestion = null; quickTomorrow = false; render(); window.scrollTo(0, 0); }
-      else if (button.dataset.back) { route = button.dataset.back; quickTomorrow = false; if (route !== 'project') selection = ''; render(); }
+      else if (button.dataset.route) { route = button.dataset.route; selection = ''; suggestion = null; quickTomorrow = false; quickIntent = 'edit'; render(); window.scrollTo(0, 0); }
+      else if (button.dataset.back) { route = button.dataset.back; quickTomorrow = false; quickIntent = 'edit'; if (route !== 'project') selection = ''; render(); }
       else if (button.hasAttribute('data-clear-search')) { searchQuery = ''; searchStatus = '全部'; render(); }
       else if (button.hasAttribute('data-edit-hospital')) { selection = button.dataset.editHospital; route = 'hospital-form'; render(); }
       else if (button.dataset.hospital) { selection = button.dataset.hospital; route = 'hospitals'; render(); }
       else if (button.dataset.project) { selection = button.dataset.project; route = 'project'; render(); }
       else if (button.dataset.newProject || button.dataset.editProject) { selection = button.dataset.newProject || button.dataset.editProject; route = 'project-form'; render(); }
-      else if (button.dataset.followTomorrow) { selection = button.dataset.followTomorrow; quickTomorrow = true; route = 'quick-project'; render(); }
-      else if (button.dataset.quickProject) { selection = button.dataset.quickProject; quickTomorrow = false; route = 'quick-project'; render(); }
+      else if (button.dataset.followTomorrow) { selection = button.dataset.followTomorrow; quickTomorrow = true; quickIntent = 'edit'; route = 'quick-project'; render(); }
+      else if (button.dataset.feedbackProject) { selection = button.dataset.feedbackProject; quickTomorrow = false; quickIntent = 'feedback'; route = 'quick-project'; render(); }
+      else if (button.dataset.completeProject) { selection = button.dataset.completeProject; quickTomorrow = false; quickIntent = 'complete'; route = 'quick-project'; render(); }
+      else if (button.dataset.quickProject) { selection = button.dataset.quickProject; quickTomorrow = false; quickIntent = 'edit'; route = 'quick-project'; render(); }
       else if (button.dataset.noteProject) { selection = button.dataset.noteProject; route = 'note'; suggestion = null; render(); }
       else if (button.dataset.filesProject || button.dataset.filesOrder) { selection = button.dataset.filesProject || button.dataset.filesOrder; route = 'files'; render(); }
       else if (button.hasAttribute('data-cancel-note')) { suggestion = null; render(); }
@@ -193,19 +212,20 @@
       if (form.dataset.form === 'quick-project') {
         const current=state.projects.find(item=>item.id===selection);
         if(!current)throw new Error('项目已经变化，请重新打开');
+        const progress=String(values.progress||'').trim();
+        if((quickIntent==='feedback'||quickIntent==='complete')&&!progress)throw new Error('请填写本次反馈或完成结果');
         const merged=core.saveProject(state,{
           id:current.id,hospitalId:current.hospitalId,name:current.name,kind:current.kind,
           department:current.department,owner:current.owner,
           status:values.status,followupDate:values.followupDate,nextAction:values.nextAction,waitingOn:values.waitingOn,
           details:current.details
         },today()).state;
-        const progress=String(values.progress||'').trim();
         if(progress){
           const id=crypto.randomUUID(),changed=merged.projects.find(item=>item.id===selection);
           changed.timeline.push({id,text:progress,occurredOn:today(),sourceText:progress});
           merged.notes.push({id,progress,projectId:selection,savedOn:today(),createdOn:today(),disposition:'项目时间线',source:'快捷跟进'});
         }
-        await save(merged);route='project';quickTomorrow = false;
+        await save(merged);route='project';quickTomorrow = false;quickIntent = 'edit';
       }
       if (form.dataset.form === 'order') await save(core.saveOrder(state, values));
       if (form.dataset.form === 'stage') { const order = state.orders.find(item => item.id === form.dataset.id); await save(core.advanceOrder(state, order.id, core.stages[core.stages.indexOf(order.stage) + 1], today(), values)); }

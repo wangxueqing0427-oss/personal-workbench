@@ -322,6 +322,79 @@ async function main(){
    });
    check(restoredNote.hasTimeline&&restoredNote.hasNote&&restoredNote.remark.includes('合成拍照沟通'),
      'reload preserves photo remark, linked note and project timeline without losing originals');
+   // New isolated workflow: waiting feedback is recorded with a real timestamp
+   // and today's completion cannot be saved silently or without a result.
+   await page.evaluate(async()=>{
+     const store=WorkbenchBusinessStore,base=await store.read(),next=structuredClone(base);
+     const item=next.projects.find(project=>project.name==='合成DR设备维保');
+     const date=new Intl.DateTimeFormat('sv-SE',{year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+     if(!item)throw Error('Synthetic waiting project missing');
+     item.status='等待对方';item.followupDate=WorkbenchBusiness.addDays(date,5);
+     await store.commit(next,base.revision);
+   });
+   await page.reload({waitUntil:'load'});
+   const waitingCard=page.locator('#focus-waiting .work-item',{has:page.locator('[data-feedback-project]')}).first();
+   check(await waitingCard.isVisible()&&
+     (await waitingCard.locator('[data-last-contact]').textContent()).includes('最近沟通：')&&
+     await waitingCard.locator('[data-feedback-project]').isVisible(),
+     'waiting items display a history-derived last-contact date and a real feedback action');
+   const beforeFeedback=await page.evaluate(async()=>{
+     const s=await WorkbenchBusinessStore.read(),p=s.projects.find(x=>x.name==='合成DR设备维保');
+     return {status:p.status,waiting:p.waitingOn,followup:p.followupDate,history:p.timeline.length};
+   });
+   await waitingCard.locator('[data-feedback-project]').click();
+   const feedbackForm=page.locator('form[data-form="quick-project"]');
+   check(await feedbackForm.locator('select[name="status"]').inputValue()==='进行中'&&
+     await feedbackForm.locator('textarea[name="progress"]').getAttribute('required')!==null,
+     'received-feedback mode only suggests reopening work and requires a written outcome');
+   await feedbackForm.locator('[data-back="project"]').click();
+   const canceledFeedback=await page.evaluate(async()=>{
+     const s=await WorkbenchBusinessStore.read(),p=s.projects.find(x=>x.name==='合成DR设备维保');
+     return {status:p.status,waiting:p.waitingOn,followup:p.followupDate,history:p.timeline.length};
+   });
+   check(JSON.stringify(canceledFeedback)===JSON.stringify(beforeFeedback),
+     'canceling a suggested feedback change does not persist status, waiting person, or date');
+   await page.locator('nav button[data-route="home"]').click();
+   await page.locator('#focus-waiting [data-feedback-project]').first().click();
+   await page.locator('textarea[name="progress"]').fill('合成反馈：设备科已确认报价，下一步安排签约');
+   await page.locator('input[name="nextAction"]').fill('安排合同签署');
+   await page.locator('form[data-form="quick-project"] button.primary').click();
+   const received=await page.evaluate(async()=>{
+     const s=await WorkbenchBusinessStore.read(),p=s.projects.find(x=>x.name==='合成DR设备维保');
+     const notes=s.notes.filter(n=>n.projectId===p.id&&n.progress.includes('设备科已确认报价'));
+     return {status:p.status,waiting:p.waitingOn,next:p.nextAction,history:p.timeline.at(-1)?.text,notes:notes.length,model:p.details.model};
+   });
+   check(received.status==='进行中'&&received.waiting===''&&received.next==='安排合同签署'&&
+     received.history.includes('设备科已确认报价')&&received.notes===1&&received.model==='Discovery RT 合成型号',
+     'feedback saves a single linked project timeline and note without losing device details');
+   await page.locator('nav button[data-route="home"]').click();
+   const completeButton=page.locator('#focus-today [data-complete-project]').first();
+   check(await completeButton.isVisible(),'today items offer an explicit confirm-to-complete shortcut');
+   const targetId=await completeButton.getAttribute('data-complete-project');
+   await completeButton.click();
+   const completeForm=page.locator('form[data-form="quick-project"]');
+   check(await completeForm.locator('select[name="status"]').inputValue()==='已完成'&&
+     await completeForm.locator('textarea[name="progress"]').getAttribute('required')!==null,
+     'completion is an editable proposal requiring an outcome and a user save');
+   await completeForm.locator('[data-back="project"]').click();
+   const canceledComplete=await page.evaluate(async id=>{
+     const s=await WorkbenchBusinessStore.read();return s.projects.find(p=>p.id===id)?.status;
+   },targetId);
+   check(canceledComplete!=='已完成','canceling completion leaves original status untouched');
+   await page.locator('nav button[data-route="home"]').click();
+   await page.locator(`[data-complete-project="${targetId}"]`).click();
+   await page.locator('textarea[name="progress"]').fill('合成验收：今日已完成维保跟进事项');
+   await page.locator('form[data-form="quick-project"] button.primary').click();
+   const completion=await page.evaluate(async id=>{
+     const s=await WorkbenchBusinessStore.read(),p=s.projects.find(x=>x.id===id),today=new Intl.DateTimeFormat('sv-SE',{year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+     const view=WorkbenchBusiness.focusBoard(s,today);
+     return {status:p.status,last:p.timeline.at(-1)?.text,
+       linkedNotes:s.notes.filter(n=>n.projectId===id&&n.progress.includes('今日已完成维保')).length,
+       excluded:![...view.today,...view.overdue,...view.waiting,...view.week].some(x=>x.id===id)};
+   },targetId);
+   check(completion.status==='已完成'&&completion.last.includes('今日已完成维保')&&
+     completion.linkedNotes===1&&completion.excluded,
+     'confirmed completion persists one outcome and leaves every active homepage lane');
    const viewport=await page.evaluate(()=>({overflow:document.documentElement.scrollWidth>innerWidth+1}));
    check(!viewport.overflow,'original iPhone-width UI does not overflow horizontally');
    check(errors.length===0,'no script crashes or external network access during mobile business workflows');
