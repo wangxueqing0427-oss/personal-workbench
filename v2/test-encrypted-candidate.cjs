@@ -41,7 +41,9 @@ async function main(){
     boot.includes("!['127.0.0.1','localhost'].includes(location.hostname)"),
     'candidate encryption and password bootstrap refuse every public/staging/production hostname');
   const allowed=new Set([...names,'build-info.json']);
+  let denyOrigin=false,deniedRequests=0;
   const server=http.createServer(async(req,res)=>{
+    if(denyOrigin){deniedRequests++;res.writeHead(503).end();return;}
     const name=new URL(req.url,'http://127.0.0.1').pathname.slice(1);
     if(!allowed.has(name)){res.writeHead(404).end();return;}
     const types={html:'text/html; charset=utf-8',css:'text/css',js:'application/javascript',
@@ -120,10 +122,11 @@ async function main(){
     await a.reload({waitUntil:'load'});
     await a.getByRole('heading',{name:'解锁加密工作台'}).waitFor();
     if(engine==='webkit'){
-      // Playwright's Linux WebKit can internally fail to navigate when
-      // context.setOffline(true) is combined with a newly controlled SW.
-      // Abort every network request instead, so only cached SW responses pass.
-      await aCtx.route('**/*',route=>route.abort('internetdisconnected'));
+      // The Linux WebKit DevTools protocol can abort navigations when
+      // context.setOffline or route.abort is used on a SW-controlled page.
+      // Make the ACTUAL source origin unavailable with HTTP 503 instead.
+      // Every asset still has to come from the already installed SW cache.
+      denyOrigin=true;
     }else{
       await aCtx.setOffline(true);
     }
@@ -137,8 +140,11 @@ async function main(){
     await a.locator('nav button[data-route="note"]').click();
     check(await a.locator('form[data-form="note"] textarea[name="text"]').inputValue()===draft,
       'offline password unlock restores complete encrypted business data and unsaved voice note');
-    if(engine==='webkit')await aCtx.unroute('**/*');
-    else await aCtx.setOffline(false);
+    if(engine==='webkit'){
+      denyOrigin=false;
+      check(deniedRequests===0,
+        'WebKit loads the full encrypted candidate from its service-worker cache with the server unavailable');
+    }else await aCtx.setOffline(false);
     await a.locator('nav button[data-route="home"]').click();
     await a.locator('.shortcut-panel [data-route="files"]').click();
     const data=Buffer.from('SYNTHETIC_CANDIDATE_BYTES_'+crypto.randomUUID().repeat(8192));
