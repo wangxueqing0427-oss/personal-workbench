@@ -328,6 +328,42 @@
     }
     return next;
   }
+  // Reconcile an already-saved inbox note to one existing project without
+  // changing its original wording, timestamp, due date, workflow or invoice.
+  function archiveInboxNote(state,noteId,projectId,today){
+    const next=copy(state);
+    const note=next.notes.find(n=>n.id===noteId);
+    const project=next.projects.find(p=>p.id===projectId);
+    if(!note)throw new Error('这条收件箱记录不存在，未修改任何数据');
+    if(note.projectId||note.disposition==='项目时间线')
+      throw new Error('这条记录已关联项目，不能重复归档');
+    if(!project)throw new Error('请选择仍然有效的项目，未修改任何数据');
+    if(note.hospitalId&&project.hospitalId!==note.hospitalId)
+      throw new Error('该项目不属于记录识别的医院，请重新选择');
+    const noteText=text(note.progress);
+    if(!noteText)throw new Error('记录原文为空，无法归档');
+    if((project.timeline||[]).some(t=>t.id===note.id))
+      throw new Error('项目时间线已有相同记录，禁止重复关联');
+    let file=null;
+    if(note.fileId){
+      file=next.files.find(x=>x.id===note.fileId);
+      if(!file||file.projectId)throw new Error('原件关联状态已变化，请核对后重试');
+      if(!Array.isArray(project.fileIds))throw new Error('项目资料目录不完整，请核对后再归档');
+      if(project.fileIds.includes(file.id))throw new Error('原件已存在该项目，请核对后再归档');
+    }
+    note.projectId=project.id;
+    note.disposition='项目时间线';
+    note.archivedOn=date(today);
+    if(!Array.isArray(project.timeline))throw new Error('项目时间线不可用，原始记录未更改');
+    project.timeline.push({id:note.id,text:noteText,occurredOn:note.savedOn||note.createdOn||date(today),
+      sourceText:note.text||noteText,...(note.fileId?{fileId:note.fileId}:{})});
+    project.updatedOn=date(today);
+    if(file){
+      file.projectId=project.id;
+      project.fileIds.push(file.id);
+    }
+    return next;
+  }
   function dashboard(state, today) {
     date(today);
     const active = state.projects.filter(item => !['已完成', '暂停/机会池'].includes(item.status));
@@ -409,5 +445,5 @@
   function finance(state) {
     return { uninvoiced: state.orders.filter(item => !item.invoiced), unpaid: state.orders.filter(item => item.invoiced && !item.received), balances: state.movements.reduce((result, item) => { result[item.inventoryKey] = (result[item.inventoryKey] || 0) + item.delta; return result; }, {}) };
   }
-  root.WorkbenchBusiness = { empty, statuses, kinds, stages, date, addDays, followupInfo, upsertHospital, searchBusiness, saveProject, fromLegacy, suggestNote, splitBriefing, confirmNote, confirmBriefing, dashboard, focusBoard, saveOrder, logOrderFollowup, advanceOrder, stock, finance };
+  root.WorkbenchBusiness = { empty, statuses, kinds, stages, date, addDays, followupInfo, upsertHospital, searchBusiness, saveProject, fromLegacy, suggestNote, splitBriefing, confirmNote, confirmBriefing, archiveInboxNote, dashboard, focusBoard, saveOrder, logOrderFollowup, advanceOrder, stock, finance };
 })(globalThis);

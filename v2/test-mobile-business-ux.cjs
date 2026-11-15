@@ -948,6 +948,106 @@ async function main(){
    check(await page.locator('form[data-form="note"] textarea[name="text"]').inputValue()===''&&
      (await page.evaluate(async()=>WorkbenchBusinessStore.readDraft()))===null,
      'confirmed speech is never resurrected as an unfinished draft');
+   // New high-frequency workflow: turn an already-saved unlinked voice note
+   // into a discoverable, deliberately linked project record without touching
+   // the original date or any task/finance fields.
+   {
+     const coreArchive=await page.evaluate(()=>{
+       const core=WorkbenchBusiness,s=core.empty();
+       const h1=core.upsertHospital(s,{name:'合成东院'});
+       const h2=core.upsertHospital(h1.state,{name:'合成西院'});
+       const a=core.saveProject(h2.state,{hospitalId:h1.hospitalId,name:'核磁维保',kind:'维保',status:'等待对方',followupDate:'2026-11-20',nextAction:'原始跟进动作',details:{}},'2026-11-15');
+       const b=core.saveProject(a.state,{hospitalId:h2.hospitalId,name:'直线加速器维修',kind:'维保',status:'待处理',details:{}},'2026-11-15');
+       const original=structuredClone(b.state);
+       original.notes.push({id:'noteA',hospitalId:h1.hospitalId,projectId:'',progress:'合成东院，核磁维保记录。',savedOn:'2026-11-12',disposition:'收件箱'});
+       original.files.push({id:'fileA',name:'synthetic.txt',projectId:'',size:7});
+       original.notes.push({id:'noteF',hospitalId:h1.hospitalId,projectId:'',fileId:'fileA',progress:'已上传合成附件备注',savedOn:'2026-11-14',disposition:'收件箱'});
+       let cross=false,missing=false,repeat=false,missingFile=false;
+       try{core.archiveInboxNote(original,'noteA',b.projectId,'2026-11-15');}catch(_){cross=true;}
+       try{core.archiveInboxNote(original,'missing',a.projectId,'2026-11-15');}catch(_){missing=true;}
+       const linked=core.archiveInboxNote(original,'noteA',a.projectId,'2026-11-15');
+       try{core.archiveInboxNote(linked,'noteA',a.projectId,'2026-11-15');}catch(_){repeat=true;}
+       const fileLinked=core.archiveInboxNote(linked,'noteF',a.projectId,'2026-11-15');
+       const p=fileLinked.projects.find(p=>p.id===a.projectId),record=fileLinked.notes.find(n=>n.id==='noteA');
+       const file=fileLinked.files.find(f=>f.id==='fileA');
+       const broken=structuredClone(original);broken.files=[];
+       try{core.archiveInboxNote(broken,'noteF',a.projectId,'2026-11-15');}catch(_){missingFile=true;}
+       const sourceProject=original.projects.find(p=>p.id===a.projectId);
+       return {cross,missing,repeat,missingFile,untouched:original.notes.every(n=>!n.projectId),
+         preserved:record.progress==='合成东院，核磁维保记录。'&&record.savedOn==='2026-11-12'&&
+           p.timeline.filter(t=>t.id==='noteA').length===1&&p.timeline.find(t=>t.id==='noteA').occurredOn==='2026-11-12'&&
+           p.status===sourceProject.status&&p.nextAction===sourceProject.nextAction&&p.followupDate===sourceProject.followupDate,
+         originalFileLinked:file.projectId===a.projectId&&p.fileIds.includes('fileA')&&
+           p.timeline.some(t=>t.id==='noteF'&&t.fileId==='fileA')};
+     });
+     check(coreArchive.cross&&coreArchive.missing&&coreArchive.repeat&&coreArchive.missingFile&&coreArchive.untouched,
+       'inbox archival rejects cross-hospital, stale, duplicate and missing-original links without writing partial data');
+     check(coreArchive.preserved&&coreArchive.originalFileLinked,
+       'archived note retains its original timestamp and content, and links any original file once without changing project tasks');
+     const unlinkedText='合成新增沟通，项目还没确认，需要之后人工归档';
+     await page.locator('nav button[data-route="note"]').click();
+     await page.locator('form[data-form="note"] textarea[name="text"]').fill(unlinkedText);
+     await page.locator('form[data-form="note"] button.primary').click();
+     await page.locator('form[data-form="briefing"]').waitFor();
+     await page.locator('form[data-form="briefing"] button.primary').click();
+     await page.getByRole('heading',{name:'今天先办重要的事'}).waitFor();
+     check(await page.locator('.inbox-reminder [data-route="inbox"]').count()===1 &&
+       await page.locator('.recent-note-panel').getByText(unlinkedText).isVisible() &&
+       await page.locator('.recent-note-panel button[data-route="inbox"]').count()>=1,
+       'home immediately surfaces just-saved voice communication and a direct route to unfiled records');
+     const beforeArchive=await page.evaluate(async()=>{
+       const s=await WorkbenchBusinessStore.read();
+       const note=s.notes.find(n=>n.progress==='合成新增沟通，项目还没确认，需要之后人工归档');
+       return {revision:s.revision,id:note?.id,savedOn:note?.savedOn,
+         notes:s.notes.length,
+         projectFields:s.projects.map(p=>({id:p.id,status:p.status,date:p.followupDate,action:p.nextAction,files:p.fileIds.length}))};
+     });
+     check(!!beforeArchive.id,'voice note without a matched project was safely retained in the inbox');
+     await page.locator('.inbox-reminder [data-route="inbox"]').click();
+     const selectedInbox=page.locator('.inbox-note[data-inbox-id="'+beforeArchive.id+'"]');
+     check(await selectedInbox.getByText(unlinkedText).isVisible()&&
+       await selectedInbox.locator('[data-archive-note]').isVisible(),
+       'inbox displays the original content and offers a review-first archive action');
+     await selectedInbox.locator('[data-archive-note]').click();
+     check(await page.getByRole('heading',{name:'确认关联项目'}).isVisible() &&
+       await page.locator('form[data-form="archive-note"] select[name="projectId"]').count()===1,
+       'archival requires a dedicated form and explicit project selection');
+     await page.locator('form[data-form="archive-note"] button[data-back="inbox"]').last().click();
+     check(await page.locator('.inbox-note[data-inbox-id="'+beforeArchive.id+'"]').count()===1,
+       'canceling archival keeps the note in inbox without committing changes');
+     await page.locator('.inbox-note[data-inbox-id="'+beforeArchive.id+'"] [data-archive-note]').click();
+     await page.locator('form[data-form="archive-note"] select[name="projectId"]').selectOption({index:1});
+     const destination=await page.locator('form[data-form="archive-note"] select[name="projectId"]').inputValue();
+     await page.locator('form[data-form="archive-note"] button.primary').click();
+     await page.locator('section.detail-head h2').waitFor();
+     check(await page.locator('section.detail-head h2').innerText()===
+       await page.evaluate(async id=>(await WorkbenchBusinessStore.read()).projects.find(p=>p.id===id)?.name,destination),
+       'archival navigates directly to the correct existing project');
+     const afterArchive=await page.evaluate(async({noteId,projectId})=>{
+       const s=await WorkbenchBusinessStore.read(),n=s.notes.find(x=>x.id===noteId);
+       const p=s.projects.find(x=>x.id===projectId);
+       return {revision:s.revision,notes:s.notes.length,noteProject:n?.projectId,noteSavedOn:n?.savedOn,
+         timeline:p.timeline.filter(x=>x.id===noteId).length,
+         untouchedProjects:s.projects.every(x=>{
+           const old=x.id===projectId?null:null;
+           return !!x;
+         }),
+         fields:s.projects.map(x=>({id:x.id,status:x.status,date:x.followupDate,action:x.nextAction,files:x.fileIds.length}))};
+     },{noteId:beforeArchive.id,projectId:destination});
+     check(afterArchive.revision===beforeArchive.revision+1&&afterArchive.notes===beforeArchive.notes&&
+       afterArchive.noteProject===destination&&afterArchive.noteSavedOn===beforeArchive.savedOn&&
+       afterArchive.timeline===1&&JSON.stringify(afterArchive.fields)===JSON.stringify(beforeArchive.projectFields),
+       'one confirmation moves the saved note into project timeline without duplicating notes or changing any project dates/status');
+     await page.reload({waitUntil:'load'});
+     const durable=await page.evaluate(async id=>{
+       const s=await WorkbenchBusinessStore.read(),n=s.notes.find(x=>x.id===id);
+       const p=s.projects.find(x=>x.id===n?.projectId);
+       return {linked:!!p,occurrences:p?.timeline.filter(x=>x.id===id).length,
+         stillInInbox:s.notes.some(x=>x.id===id&&!x.projectId)};
+     },beforeArchive.id);
+     check(durable.linked&&durable.occurrences===1&&!durable.stillInInbox,
+       'archived note survives a full offline reload without reappearing in inbox or duplicating timeline entries');
+   }
    const viewport=await page.evaluate(()=>({overflow:document.documentElement.scrollWidth>innerWidth+1}));
    check(!viewport.overflow,'original iPhone-width UI does not overflow horizontally');
    check(errors.length===0,'no script crashes or external network access during mobile business workflows');

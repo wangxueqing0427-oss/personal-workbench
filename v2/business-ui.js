@@ -100,7 +100,15 @@
       .map(([eyebrow,label,id,items])=>`<section id="focus-${id}" class="card task-section${id==='overdue'?' urgency-section':''}">${sectionHead(eyebrow,label,`${items.length} 项`)}${projectButtons(items,{actions:true,mode:id})}</section>`).join('');
     const nodes=view.nodes.map(node=>`<div class="milestone"><span class="milestone-date">${escape(core.followupInfo(node.date,today()).label)} · ${escape(node.date)}</span><span>${escape(node.project.name)} · ${escape(({bidDate:'招标',contractEnd:'合同到期',renewalDate:'续约',quoteDate:'报价'})[node.field])}</span></div>`).join('');
     const week=view.weekTotal?`<section id="focus-week" class="card task-section">${sectionHead('AHEAD','未来7天节点',`${view.weekTotal} 项`)}${view.week.length?projectButtons(view.week,{actions:true}):''}${nodes}</section>`:'';
-    return greeting+shortcuts+sections+week+`<details class="card quiet-details"><summary>最近跟进 / 长时间未跟进</summary>${projectButtons(view.recent)}<h3>超过14天未跟进</h3>${projectButtons(view.stale)}</details>`;
+    const pending=state.notes.filter(n=>!n.projectId).length;
+    const pendingEntry=pending?`<section class="card inbox-reminder"><div><strong>有 ${pending} 条记录等待归档</strong><p class="muted">刚才记下的沟通不会丢，核对项目后就能加入项目时间线。</p></div><button type="button" data-route="inbox">查看待归档</button></section>`:'';
+    const recent=[...state.notes].slice(-4).reverse();
+    const latest=recent.length?`<section class="card recent-note-panel">${sectionHead('RECENT ACTIVITY','最近沟通',recent.length+' 条')}<div class="recent-note-list">${recent.map(n=>{
+      const project=state.projects.find(p=>p.id===n.projectId);
+      const hospital=state.hospitals.find(h=>h.id===(project?.hospitalId||n.hospitalId));
+      return `<article class="recent-note-item"><div><small>${escape(n.savedOn||n.createdOn||'日期待核对')} · ${escape(hospital?.name||'医院待关联')} · ${escape(project?.name||'尚未归档')}</small><p>${escape(n.progress||'')}</p></div>${project?`<button type="button" data-project="${escape(project.id)}">查看项目</button>`:`<button type="button" data-route="inbox">去归档</button>`}</article>`;
+    }).join('')}</div></section>`:'';
+    return greeting+shortcuts+pendingEntry+sections+week+latest+`<details class="card quiet-details"><summary>最近跟进 / 长时间未跟进</summary>${projectButtons(view.recent)}<h3>超过14天未跟进</h3>${projectButtons(view.stale)}</details>`;
   }
   function hospitalSearchResults() {
     const found=core.searchBusiness(state,searchQuery,searchStatus);
@@ -320,12 +328,51 @@
       <label class="camera-choice"><span class="camera-symbol" aria-hidden="true">▤</span><strong>上传文件</strong><small>合同、报价、发票等</small><input name="file" type="file" aria-label="选择手机中的合同报价或其他文件"></label>
     </div><output class="camera-picked" role="status" aria-live="polite">尚未选择原件</output><p class="muted">如果当前浏览器不弹出相机，请改用“相册 / 选照片”，在系统菜单里选择拍照；也可以复制链接到 Safari 打开。</p><label>本次资料的沟通备注（选填）<textarea name="remark" maxlength="1000" placeholder="例如：设备科已接收报价单，下周二电话确认。"></textarea></label><p class="muted">备注会与这份原件一起保存，并自动进入关联项目时间线；未选择项目则保留在收件箱。二选一即可，原件失败时备注也不会单独写入。</p><button class="primary">保存原件和关联</button></form><section class="card"><h3>文件收件箱</h3>${fileButtons(state.files.map(item => item.id)) || '<p>暂无文件</p>'}</section>`;
   }
+  function inbox(){
+    const pending=[...state.notes].filter(n=>!n.projectId).reverse();
+    const entries=pending.map(n=>{
+      const hospital=state.hospitals.find(h=>h.id===n.hospitalId);
+      const excerpt=escape(n.progress||'');
+      return `<article class="inbox-note" data-inbox-id="${escape(n.id)}">
+        <p class="inbox-note-meta">${escape(n.savedOn||n.createdOn||'日期待核对')} · ${escape(hospital?.name||'待确认医院')} ${n.fileId?' · 附原件':''}</p>
+        <p class="inbox-note-text">${excerpt}</p>
+        <div class="inbox-note-actions"><button type="button" class="primary" data-archive-note="${escape(n.id)}">关联已有项目</button>${n.fileId?fileButtons([n.fileId]):''}</div>
+      </article>`;
+    }).join('');
+    return `<section class="card"><button type="button" data-back="home" class="back-link">← 返回今日</button>
+      ${sectionHead('INBOX','待归档沟通',pending.length+' 条')}
+      <p class="muted">这些都是你已经确认保存的记录，但尚未关联项目。选择已有项目后只会补齐关联关系，不会修改原文、原件、项目状态或回款标记。</p>
+      ${entries||'<div class="empty-state"><p>所有沟通已经归档</p><small>新的语音记录如果没有匹配项目，会出现在这里</small></div>'}
+      <button type="button" data-route="hospitals">查看医院与项目</button></section>`;
+  }
+  function archiveNoteForm(){
+    const note=state.notes.find(n=>n.id===selection&&!n.projectId);
+    if(!note)return '<section class="card"><button type="button" data-back="inbox">← 返回收件箱</button><p>记录已归档或不存在，不会重复保存。</p></section>';
+    const hospital=state.hospitals.find(h=>h.id===note.hospitalId);
+    const available=note.hospitalId?state.projects.filter(p=>p.hospitalId===note.hospitalId):state.projects;
+    const choices=available.map(p=>{
+      const owner=state.hospitals.find(h=>h.id===p.hospitalId);
+      return `<option value="${escape(p.id)}">${escape(owner?.name||'医院待关联')} · ${escape(p.name)}（${escape(p.kind)}）</option>`;
+    }).join('');
+    return `<form class="card archive-note-form" data-form="archive-note">
+      <button type="button" data-back="inbox" class="back-link">← 返回待归档沟通</button>
+      <p class="eyebrow">ASSIGN EXISTING PROJECT</p><h2>确认关联项目</h2>
+      <p class="muted">记录时间：${escape(note.savedOn||note.createdOn||'待核对')} · 原医院：${escape(hospital?.name||'未识别，请手动核对')}</p>
+      <blockquote>${escape(note.progress||'')}</blockquote>
+      ${note.fileId?'<p class="muted">这条记录还关联一个原件，确认后会一并进入项目资料。</p>':''}
+      <label>选择已有项目<select name="projectId" required><option value="">请选择项目（不会自动创建）</option>${choices}</select></label>
+      ${!available.length?'<p class="warning">暂无符合条件的项目，请先到医院业务中建立项目；本条记录会继续留在收件箱。</p>':''}
+      <p class="muted">确认只建立记录与项目的关系，保留原文、原时间和附件，不改变项目状态、跟进日期、合同或回款。</p>
+      <button class="primary"${available.length?'':' disabled'}>确认归档到项目</button>
+      <button type="button" data-back="inbox">取消，暂时留在收件箱</button>
+    </form>`;
+  }
   function more() { return `<section class="card"><h2>更多</h2><p>V2.0 手机验收测试版。仅合成数据，独立加密同步。</p><button data-route="files">文件与拍照</button> <button data-route="inbox">记录收件箱</button><p>完整备份及隔离恢复已自动测试；未开放生产资料接入。</p><p class="muted">iPhone真实Safari/PWA、供应链批次追溯和旧版文件迁移仍需后续验收。</p></section>`; }
   let lastDrawnDay=today();
   function render() {
     lastDrawnDay=today();
     if(route!=='note'||briefing)clearDraftArmed=false;
-    const views = { home, hospitals, 'hospital-form': hospitalForm, 'project-form': projectForm, 'quick-project': quickProjectForm, 'order-followup':orderFollowupForm, 'order-confirm':orderConfirmForm, project: projectDetail, note, supplies, files, more, inbox: () => `<section class="card"><h2>记录收件箱</h2>${state.notes.filter(item => !item.projectId).map(item => `<p>${escape(item.progress)}</p>`).join('') || '<p>暂无待整理记录</p>'}</section>` };
+    const views = { home, hospitals, 'hospital-form': hospitalForm, 'project-form': projectForm, 'quick-project': quickProjectForm, 'order-followup':orderFollowupForm, 'order-confirm':orderConfirmForm, project: projectDetail, note, supplies, files, more, inbox, 'archive-note':archiveNoteForm };
     content.innerHTML = (views[route] || home)();
     document.querySelectorAll('nav button').forEach(button => button.classList.toggle('active', button.dataset.route === route));
   }
@@ -362,6 +409,7 @@
       else if (button.hasAttribute('data-edit-hospital')) { selection = button.dataset.editHospital; route = 'hospital-form'; render(); }
       else if (button.dataset.hospital) { selection = button.dataset.hospital; route = 'hospitals'; render(); }
       else if (button.dataset.project) { selection = button.dataset.project; route = 'project'; render(); }
+      else if (button.dataset.archiveNote) { selection=button.dataset.archiveNote;route='archive-note';render();window.scrollTo(0,0); }
       else if (button.dataset.newProject || button.dataset.editProject) { selection = button.dataset.newProject || button.dataset.editProject; route = 'project-form'; render(); }
       else if (button.dataset.followTomorrow) { selection = button.dataset.followTomorrow; quickTomorrow = true; quickIntent = 'edit'; route = 'quick-project'; render(); }
       else if (button.dataset.feedbackProject) { selection = button.dataset.feedbackProject; quickTomorrow = false; quickIntent = 'feedback'; route = 'quick-project'; render(); }
@@ -482,6 +530,12 @@
         briefing=null;noteDraft='';draftStatus='';clearDraftArmed=false;selection='';route='home';
       }
       if (form.dataset.form === 'confirm-note') { await save(core.confirmNote(state, suggestion, values, today())); selection = values.projectId; suggestion = null; route = selection ? 'project' : 'inbox'; }
+      if (form.dataset.form === 'archive-note') {
+        const result=core.archiveInboxNote(state,selection,String(values.projectId||''),today());
+        await save(result);
+        selection=String(values.projectId);route='project';
+        message('沟通记录已归档到对应项目；原记录与项目状态均保留。');
+      }
       if (form.dataset.form === 'quick-project') {
         const current=state.projects.find(item=>item.id===selection);
         if(!current)throw new Error('项目已经变化，请重新打开');

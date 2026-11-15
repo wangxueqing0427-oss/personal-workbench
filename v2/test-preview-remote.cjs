@@ -185,6 +185,32 @@ async function main() {
     await page.getByRole('button', { name: '记录收件箱' }).click();
     check((await page.locator('#content').innerText()).includes(marker),
       'confirmed split note persists in the isolated local inbox');
+    if(process.env.PREVIEW_EXPECTED_SHA){
+      const unlinked=page.locator('.inbox-note').filter({hasText:marker});
+      check(await unlinked.locator('[data-archive-note]').count()===1,
+        'deployed inbox displays just-confirmed unlinked voice note with a reviewable project action');
+      const previous=await page.evaluate(async marker=>{
+        const s=await WorkbenchBusinessStore.read();
+        return {revision:s.revision,notes:s.notes.length,id:s.notes.find(n=>n.progress?.includes(marker))?.id,
+          projects:s.projects.map(p=>({id:p.id,status:p.status,date:p.followupDate,action:p.nextAction}))};
+      },marker);
+      await unlinked.locator('[data-archive-note]').click();
+      await page.getByRole('heading',{name:'确认关联项目'}).waitFor();
+      await page.locator('form[data-form="archive-note"] select[name="projectId"]').selectOption({index:1});
+      const projectId=await page.locator('form[data-form="archive-note"] select[name="projectId"]').inputValue();
+      await page.locator('form[data-form="archive-note"] button.primary').click();
+      const archived=await page.evaluate(async({id,projectId})=>{
+        const s=await WorkbenchBusinessStore.read(),note=s.notes.find(n=>n.id===id);
+        const p=s.projects.find(x=>x.id===projectId);
+        return {revision:s.revision,notes:s.notes.length,linked:note?.projectId===projectId,
+          timeline:p?.timeline.filter(t=>t.id===id).length,
+          projects:s.projects.map(p=>({id:p.id,status:p.status,date:p.followupDate,action:p.nextAction}))};
+      },{id:previous.id,projectId});
+      check(archived.revision===previous.revision+1&&archived.notes===previous.notes&&
+        archived.linked&&archived.timeline===1&&
+        JSON.stringify(archived.projects)===JSON.stringify(previous.projects),
+        'deployed inbox archival is one explicit atomic update, preserving project dates/status and original note count');
+    }
 
     await page.locator('nav button[data-route="more"]').click();
     await page.locator('[data-route="files"]').last().click();
