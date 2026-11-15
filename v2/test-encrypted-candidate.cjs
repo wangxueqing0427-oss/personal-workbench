@@ -163,6 +163,8 @@ async function main(){
       await a.locator('button[data-confirm-external-backup]').isVisible(),
       'browser download alone is not falsely recorded as a complete external backup');
     await a.locator('button[data-confirm-external-backup]').click();
+    await a.getByText('已记录你对外部文件的人工确认',{exact:false}).waitFor();
+    await a.locator('[data-backup-status]').getByText('已人工确认当前版本的外部加密备份',{exact:false}).waitFor();
     const acknowledged=await a.evaluate(async()=>{
       const s=await WorkbenchBusinessStore.backupStatus();
       const db=await new Promise((resolve,reject)=>{
@@ -177,12 +179,6 @@ async function main(){
       });db.close();
       return {s,raw,revision:(await WorkbenchBusinessStore.read()).revision};
     });
-    console.log('BACKUP_RECEIPT_DEBUG '+JSON.stringify({
-      confirmed:acknowledged.s.confirmed,needsBackup:acknowledged.s.needsBackup,
-      receiptRevision:acknowledged.s.confirmedRevision,currentRevision:acknowledged.revision,
-      rawEncrypted:!!acknowledged.raw?.ciphertext,
-      rawHasHospital:!!JSON.stringify(acknowledged.raw).includes('合成候选独立医院'),
-      notice:(await a.locator('#notice').innerText()).slice(0,140)}));
     check(acknowledged.s.confirmed&&acknowledged.s.needsBackup===false&&
       acknowledged.s.confirmedRevision===3&&acknowledged.raw?.ciphertext&&
       !JSON.stringify(acknowledged.raw).includes('合成候选独立医院')&&
