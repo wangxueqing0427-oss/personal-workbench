@@ -1,7 +1,7 @@
 'use strict';
 /**
- * Build-only encrypted offline V2 candidate. NEVER deploy.
- * Only runs on localhost / 127.0.0.1, uses no V1 records or public data.
+ * Build the fresh-start encrypted V2 candidate for one isolated static test host.
+ * Never production, never syncs to a server, and never migrates V1 data.
  */
 const fs=require('node:fs/promises');
 const path=require('node:path');
@@ -10,6 +10,7 @@ const vm=require('node:vm');
 const {execFileSync}=require('node:child_process');
 const dir=__dirname,root=path.resolve(dir,'..');
 const destination=path.join(dir,'candidate-public');
+const CANDIDATE_HOST='personal-workbench-v2-encrypted-candidate.wangxueqing0427.workers.dev';
 const sources=['business-core.js','business-ui.js','business.css',
   'privacy-delta-journal-poc.js','fresh-encrypted-boot-lab.js',
   'build-encrypted-candidate.cjs'];
@@ -33,7 +34,7 @@ async function main(){
  let encrypted=inputs['privacy-delta-journal-poc.js'];
  encrypted=patch(encrypted,
    "if(root.__WORKBENCH_SYNTHETIC_SHARDED_TEST__!==true ||\n     !['localhost','127.0.0.1'].includes(location.hostname))return;",
-   "if(!['localhost','127.0.0.1'].includes(location.hostname))return;",
+   "if(!['localhost','127.0.0.1','personal-workbench-v2-encrypted-candidate.wangxueqing0427.workers.dev'].includes(location.hostname))return;",
    'local-only encryption guard');
  encrypted=patch(encrypted,
    "const FORMAT='workbench-v2-object-delta-synthetic-v1';",
@@ -54,7 +55,7 @@ async function main(){
  let boot=inputs['fresh-encrypted-boot-lab.js'];
  boot=patch(boot,
    "if(root.__WORKBENCH_ENCRYPTED_BOOT_LAB__!==true||\n    !['127.0.0.1','localhost'].includes(location.hostname)||\n    !root.WorkbenchDeltaCryptoPOC||!root.WorkbenchBusiness)return;",
-   "if(!['127.0.0.1','localhost'].includes(location.hostname)||\n    !root.WorkbenchEncryptedCandidateStore||!root.WorkbenchBusiness)return;",
+   "if(!['127.0.0.1','localhost','personal-workbench-v2-encrypted-candidate.wangxueqing0427.workers.dev'].includes(location.hostname)||\n    !root.WorkbenchEncryptedCandidateStore||!root.WorkbenchBusiness)return;",
    'password-before-UI gate');
  boot=boot.replaceAll('WorkbenchDeltaCryptoPOC','WorkbenchEncryptedCandidateStore')
    .replaceAll('workbench-v2-synthetic-encrypted-vault-id-v1',
@@ -119,7 +120,7 @@ async function main(){
  '<script src="./encrypted-store.js"></script>',
  '<script src="./encrypted-boot.js"></script>',
  '<script>if("serviceWorker" in navigator &&',
- ' ["localhost","127.0.0.1"].includes(location.hostname))',
+ ' ["localhost","127.0.0.1",'+JSON.stringify(CANDIDATE_HOST)+'].includes(location.hostname))',
  ' navigator.serviceWorker.register("./offline-sw.js",{scope:"./",updateViaCache:"none"}).catch(()=>{});</script>',
  '</body></html>'
  ].join('\n');
@@ -178,7 +179,9 @@ async function main(){
  }
  const manifest={kind:'encrypted-fresh-start-candidate',sourceCommit:sha,
    releaseId:id,freshEmpty:true,legacyMigration:false,cloudConnected:false,
-   localhostOnly:true,syntheticOnly:true,productionReady:false,deployAllowed:false,
+   localhostOnly:false,allowedHosts:['localhost','127.0.0.1',CANDIDATE_HOST],
+   syntheticOnly:true,cloudConnected:false,productionReady:false,
+   productionDeployAllowed:false,isolatedTestDeployAllowed:true,
    files:Object.fromEntries(Object.entries(output).map(([name,contents])=>[
      name,{sha256:hash(contents),bytes:Buffer.byteLength(contents,'utf8')}
    ]))};
@@ -191,6 +194,22 @@ async function main(){
      if(path.dirname(filename)!==staging)throw Error('Unsafe candidate path');
      await fs.writeFile(filename,body,{flag:'wx'});
    }
+   // Cloudflare Workers Static Assets consumes this special file; it is not
+   // exposed as a downloadable asset. Keep the test origin unindexed and framed
+   // out, and allow camera/microphone only for this same origin.
+   const headers=[
+     '/*',
+     '  X-Content-Type-Options: nosniff',
+     '  X-Frame-Options: DENY',
+     '  Referrer-Policy: no-referrer',
+     '  X-Robots-Tag: noindex, nofollow, noarchive',
+     '  Permissions-Policy: camera=(self), microphone=(self), geolocation=()',
+     '',
+     'https://'+CANDIDATE_HOST+'/*',
+     '  X-Robots-Tag: noindex, nofollow, noarchive',
+     ''
+   ].join('\n');
+   await fs.writeFile(path.join(staging,'_headers'),headers,{flag:'wx'});
    const old=path.join(dir,'.tools','candidate-old-'+crypto.randomUUID());
    let moved=false;
    try{await fs.rename(destination,old);moved=true;}
@@ -201,8 +220,9 @@ async function main(){
  }catch(e){await fs.rm(staging,{recursive:true,force:true});throw e;}
  console.log('ENCRYPTED_CANDIDATE_BUILD_PASS '+JSON.stringify({
    sourceCommit:sha,releaseId:id,assets:Object.keys(output).length,
-   syntheticOnly:true,deployAllowed:false,productionReady:false,
-   productionTouched:false
+   syntheticOnly:true,isolatedTestDeployAllowed:true,
+   productionDeployAllowed:false,productionReady:false,
+   allowedHosts:['localhost','127.0.0.1',CANDIDATE_HOST],productionTouched:false
  }));
 }
 main().catch(error=>{console.error(error.message);process.exitCode=1;});

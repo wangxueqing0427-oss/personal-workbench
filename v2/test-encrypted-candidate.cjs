@@ -1,6 +1,6 @@
 'use strict';
 /* Build artifact and actual iPhone-shaped browser acceptance:
- * generated static candidate only, isolated localhost; no real backend.
+ * generated static candidate on localhost or its one isolated HTTPS test host; no backend.
  */
 const fs=require('node:fs/promises');
 const path=require('node:path');
@@ -17,8 +17,10 @@ async function main(){
   const manifest=JSON.parse(await fs.readFile(path.join(dir,'build-info.json'),'utf8'));
   check(manifest.kind==='encrypted-fresh-start-candidate'&&manifest.freshEmpty&&
     manifest.legacyMigration===false&&manifest.syntheticOnly&&
-    !manifest.productionReady&&!manifest.deployAllowed&&manifest.localhostOnly&&
-    !manifest.cloudConnected,'candidate manifest blocks real-data use and all production deployments');
+    !manifest.productionReady&&!manifest.productionDeployAllowed&&
+    manifest.isolatedTestDeployAllowed===true&&!manifest.localhostOnly&&
+    manifest.allowedHosts?.includes('personal-workbench-v2-encrypted-candidate.wangxueqing0427.workers.dev')&&
+    !manifest.cloudConnected,'candidate manifest allows only the isolated test host, never production or cloud data');
   const names=Object.keys(manifest.files);
   check(names.length===8&&
     !names.some(name=>/business-store|offline-sync|staging|preview-privacy|legacy/i.test(name)),
@@ -37,9 +39,17 @@ async function main(){
     !store.includes('__WORKBENCH_SYNTHETIC_SHARDED_TEST__')&&
     !boot.includes('__WORKBENCH_ENCRYPTED_BOOT_LAB__'),
     'candidate package removes demo hospitals, old data migration and special-purpose test switches');
-  check(store.includes("!['localhost','127.0.0.1'].includes(location.hostname)")&&
-    boot.includes("!['127.0.0.1','localhost'].includes(location.hostname)"),
-    'candidate encryption and password bootstrap refuse every public/staging/production hostname');
+  check(store.includes("!['localhost','127.0.0.1','personal-workbench-v2-encrypted-candidate.wangxueqing0427.workers.dev'].includes(location.hostname)")&&
+    boot.includes("!['127.0.0.1','localhost','personal-workbench-v2-encrypted-candidate.wangxueqing0427.workers.dev'].includes(location.hostname)"),
+    'candidate encryption and password bootstrap allow only localhost and the exact isolated HTTPS host');
+  const headers=await fs.readFile(path.join(dir,'_headers'),'utf8');
+  check(headers.includes('X-Robots-Tag: noindex, nofollow, noarchive')&&
+    headers.includes('Permissions-Policy: camera=(self), microphone=(self), geolocation=()')&&
+    headers.includes('X-Frame-Options: DENY'),
+    'isolated public static host adds noindex, same-origin camera/microphone policy and clickjacking protection');
+  const html=await fs.readFile(path.join(dir,'business.html'),'utf8');
+  check(html.includes('personal-workbench-v2-encrypted-candidate.wangxueqing0427.workers.dev')&&html.includes('navigator.serviceWorker.register'),
+    'PWA service worker is enabled only for the exact isolated HTTPS host and localhost');
   const allowed=new Set([...names,'build-info.json']);
   let denyOrigin=false,deniedRequests=0;
   const server=http.createServer(async(req,res)=>{
@@ -99,6 +109,16 @@ async function main(){
     await a.locator('form[data-form="project"] button.primary').click();
     await a.getByRole('heading',{name:'合成候选CT维保项目'}).waitFor();
     await a.locator('nav button[data-route="note"]').click();
+    check(await a.locator('button[data-voice-toggle]').count()===1&&
+      await a.locator('form[data-form="note"] textarea[name="text"]').count()===1,
+      'one-tap Chinese voice note and editable text fallback are available on mobile');
+    await a.evaluate(()=>{
+      Object.defineProperty(window,'SpeechRecognition',{value:undefined,configurable:true});
+      Object.defineProperty(window,'webkitSpeechRecognition',{value:undefined,configurable:true});
+    });
+    await a.locator('button[data-voice-toggle]').click();
+    check((await a.locator('#voice-status').innerText()).includes('iPhone 键盘上的麦克风'),
+      'unsupported browser explains the iPhone keyboard microphone fallback without losing draft text');
     const draft='SYNTHETIC_OFFLINE_CANDIDATE_UNFINISHED_DRAFT_'+crypto.randomUUID();
     await a.locator('form[data-form="note"] textarea[name="text"]').fill(draft);
     await a.waitForFunction(()=>document.querySelector('[data-draft-status]')?.textContent.includes('草稿已暂存本机'));
@@ -147,6 +167,10 @@ async function main(){
     }else await aCtx.setOffline(false);
     await a.locator('nav button[data-route="home"]').click();
     await a.locator('.shortcut-panel [data-route="files"]').click();
+    check(await a.locator('form[data-form="file"] input[name="photo"]').getAttribute('capture')==='environment'&&
+      await a.locator('form[data-form="file"] input[name="photo"]').getAttribute('accept')==='image/*'&&
+      await a.locator('form[data-form="file"] input[name="gallery"]').count()===1,
+      'camera capture requests the rear camera and retains a separate photo-library fallback');
     const data=Buffer.from('SYNTHETIC_CANDIDATE_BYTES_'+crypto.randomUUID().repeat(8192));
     await a.locator('form[data-form="file"] select[name="projectId"]').selectOption({index:1});
     await a.locator('form[data-form="file"] input[name="file"]').setInputFiles({

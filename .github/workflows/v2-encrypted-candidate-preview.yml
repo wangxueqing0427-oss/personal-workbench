@@ -1,0 +1,121 @@
+name: Deploy isolated encrypted V2 candidate
+on:
+  push:
+    branches:
+      - dev/v2-preview-isolated-20261111
+    paths:
+      - v2/encrypted-candidate-preview.trigger
+      - .github/workflows/v2-encrypted-candidate-preview.yml
+      - v2/wrangler.encrypted-preview.jsonc
+      - v2/build-encrypted-candidate.cjs
+      - v2/test-encrypted-candidate-remote.cjs
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: personal-workbench-v2-encrypted-candidate
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: >-
+      github.ref == 'refs/heads/dev/v2-preview-isolated-20261111' &&
+      vars.V2_PREVIEW_DEPLOY_ENABLED == 'true' &&
+      vars.V2_PREVIEW_FREE_PLAN_CONFIRMED == 'true' &&
+      vars.V2_PREVIEW_WORKER_READY == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CLOUDFLARE_API_TOKEN: \${{ secrets.CLOUDFLARE_PREVIEW_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: \${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      WRANGLER_SEND_METRICS: "false"
+      CANDIDATE_BASE_URL: https://personal-workbench-v2-encrypted-candidate.wangxueqing0427.workers.dev/
+      CANDIDATE_EXPECTED_SHA: \${{ github.sha }}
+    steps:
+      - name: Checkout the isolated development branch only
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Enforce static-only target, free-plan gate, and no overwrite
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "wangxueqing0427-oss/personal-workbench"
+          test "$GITHUB_REF" = "refs/heads/dev/v2-preview-isolated-20261111"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          test -n "$CLOUDFLARE_API_TOKEN"
+          node <<'NODE'
+          const fs=require('node:fs');
+          const c=JSON.parse(fs.readFileSync('v2/wrangler.encrypted-preview.jsonc','utf8'));
+          if(c.name!=='personal-workbench-v2-encrypted-candidate'||
+             c.main!==undefined||c.workers_dev!==true||
+             c.assets?.directory!=='./candidate-public'||
+             c.assets?.html_handling!=='none'||
+             c.assets?.not_found_handling!=='404-page'||
+             c.assets?.binding!==undefined||c.assets?.run_worker_first!==undefined||
+             c.durable_objects!==undefined||c.kv_namespaces!==undefined||
+             c.r2_buckets!==undefined||c.d1_databases!==undefined||
+             c.vars!==undefined||c.routes!==undefined||c.route!==undefined||
+             c.triggers!==undefined) throw Error('Candidate must be a static-assets-only Worker with no data bindings, routes or runtime script');
+          console.log('ENCRYPTED_STATIC_ONLY_CONFIG_PASS');
+          NODE
+          node <<'NODE'
+          const u='https://api.cloudflare.com/client/v4/accounts/'+process.env.CLOUDFLARE_ACCOUNT_ID+
+            '/workers/scripts/personal-workbench-v2-encrypted-candidate';
+          fetch(u,{headers:{Authorization:'Bearer '+process.env.CLOUDFLARE_API_TOKEN}})
+            .then(async r=>{
+              if(r.status===404){console.log('ENCRYPTED_TARGET_ABSENT_PASS');return;}
+              if(r.ok)throw Error('Dedicated candidate Worker already exists; refusing to overwrite it');
+              throw Error('Cloudflare preflight unavailable (HTTP '+r.status+'); refusing deployment');
+            }).catch(e=>{console.error(e.message);process.exitCode=1;});
+          NODE
+      - name: Build the fresh empty encrypted candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check v2/build-encrypted-candidate.cjs
+          node --check v2/test-encrypted-candidate.cjs
+          node --check v2/test-encrypted-candidate-remote.cjs
+          node v2/build-encrypted-candidate.cjs | tee /tmp/encrypted-candidate-build.log
+          node <<'NODE'
+          const fs=require('node:fs');
+          const m=JSON.parse(fs.readFileSync('v2/candidate-public/build-info.json','utf8'));
+          if(m.sourceCommit!==process.env.GITHUB_SHA||
+             m.isolatedTestDeployAllowed!==true||
+             m.productionDeployAllowed!==false||
+             m.productionReady!==false||
+             m.syntheticOnly!==true||m.cloudConnected!==false||
+             !m.allowedHosts.includes('personal-workbench-v2-encrypted-candidate.wangxueqing0427.workers.dev')||
+             !fs.existsSync('v2/candidate-public/_headers'))
+            throw Error('Built candidate does not satisfy isolated deployment manifest');
+          console.log('ENCRYPTED_CANDIDATE_BUILD_POLICY_PASS');
+          NODE
+      - name: Install pinned mobile browser test engines
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --prefix /tmp/workbench-v2-encrypted-candidate-preview --no-save --no-package-lock playwright@1.56.1
+          /tmp/workbench-v2-encrypted-candidate-preview/node_modules/.bin/playwright install --with-deps chromium webkit
+      - name: Re-run complete local encrypted candidate tests for this exact commit
+        shell: bash
+        env:
+          NODE_PATH: /tmp/workbench-v2-encrypted-candidate-preview/node_modules
+        run: |
+          set -euo pipefail
+          WB_BROWSER=chromium node v2/test-encrypted-candidate.cjs
+          WB_BROWSER=webkit node v2/test-encrypted-candidate.cjs
+      - name: Deploy only the new static-assets-only test Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.149.0 deploy --config v2/wrangler.encrypted-preview.jsonc
+      - name: Verify live HTTPS assets, mobile camera/voice fallback and offline boot
+        shell: bash
+        env:
+          NODE_PATH: /tmp/workbench-v2-encrypted-candidate-preview/node_modules
+        run: |
+          set -euo pipefail
+          WB_BROWSER=chromium node v2/test-encrypted-candidate-remote.cjs
+          WB_BROWSER=webkit node v2/test-encrypted-candidate-remote.cjs
+          echo ENCRYPTED_CANDIDATE_LIVE_HTTPS_ACCEPTANCE_PASS

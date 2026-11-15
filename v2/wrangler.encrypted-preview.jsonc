@@ -1,0 +1,13 @@
+{
+  "name": "personal-workbench-v2-encrypted-candidate",
+  "compatibility_date": "2026-11-16",
+  "workers_dev": true,
+  "assets": {
+    "directory": "./candidate-public",
+    "html_handling": "none",
+    "not_found_handling": "404-page"
+  },
+  "observability": {
+    "enabled": false
+  }
+}

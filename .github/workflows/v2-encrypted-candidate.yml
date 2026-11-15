@@ -8,6 +8,9 @@ on:
       - v2/build-encrypted-candidate.cjs
       - v2/test-encrypted-candidate.cjs
       - v2/test-encrypted-candidate-sw.cjs
+      - v2/test-encrypted-candidate-remote.cjs
+      - v2/wrangler.encrypted-preview.jsonc
+      - .github/workflows/v2-encrypted-candidate-preview.yml
       - v2/privacy-delta-journal-poc.js
       - v2/fresh-encrypted-boot-lab.js
       - v2/business-core.js
@@ -40,6 +43,7 @@ jobs:
           node --check v2/build-encrypted-candidate.cjs
           node --check v2/test-encrypted-candidate.cjs
           node --check v2/test-encrypted-candidate-sw.cjs
+          node --check v2/test-encrypted-candidate-remote.cjs
           ! grep -Ei 'wrangler deploy|CLOUDFLARE_API_TOKEN|PRODUCTION_API_TOKEN' v2/build-encrypted-candidate.cjs v2/test-encrypted-candidate.cjs
           node v2/build-encrypted-candidate.cjs | tee /tmp/encrypted-candidate-build.log
           grep -F 'ENCRYPTED_CANDIDATE_BUILD_PASS' /tmp/encrypted-candidate-build.log
