@@ -540,6 +540,48 @@ async function main(){
    await page.locator('[data-supply-filter="unpaid"]').click();
    check(await page.locator('.order-card').count()===0,
      'receipt immediately updates the unpaid view, without inventing an extra receivable record');
+   // Invoice confirmation is allowed only at the existing sequential boundary.
+   await page.evaluate(async()=>{
+     const store=WorkbenchBusinessStore,s=await store.read(),next=structuredClone(s);
+     const original=next.orders.find(x=>x.product==='合成过滤器订单');
+     if(!original)throw Error('Source order disappeared');
+     next.orders.push({...structuredClone(original),id:crypto.randomUUID(),
+       product:'合成待开票校验订单',stage:'库存',invoiced:false,received:false,
+       invoiceNumber:'',fileIds:[],history:[]});
+     await store.commit(next,s.revision);
+   });
+   await page.reload({waitUntil:'load'});
+   await page.locator('nav button[data-route="supplies"]').click();
+   await page.locator('[data-supply-filter="uninvoiced"]').click();
+   const invoiceTarget=page.locator('.order-card',{has:page.getByRole('heading',{name:/合成待开票校验订单/})});
+   check(await invoiceTarget.locator('[data-confirm-invoice]').count()===1,
+     'order at the invoice boundary exposes invoice confirmation shortcut');
+   await invoiceTarget.locator('[data-confirm-invoice]').click();
+   const invoiceForm=page.locator('form[data-form="order-confirm"]');
+   check(await invoiceForm.locator('input[name="invoiceNumber"][required]').count()===1 &&
+     await invoiceForm.locator('input[name="confirmed"][required]').count()===1,
+     'invoice confirmation requires both an invoice number and explicit user verification');
+   await invoiceForm.getByRole('button',{name:'取消'}).click();
+   const stillUnbilled=await page.evaluate(async()=>{
+     const s=await WorkbenchBusinessStore.read(),o=s.orders.find(x=>x.product==='合成待开票校验订单');
+     return {stage:o.stage,invoiced:o.invoiced,number:o.invoiceNumber};
+   });
+   check(stillUnbilled.stage==='库存'&&!stillUnbilled.invoiced&&!stillUnbilled.number,
+     'canceling invoice confirmation keeps original unbilled status');
+   await page.locator('.order-card',{has:page.getByRole('heading',{name:/合成待开票校验订单/})})
+     .locator('[data-confirm-invoice]').click();
+   await page.locator('form[data-form="order-confirm"] input[name="invoiceNumber"]').fill('SYNTHETIC-FAPIAO-001');
+   await page.locator('form[data-form="order-confirm"] input[name="confirmed"]').check();
+   await page.locator('form[data-form="order-confirm"] button.primary').click();
+   const nowInvoiced=await page.evaluate(async()=>{
+     const s=await WorkbenchBusinessStore.read(),o=s.orders.find(x=>x.product==='合成待开票校验订单');
+     return {stage:o.stage,invoiced:o.invoiced,received:o.received,number:o.invoiceNumber,
+       last:o.history.at(-1)?.stage,unpaid:WorkbenchBusiness.finance(s).unpaid.some(x=>x.id===o.id)};
+   });
+   check(nowInvoiced.stage==='开票'&&nowInvoiced.invoiced&&!nowInvoiced.received &&
+     nowInvoiced.number==='SYNTHETIC-FAPIAO-001'&&nowInvoiced.last==='开票'&&nowInvoiced.unpaid,
+     'verified invoice uses the normal next-stage rule and moves the order into unpaid list');
+
 
    const viewport=await page.evaluate(()=>({overflow:document.documentElement.scrollWidth>innerWidth+1}));
    check(!viewport.overflow,'original iPhone-width UI does not overflow horizontally');
