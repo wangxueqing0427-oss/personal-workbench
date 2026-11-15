@@ -185,3 +185,14 @@ form[data-form="file"] textarea[name="remark"]{min-height:96px;background:#f8fcf
 .order-parent{margin:10px 0 6px;font-size:12px;color:#4f7284;font-weight:650;line-height:1.5}
 .supplies-results{padding-top:12px;padding-bottom:12px}.supplies-results .section-head{margin-bottom:0}
 @media(max-width:350px){.stat-grid{gap:5px}.stat-tile-button{padding:10px 6px}.stat-tile-button span{font-size:11px}}
+
+/* Consumables follow-up: compact in-card action row and confirmation safety. */
+.order-followup-summary{border-top:1px solid var(--line);margin:10px 0 9px;padding-top:7px;color:#567486;font-size:12px;line-height:1.55}
+.order-followup-summary p{margin:4px 0;overflow-wrap:anywhere}
+.order-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.order-actions button{width:100%;min-height:46px;min-width:0;font-size:12px;padding:9px 6px}
+.order-actions button[data-order-followup]{background:#e8f4f7;color:#185f78;border-color:#cee3e9;font-weight:700}
+.order-actions .primary{grid-column:1/-1}
+.order-quick-form .order-confirm-check{display:flex;align-items:center;gap:10px;margin:14px 0}
+.order-confirm-check input[type=checkbox]{min-width:22px;min-height:22px;flex:0 0 22px}
+.order-quick-form button.primary{width:100%;min-height:48px}

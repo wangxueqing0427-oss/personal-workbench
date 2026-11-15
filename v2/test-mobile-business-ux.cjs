@@ -466,6 +466,81 @@ async function main(){
    check(await page.locator('.order-card').count()===2&&
      await page.locator('[data-supply-filter="all"]').getAttribute('aria-pressed')==='true',
      'all-orders tab restores the complete order list without losing either record');
+   // No hidden stage skips: record a chase on an unbilled order while preserving status.
+   const historyOrder=page.locator('.order-card',{has:page.getByRole('heading',{name:/合成过滤器订单/})});
+   const beforeChase=await page.evaluate(async()=>{
+     const s=await WorkbenchBusinessStore.read(),o=s.orders.find(x=>x.product==='合成过滤器订单');
+     return {stage:o.stage,invoiced:o.invoiced,received:o.received,hist:o.history.length,rev:s.revision};
+   });
+   await historyOrder.locator('[data-order-followup]').click();
+   const follow=page.locator('form[data-form="order-followup"]');
+   check(await follow.isVisible()&&await follow.getByText('只记录沟通').isVisible(),
+     'order chase opens a dedicated simple form without falsely changing invoice or payment');
+   await follow.getByRole('button',{name:'取消'}).click();
+   const canceledChase=await page.evaluate(async()=>{
+     const s=await WorkbenchBusinessStore.read(),o=s.orders.find(x=>x.product==='合成过滤器订单');
+     return {stage:o.stage,invoiced:o.invoiced,received:o.received,hist:o.history.length,rev:s.revision};
+   });
+   check(JSON.stringify(beforeChase)===JSON.stringify(canceledChase),
+     'canceling an order follow-up makes no writes or silent stage advances');
+   await page.locator('.order-card',{has:page.getByRole('heading',{name:/合成过滤器订单/})})
+     .locator('[data-order-followup]').click();
+   const nextDate=await page.evaluate(()=>{
+     const now=new Intl.DateTimeFormat('sv-SE',{year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+     return WorkbenchBusiness.addDays(now,3);
+   });
+   await page.locator('form[data-form="order-followup"] textarea[name="progress"]').fill('合成催办：设备科约定3天后回复开票进度');
+   await page.locator('form[data-form="order-followup"] input[name="followupDate"]').fill(nextDate);
+   await page.locator('form[data-form="order-followup"] button.primary').click();
+   const chased=await page.evaluate(async()=>{
+     const s=await WorkbenchBusinessStore.read(),o=s.orders.find(x=>x.product==='合成过滤器订单');
+     const p=s.projects.find(x=>x.id===o.projectId),event=o.history.at(-1);
+     return {invoiced:o.invoiced,received:o.received,stage:o.stage,date:o.followupDate,
+       history:event,notes:s.notes.filter(x=>x.id===event.id).length,
+       timeline:p.timeline.filter(x=>x.id===event.id).length,
+       noteText:p.timeline.find(x=>x.id===event.id)?.text};
+   });
+   check(chased.stage==='采购计划'&&!chased.invoiced&&!chased.received&&chased.date===nextDate&&
+     chased.history.type==='跟进'&&chased.notes===1&&chased.timeline===1&&
+     chased.noteText.includes('设备科约定3天后回复'),
+     'one atomic chase saves next date, single project-linked note and order history while preserving finance flags');
+   check(await page.locator('.order-card',{has:page.getByRole('heading',{name:/合成过滤器订单/})})
+      .getByText('上次进展', {exact:false}).isVisible(),
+     'saved chase shows last real communication inline on the associated consumables order');
+   // "Received" shortcut is only offered for already invoiced orders. Must confirm full amount.
+   const owed=page.locator('.order-card',{has:page.getByRole('heading',{name:/合成已开票待回款订单/})});
+   check(await owed.locator('[data-confirm-payment]').count()===1 &&
+     await page.locator('.order-card',{has:page.getByRole('heading',{name:/合成过滤器订单/})})
+       .locator('[data-confirm-payment]').count()===0,
+     'only an invoiced unpaid order offers whole-order receipt; early-stage order cannot jump ahead');
+   await owed.locator('[data-confirm-payment]').click();
+   const receipt=page.locator('form[data-form="order-confirm"]');
+   check(await receipt.getByText('部分回款不能在这里标为全部已回款').isVisible()&&
+     await receipt.locator('input[name="confirmed"][required]').count()===1,
+     'receipt form clearly warns partial payments are unsupported and requires explicit verification');
+   await receipt.getByRole('button',{name:'取消'}).click();
+   const owedStatus=await page.evaluate(async()=>{
+     const s=await WorkbenchBusinessStore.read();
+     const o=s.orders.find(x=>x.product==='合成已开票待回款订单');
+     return {stage:o.stage,received:o.received};
+   });
+   check(owedStatus.stage==='开票'&&!owedStatus.received,
+     'canceling confirmation never falsely marks an invoice as paid');
+   await page.locator('.order-card',{has:page.getByRole('heading',{name:/合成已开票待回款订单/})})
+     .locator('[data-confirm-payment]').click();
+   await page.locator('form[data-form="order-confirm"] input[name="confirmed"]').check();
+   await page.locator('form[data-form="order-confirm"] button.primary').click();
+   const paidOrder=await page.evaluate(async()=>{
+     const s=await WorkbenchBusinessStore.read();
+     const o=s.orders.find(x=>x.product==='合成已开票待回款订单');
+     return {stage:o.stage,received:o.received,history:o.history.at(-1),unpaid:WorkbenchBusiness.finance(s).unpaid.length};
+   });
+   check(paidOrder.stage==='回款'&&paidOrder.received&&paidOrder.history.stage==='回款'&&paidOrder.unpaid===0,
+     'confirmed full receipt uses existing sequential stage rule and removes the record from unpaid filter');
+   await page.locator('[data-supply-filter="unpaid"]').click();
+   check(await page.locator('.order-card').count()===0,
+     'receipt immediately updates the unpaid view, without inventing an extra receivable record');
+
    const viewport=await page.evaluate(()=>({overflow:document.documentElement.scrollWidth>innerWidth+1}));
    check(!viewport.overflow,'original iPhone-width UI does not overflow horizontally');
    check(errors.length===0,'no script crashes or external network access during mobile business workflows');

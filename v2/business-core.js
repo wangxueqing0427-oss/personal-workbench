@@ -194,6 +194,27 @@
     if (next.orders.at(-1).mode === '高值' && !next.orders.at(-1).traceCode) throw new Error('高值耗材请填写批次/UDI追溯信息');
     return next;
   }
+  // Follow-up is not payment recognition. One commit records all three links
+  // without changing invoice/receipt flags or the sequential purchase stage.
+  function logOrderFollowup(state, orderId, input, today) {
+    const next=copy(state), order=next.orders.find(item=>item.id===orderId);
+    if(!order)throw new Error('耗材订单已不存在，未保存跟进');
+    const project=next.projects.find(item=>item.id===order.projectId);
+    if(!project)throw new Error('订单关联项目不存在，未保存跟进');
+    const note=text(input.progress), savedOn=date(today);
+    if(!note||note.length>1000)throw new Error('请填写不超过1000字的催办进展');
+    const nextFollowup=date(input.followupDate);
+    const id=identifier(), content='耗材跟进｜'+order.product+'：'+note;
+    if(!Array.isArray(order.history))order.history=[];
+    if(!Array.isArray(project.timeline))project.timeline=[];
+    order.history.push({id,type:'跟进',date:savedOn,note,followupDate:nextFollowup});
+    order.followupDate=nextFollowup;
+    project.timeline.push({id,text:content,occurredOn:savedOn,orderId:order.id});
+    project.updatedOn=savedOn;
+    next.notes.push({id,progress:content,projectId:project.id,orderId:order.id,
+      savedOn,createdOn:savedOn,source:'耗材订单跟进',disposition:'项目时间线'});
+    return next;
+  }
   function advanceOrder(state, id, stage, today, input = {}) {
     const next = copy(state), order = next.orders.find(item => item.id === id);
     if (!order || stages.indexOf(stage) !== stages.indexOf(order.stage) + 1) throw new Error('流程必须逐步推进');
@@ -217,5 +238,5 @@
   function finance(state) {
     return { uninvoiced: state.orders.filter(item => !item.invoiced), unpaid: state.orders.filter(item => item.invoiced && !item.received), balances: state.movements.reduce((result, item) => { result[item.inventoryKey] = (result[item.inventoryKey] || 0) + item.delta; return result; }, {}) };
   }
-  root.WorkbenchBusiness = { empty, statuses, kinds, stages, date, addDays, followupInfo, upsertHospital, searchBusiness, saveProject, fromLegacy, suggestNote, confirmNote, dashboard, focusBoard, saveOrder, advanceOrder, stock, finance };
+  root.WorkbenchBusiness = { empty, statuses, kinds, stages, date, addDays, followupInfo, upsertHospital, searchBusiness, saveProject, fromLegacy, suggestNote, confirmNote, dashboard, focusBoard, saveOrder, logOrderFollowup, advanceOrder, stock, finance };
 })(globalThis);

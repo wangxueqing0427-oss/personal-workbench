@@ -136,10 +136,27 @@
       const stage=next<core.stages.length?`<form data-form="stage" data-id="${escape(order.id)}">${core.stages[next]==='开票'?field('invoiceNumber','发票编号'):''}<button>确认进入 ${escape(core.stages[next])}</button></form>`:'<p class="muted">流程已完成，历史记录保留</p>';
       const project=state.projects.find(item=>item.id===order.projectId);
       const hospital=state.hospitals.find(item=>item.id===project?.hospitalId);
-      return `<section class="card order-card" data-order-id="${escape(order.id)}"><div class="row"><h3>${escape(order.product)} · ${escape(order.specification)}</h3>${statusTag(order.stage)}</div><p class="order-parent">${escape(hospital?.name||'医院待关联')} · ${escape(project?.name||'项目待关联')}</p><p class="muted">${escape(order.manufacturer)} · ${escape(order.mode)} · 数量 ${order.quantity}</p><p class="order-amount">¥${(order.quantity*order.unitPrice).toFixed(2)}</p>${order.traceCode?`<p class="muted">批次 / UDI：${escape(order.traceCode)}</p>`:''}<div class="order-actions"><button class="primary" data-files-order="${escape(order.id)}">拍照 / 上传采购单据</button></div><details class="quiet-details"><summary>采购流程与库存调整</summary>${stage}<form data-form="stock" data-id="${escape(order.id)}"><div class="grid"><label>库存操作<select name="direction">${options(['入库','出库'])}</select></label>${field('quantity','数量',1,'number')}</div><button>确认库存变动</button></form></details><details class="quiet-details"><summary>已保存的采购单 / 配送单 / 发票</summary>${fileButtons(order.fileIds)||'<p class="muted">暂未关联附件</p>'}</details></section>`;
+      return `<section class="card order-card" data-order-id="${escape(order.id)}"><div class="row"><h3>${escape(order.product)} · ${escape(order.specification)}</h3>${statusTag(order.stage)}</div><p class="order-parent">${escape(hospital?.name||'医院待关联')} · ${escape(project?.name||'项目待关联')}</p><p class="muted">${escape(order.manufacturer)} · ${escape(order.mode)} · 数量 ${order.quantity}</p><p class="order-amount">¥${(order.quantity*order.unitPrice).toFixed(2)}</p>${order.traceCode?`<p class="muted">批次 / UDI：${escape(order.traceCode)}</p>`:''}<div class="order-followup-summary">${order.followupDate?`<p>下次催办：${escape(core.followupInfo(order.followupDate,today()).label)} · ${escape(order.followupDate)}</p>`:'<p>下次催办：尚未安排</p>'}${(order.history||[]).filter(x=>x.type==='跟进'&&x.note).slice(-1).map(x=>`<p data-last-order-note>上次进展（${escape(x.date||'日期待核对')}）：${escape(x.note)}</p>`).join('')}</div><div class="order-actions"><button type="button" data-order-followup="${escape(order.id)}">记录催办</button>${order.stage==='库存'&&!order.invoiced?`<button type="button" data-confirm-invoice="${escape(order.id)}">确认开票</button>`:''}${order.stage==='开票'&&order.invoiced&&!order.received?`<button type="button" data-confirm-payment="${escape(order.id)}">确认整单回款</button>`:''}<button class="primary" data-files-order="${escape(order.id)}">拍照 / 上传采购单据</button></div><details class="quiet-details"><summary>采购流程与库存调整</summary>${stage}<form data-form="stock" data-id="${escape(order.id)}"><div class="grid"><label>库存操作<select name="direction">${options(['入库','出库'])}</select></label>${field('quantity','数量',1,'number')}</div><button>确认库存变动</button></form></details><details class="quiet-details"><summary>已保存的采购单 / 配送单 / 发票</summary>${fileButtons(order.fileIds)||'<p class="muted">暂未关联附件</p>'}</details></section>`;
     }).join('')||`<section class="card"><div class="empty-state"><p>${state.orders.length?'当前筛选没有符合条件的订单':'还没有采购记录'}</p><small>${state.orders.length?'可以点击“采购记录”查看全部订单':'可以先从上方登记一笔合成订单'}</small></div></section>`;
     const stock=`<section class="card">${sectionHead('INVENTORY','库存结余')}${Object.entries(amounts.balances).map(([name,count])=>`<div class="info-row"><span>${escape(name)}</span><strong>${count}</strong></div>`).join('')||'<p class="muted">暂无库存流水</p>'}</section>`;
     return summary+form+heading+orders+stock;
+  }
+  function orderFollowupForm() {
+    const order=state.orders.find(item=>item.id===selection);
+    if(!order)return '<section class="card">订单已不存在，请返回耗材列表。</section>';
+    const project=state.projects.find(item=>item.id===order.projectId);
+    const hospital=state.hospitals.find(item=>item.id===project?.hospitalId);
+    return `<form class="card order-quick-form" data-form="order-followup"><button type="button" data-back="supplies" class="back-link">← 返回耗材列表</button><p class="eyebrow">ORDER FOLLOW-UP</p><h2>记录本次催办</h2><p class="muted">${escape(order.product)} · ${escape(hospital?.name||'医院待关联')} · ${escape(project?.name||'项目待关联')}</p><p class="muted">此处只记录沟通，不会自动改成已开票或已回款。</p><label>沟通结果（必填）<textarea name="progress" required maxlength="1000" placeholder="如：财务科确认本周五开票，约定下周一再联系"></textarea></label>${field('followupDate','下次催办日期（可留空）',order.followupDate||'','date')}<p class="muted">确认保存后将同步写入订单历史和关联项目时间线。</p><button class="primary">确认记录催办</button><button type="button" data-back="supplies">取消</button></form>`;
+  }
+  function orderConfirmForm() {
+    const order=state.orders.find(item=>item.id===selection);
+    if(!order)return '<section class="card">订单已不存在，请返回耗材列表。</section>';
+    const invoice=order.stage==='库存'&&!order.invoiced;
+    const payment=order.stage==='开票'&&order.invoiced&&!order.received;
+    if(!invoice&&!payment)return '<section class="card">当前订单不能执行此操作；请按采购流程逐步推进。</section>';
+    const label=invoice?'确认订单开票':'确认整单回款';
+    const next=invoice?'开票':'回款';
+    return `<form class="card order-quick-form" data-form="order-confirm"><button type="button" data-back="supplies" class="back-link">← 返回耗材列表</button><p class="eyebrow">ORDER CONFIRMATION</p><h2>${label}</h2><p class="muted">${escape(order.product)} · ¥${(order.quantity*order.unitPrice).toFixed(2)} · 当前${escape(order.stage)}</p>${invoice?field('invoiceNumber','发票编号（必填）',order.invoiceNumber||''):`<p class="warning">仅在整张订单款项实际全部到账后确认。部分回款不能在这里标为全部已回款。</p><p>发票编号：${escape(order.invoiceNumber||'待核对')}</p>`}<label class="check order-confirm-check"><input name="confirmed" type="checkbox" value="yes" required>我已核实，确认${invoice?'本订单发票已经开具':'本订单款项已全部实际到账'}</label><input name="expectedStage" type="hidden" value="${next}"><button class="primary">${label}</button><button type="button" data-back="supplies">取消</button></form>`;
   }
   function fileButtons(ids) { return ids.map(id => { const file = state.files.find(item => item.id === id); return file ? `<button data-download="${escape(id)}">查看 / 下载 ${escape(file.name)}</button>${/^image\/(png|jpeg|webp|gif)$/.test(file.type || '') ? `<button data-preview="${escape(id)}">预览图片 ${escape(file.name)}</button>` : ''}` : `<p class="warning">资料 ${escape(id)} 未导入，原关联仍保留</p>`; }).join(''); }
   function files() {
@@ -151,7 +168,7 @@
   let lastDrawnDay=today();
   function render() {
     lastDrawnDay=today();
-    const views = { home, hospitals, 'hospital-form': hospitalForm, 'project-form': projectForm, 'quick-project': quickProjectForm, project: projectDetail, note, supplies, files, more, inbox: () => `<section class="card"><h2>记录收件箱</h2>${state.notes.filter(item => !item.projectId).map(item => `<p>${escape(item.progress)}</p>`).join('') || '<p>暂无待整理记录</p>'}</section>` };
+    const views = { home, hospitals, 'hospital-form': hospitalForm, 'project-form': projectForm, 'quick-project': quickProjectForm, 'order-followup':orderFollowupForm, 'order-confirm':orderConfirmForm, project: projectDetail, note, supplies, files, more, inbox: () => `<section class="card"><h2>记录收件箱</h2>${state.notes.filter(item => !item.projectId).map(item => `<p>${escape(item.progress)}</p>`).join('') || '<p>暂无待整理记录</p>'}</section>` };
     content.innerHTML = (views[route] || home)();
     document.querySelectorAll('nav button').forEach(button => button.classList.toggle('active', button.dataset.route === route));
   }
@@ -170,6 +187,8 @@
         }
       }
       else if (button.dataset.supplyFilter) { supplyFilter = button.dataset.supplyFilter; route = 'supplies'; render(); }
+      else if (button.dataset.orderFollowup) { selection=button.dataset.orderFollowup; route='order-followup'; render(); window.scrollTo(0,0); }
+      else if (button.dataset.confirmInvoice || button.dataset.confirmPayment) { selection=button.dataset.confirmInvoice||button.dataset.confirmPayment; route='order-confirm'; render(); window.scrollTo(0,0); }
       else if (button.dataset.route) { route = button.dataset.route; selection = ''; suggestion = null; quickTomorrow = false; quickIntent = 'edit'; render(); window.scrollTo(0, 0); }
       else if (button.dataset.back) { route = button.dataset.back; quickTomorrow = false; quickIntent = 'edit'; if (route !== 'project') selection = ''; render(); }
       else if (button.hasAttribute('data-clear-search')) { searchQuery = ''; searchStatus = '全部'; render(); }
@@ -242,6 +261,20 @@
         await save(merged);route='project';quickTomorrow = false;quickIntent = 'edit';
       }
       if (form.dataset.form === 'order') await save(core.saveOrder(state, values));
+      if (form.dataset.form === 'order-followup') {
+        await save(core.logOrderFollowup(state,selection,values,today()));
+        route='supplies';selection='';
+      }
+      if (form.dataset.form === 'order-confirm') {
+        if(values.confirmed!=='yes')throw new Error('需要核实后勾选确认，尚未更改订单状态');
+        const order=state.orders.find(item=>item.id===selection);
+        if(!order)throw new Error('订单已不存在，请返回列表');
+        const expected=(order.stage==='库存'&&!order.invoiced)?'开票':
+          (order.stage==='开票'&&order.invoiced&&!order.received)?'回款':'';
+        if(!expected||values.expectedStage!==expected)throw new Error('订单流程已变化，未保存');
+        await save(core.advanceOrder(state,order.id,expected,today(),values));
+        route='supplies';selection='';
+      }
       if (form.dataset.form === 'stage') { const order = state.orders.find(item => item.id === form.dataset.id); await save(core.advanceOrder(state, order.id, core.stages[core.stages.indexOf(order.stage) + 1], today(), values)); }
       if (form.dataset.form === 'stock') await save(core.stock(state, { ...values, orderId: form.dataset.id }, today()));
       if (form.dataset.form === 'file') {
