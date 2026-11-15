@@ -23,3 +23,14 @@
 真实用户的安全登录/可靠设备身份与撤销、真正可恢复的云端密文备份、iPhone Safari与主屏幕PWA真机摄像头/语音/隐私锁/离线验收、正式地址及用户明确发布许可。Face ID可作为便捷解锁，但不能直接替代长期安全备份。
 
 **这一步不是旧版迁移，也不会删除/覆盖任何已有医院资料。** 
+
+
+## 2026-11-15｜独立离线加密上线候选包已构建并通过两套移动浏览器
+
+- **源码与完全独立的候选产物**：build-only 功能提交 `089a356088329d3dfbb585e91ba0a9805269f27a`；修复硬编码语音示例 `209671a72b0110cdf55c5f0584c9edb0f7003fa1`；修正候选备份UI与WebKit离线测试 `ffdcc1407ca5191f0235c1c020b4dd97bf185272`；WebKit不使用有问题的DevTools断网API，改测试服务端503且确认**没有任何网络请求抵达服务器** `dba5dcc8c2cf43d8ae54a278eeddb04aaaa8abb3`。所有改动限于 `dev/v2-preview-isolated-20261111`，V1生产 `main` 保持`c3d9ebec26b94ef056eaad649447b3ad2dba31bc`。
+- **经验证的输出**：`node v2/build-encrypted-candidate.cjs` 在 GitHub Actions 从当前提交读入并核对所有代码哈希，仅生成本地目录 `v2/candidate-public/`。内含8个白名单静态资产及 `build-info.json`，9个文件；原源码不改。加密启动使用候选专用随机库名前缀，严禁明文`business-store.js`及旧`offline-sync.js`，不包含示例医院、旧版迁移/公有Worker预览资源。所有静态资源各自 SHA-256及字节数，构建关联原始提交SHA和不可变releaseId。
+- **安全约束未突破**：生成的 `encrypted-store.js` 与 `encrypted-boot.js` **仅在localhost/127.0.0.1下启用**，`build-info.json`明确 `syntheticOnly:true`, `localhostOnly:true`, `cloudConnected:false`, `productionReady:false`, `deployAllowed:false`。绝不可把这个输出部署到公开站点或录入真实医院资料。无云端账号或密文同步功能。
+- **测试第一轮识别并修复了真实问题**：加密备份入口仍带旧实验标志，导致无法下载；语音输入占位提示仍带演示医院；WebKit模拟断网使用DevTools代理方式引发浏览器内部导航错误。已分别修复并保留独立 CI 失败记录（不能将首次失败声称为通过）。
+- **最终双浏览器自动测试成功**：[构建及上线候选手机验收 #43730959602](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43730959602) SUCCESS。Chromium **15/15** + WebKit **16/16** = **31项全部通过、0失败**。资源SHA-256校验、仅加密存储、零演示/旧版资料、全新空白首次进入、医院项目录入、语音未完成草稿、AES-GCM原件/增量历史、离线缓存、重新打开解锁、加密备份下载、第二台独立浏览器恢复原件SHA256及队列历史、再次锁定、无外部网络均成功。Chromium是Playwright浏览器真正`setOffline(true)`；WebKit是源HTTP服务器返回503并验证业务页面完全由服务工作线程缓存提供，不能混称物理设备真正断网。
+- **最终验收发布源提交**：`dba5dcc8c2cf43d8ae54a278eeddb04aaaa8abb3`，`releaseId=8f8134dc9d65d7ba9ffb5265f32a6262d16692595cdb7286697f3446d0a80c4c`。文档后续提交会改变构建器中与完整提交SHA关联的releaseId；已验证的是上述源码提交。
+- **正式版仍不能放行**：没有真正生产域名、正式云端长期身份与设备许可及撤销机制、真实跨设备云端自动备份、iPhone原生Face ID/WebAuthn与Safari添加到主屏幕的最终验收。候选打包仅证明可复现的**本机加密独立候选**，不等于已经完成云端正式版本或获得用户发布批准。正式版要从零启用，不迁移V1.5.7；正式生产和真实数据仍禁止自动访问、清空、迁移或覆盖。

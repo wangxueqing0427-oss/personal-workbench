@@ -41,3 +41,8 @@
 - **全面未破坏验证**：原手机端回归 [#43725597752](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43725597752) SUCCESS、之前加密备份/文件导入 [#43725597760](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43725597760) SUCCESS、已有加密本地业务/草稿/Cloud模拟回归 [#43725597781](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43725597781) SUCCESS、Cloudflare build-only预检 [#43725597730](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43725597730) SUCCESS、正式版无旧版迁移门禁 [#43725597896](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43725597896) SUCCESS。
 - **不可混淆的上线边界**：实验启动页及加密runtime**仅合成本机测试**；原公有合成preview继续运行之前版本，没有部署本轮变更，现有公共端`business-store.js`仍是明文IndexedDB，不可录真实业务。即使实验加密已能通过WebKit，**它仍未具有正式长效账户鉴权/服务器强制设备授权/云端与离线身份恢复、真实iPhone Safari+主屏幕PWA、Face ID密钥解封和正式发布审批**。随机UUID对象ID、集合种类等元数据在本机仍可观察，不能称为完全硬件级数据保护。
 - **旧版数据决定和分工**：用户明确不迁移V1.5.7，正式版从空白开始；用户只负责最终真机上手，自动开发、GitHub测试、兼容回归、合成加密及失败恢复均由助手处理。生产`main`保持`c3d9ebec26b94ef056eaad649447b3ad2dba31bc`，V1、原staging和真实数据/附件不变；无新付费服务。下一阶段需要将合成原型转为**可审计的独立正式候选构建与真实云端设备身份方案**，不可在这些缺口完成前把测试版变成正式版。
+
+
+## 2026-11-15｜独立离线加密上线候选包已构建并通过两套移动浏览器
+
+[GitHub Actions #43730959602](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43730959602) SUCCESS，Chromium15/15、WebKit16/16，**31项通过、0失败**；完整证据、测试的不同断网机制和源提交/发布ID详见`v2/ENCRYPTED-CANDIDATE-BUILD-2026-11-15.md`。新增的`build-encrypted-candidate.cjs`支持以SHA256受保护的9文件本机离线候选包、独立AES-GCM对象/队列/原件/草稿加密及首次解锁、换机恢复，且包含硬编码的localhost-only及`deployAllowed:false`。**尚未生产上线、没有云账号、没有真机Safari/Face ID验收，仍禁止录入真实业务。** 生产main/V1.5.7、旧V2 staging、公有合成preview均没有改动。
