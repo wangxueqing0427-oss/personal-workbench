@@ -78,6 +78,36 @@ async function main(){
      'overdue, today, waiting and next-week focus lanes are stable, prioritized and disjoint');
    check(isolatedLanes.completedExcluded,
      'finished projects never reappear among urgent, waiting or scheduled actions');
+   const calendarLabels=await page.evaluate(()=>{
+     const info=WorkbenchBusiness.followupInfo,base='2026-12-31';
+     return {
+       last:info('2026-12-29',base),
+       today:info(base,base),
+       tomorrow:info('2027-01-01',base),
+       future:info('2027-01-05',base),
+       later:info('2027-02-20',base),
+       none:info('',base),
+       broken:info('2026-02-30',base),
+       leap:info('2028-02-29','2028-02-28')
+     };
+   });
+   check(calendarLabels.last.label==='已逾期2天'&&calendarLabels.last.tone==='overdue'&&
+     calendarLabels.today.label==='今天跟进'&&calendarLabels.tomorrow.label==='明天跟进'&&
+     calendarLabels.future.label==='5天后跟进'&&calendarLabels.later.label==='计划跟进'&&
+     calendarLabels.none.label==='日期待定'&&calendarLabels.broken.label==='日期待核对'&&
+     calendarLabels.leap.label==='明天跟进',
+     'relative date labels handle overdue, cross-year tomorrow, leap day, empty and historic invalid dates without rewriting records');
+   const visualDates=await page.evaluate(()=>{
+     const hero=document.querySelector('.hero-date');
+     const cell=document.querySelector('#focus-today .project-date');
+     return {hero:hero?.dataset.currentDate,summary:cell?.querySelector('.project-date-relative')?.textContent,
+       absolute:cell?.querySelector('time')?.getAttribute('datetime'),
+       tone:cell?.dataset.dateTone,overflow:document.documentElement.scrollWidth>innerWidth+1};
+   });
+   check(/^\\d{4}-\\d{2}-\\d{2}$/.test(visualDates.hero||'')&&
+     visualDates.summary==='今天跟进'&&visualDates.absolute===visualDates.hero&&
+     visualDates.tone==='today'&&!visualDates.overflow,
+     'homepage shows current local date plus readable follow-up priority and retains exact date on 390px iPhone');
 
    check(await page.locator('.work-item [data-follow-tomorrow]').count()>=1,
      'each daily project includes a thumb-friendly tomorrow shortcut');
@@ -338,6 +368,10 @@ async function main(){
      (await waitingCard.locator('[data-last-contact]').textContent()).includes('最近沟通：')&&
      await waitingCard.locator('[data-feedback-project]').isVisible(),
      'waiting items display a history-derived last-contact date and a real feedback action');
+   check((await waitingCard.locator('.project-date-relative').textContent())==='5天后跟进'&&
+     (await waitingCard.locator('.project-date time').getAttribute('datetime'))===
+       await page.evaluate(()=>WorkbenchBusiness.addDays(new Intl.DateTimeFormat('sv-SE',{year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()),5)),
+     'waiting feedback displays a relative reminder but preserves its exact original follow-up date');
    const beforeFeedback=await page.evaluate(async()=>{
      const s=await WorkbenchBusinessStore.read(),p=s.projects.find(x=>x.name==='合成DR设备维保');
      return {status:p.status,waiting:p.waitingOn,followup:p.followupDate,history:p.timeline.length};

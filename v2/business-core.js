@@ -17,6 +17,22 @@
     result.setUTCDate(result.getUTCDate() + days);
     return result.toISOString().slice(0, 10);
   }
+  // Date-only UTC arithmetic avoids daylight-saving and month-boundary errors.
+  // This is presentation data: never rewrite the persisted follow-up date.
+  function followupInfo(value, reference) {
+    const baseline=date(reference);
+    if (!baseline) throw new Error('需要有效的今天日期');
+    if (!value) return { label: '日期待定', tone: 'unset', absolute: '' };
+    let valid;
+    try { valid=date(value); }
+    catch (_) { return { label: '日期待核对', tone: 'invalid', absolute: text(value) }; }
+    const days=Math.round((Date.parse(valid+'T12:00:00Z')-Date.parse(baseline+'T12:00:00Z'))/86400000);
+    if (days<0) return {label:'已逾期'+Math.abs(days)+'天',tone:'overdue',absolute:valid};
+    if (days===0) return {label:'今天跟进',tone:'today',absolute:valid};
+    if (days===1) return {label:'明天跟进',tone:'tomorrow',absolute:valid};
+    if (days<=7) return {label:days+'天后跟进',tone:'future',absolute:valid};
+    return {label:'计划跟进',tone:'later',absolute:valid};
+  }
   function empty() { return { schema: 2, revision: 0, hospitals: [], projects: [], notes: [], inventory: [], movements: [], orders: [], files: [] }; }
   function normalizeStatus(value) {
     return ({ '要我行动': '待处理', '等待别人': '等待对方', '未来节点': '待处理', '暂停': '暂停/机会池' })[value] || (statuses.includes(value) ? value : '待处理');
@@ -201,5 +217,5 @@
   function finance(state) {
     return { uninvoiced: state.orders.filter(item => !item.invoiced), unpaid: state.orders.filter(item => item.invoiced && !item.received), balances: state.movements.reduce((result, item) => { result[item.inventoryKey] = (result[item.inventoryKey] || 0) + item.delta; return result; }, {}) };
   }
-  root.WorkbenchBusiness = { empty, statuses, kinds, stages, date, addDays, upsertHospital, searchBusiness, saveProject, fromLegacy, suggestNote, confirmNote, dashboard, focusBoard, saveOrder, advanceOrder, stock, finance };
+  root.WorkbenchBusiness = { empty, statuses, kinds, stages, date, addDays, followupInfo, upsertHospital, searchBusiness, saveProject, fromLegacy, suggestNote, confirmNote, dashboard, focusBoard, saveOrder, advanceOrder, stock, finance };
 })(globalThis);
