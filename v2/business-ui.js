@@ -37,15 +37,25 @@
     }).join('') : '<div class="empty-state"><span aria-hidden="true">✓</span><p>目前没有需要处理的事项</p><small>新进展可以随时从下方快捷入口记录</small></div>';
   }
   function home() {
-    const view=core.dashboard(state,today());
-    const future=view.week.filter(item=>item.followupDate>today());
-    const upcoming=future.length+view.nodes.length;
-    const greeting=`<section class="hero card"><p class="eyebrow">WORKBENCH · DAILY FOCUS</p><h2>今天先办重要的事</h2><p class="hero-description">轻松梳理医院业务，下一步始终清楚。</p><div class="hero-metrics"><div><strong>${view.today.length}</strong><span>今日事项</span></div><div><strong>${view.overdue.length}</strong><span>已逾期</span></div><div><strong>${view.waiting.length}</strong><span>等待反馈</span></div><div><strong>${upcoming}</strong><span>本周节点</span></div></div></section>`;
+    const view=core.focusBoard(state,today());
+    const metrics=[
+      ['overdue',view.overdue.length,'已逾期'],
+      ['today',view.today.length,'今日事项'],
+      ['waiting',view.waiting.length,'等待反馈'],
+      ['week',view.weekTotal,'本周节点']
+    ];
+    const stat=([target,count,label])=>`<div class="hero-metric"><button type="button" class="hero-metric-button" data-focus-target="${target}" aria-label="查看${label}，${count}项"${count?'':' disabled'}><strong>${count}</strong><span>${label}</span></button></div>`;
+    const greeting=`<section class="hero card"><p class="eyebrow">WORKBENCH · DAILY FOCUS</p><h2>今天先办重要的事</h2><p class="hero-description">逾期先处理，今天要办的事情一眼看到。</p><div class="hero-metrics">${metrics.map(stat).join('')}</div></section>`;
     const shortcuts=`<section class="card shortcut-panel">${sectionHead('QUICK ACTIONS','常用操作')}<div class="shortcut-grid"><button class="shortcut primary" data-route="note"><span class="shortcut-icon" aria-hidden="true">✎</span><span>随手记录</span></button><button class="shortcut" data-route="hospitals"><span class="shortcut-icon" aria-hidden="true">⌕</span><span>医院与项目</span></button><button class="shortcut" data-route="files"><span class="shortcut-icon" aria-hidden="true">▧</span><span>拍照 / 上传</span></button><button class="shortcut" data-route="supplies"><span class="shortcut-icon" aria-hidden="true">▤</span><span>耗材业务</span></button></div></section>`;
-    const categories=[['TODAY','今天要办',view.today],['OVERDUE','已逾期',view.overdue],['WAITING','等待反馈',view.waiting]];
-    const sections=categories.filter(([,label,items])=>label==='今天要办'||items.length).map(([eyebrow,label,items])=>`<section class="card task-section">${sectionHead(eyebrow,label,`${items.length} 项`)}${projectButtons(items,{actions:true})}</section>`).join('');
+    const categories=[
+      ['OVERDUE','已逾期','overdue',view.overdue],
+      ['TODAY','今天要办','today',view.today],
+      ['WAITING','等待反馈','waiting',view.waiting]
+    ];
+    const sections=categories.filter(([,label,,items])=>label==='今天要办'||items.length)
+      .map(([eyebrow,label,id,items])=>`<section id="focus-${id}" class="card task-section${id==='overdue'?' urgency-section':''}">${sectionHead(eyebrow,label,`${items.length} 项`)}${projectButtons(items,{actions:true})}</section>`).join('');
     const nodes=view.nodes.map(node=>`<div class="milestone"><span class="milestone-date">${escape(node.date)}</span><span>${escape(node.project.name)} · ${escape(({bidDate:'招标',contractEnd:'合同到期',renewalDate:'续约',quoteDate:'报价'})[node.field])}</span></div>`).join('');
-    const week=(future.length||nodes)?`<section class="card task-section">${sectionHead('AHEAD','未来7天节点')}${projectButtons(future,{actions:true})}${nodes}</section>`:'';
+    const week=view.weekTotal?`<section id="focus-week" class="card task-section">${sectionHead('AHEAD','未来7天节点',`${view.weekTotal} 项`)}${view.week.length?projectButtons(view.week,{actions:true}):''}${nodes}</section>`:'';
     return greeting+shortcuts+sections+week+`<details class="card quiet-details"><summary>最近跟进 / 长时间未跟进</summary>${projectButtons(view.recent)}<h3>超过14天未跟进</h3>${projectButtons(view.stale)}</details>`;
   }
   function hospitalSearchResults() {
@@ -121,7 +131,15 @@
   document.addEventListener('click', async event => {
     const button = event.target.closest('button'); if (!button || busy) return;
     try {
-      if (button.dataset.route) { route = button.dataset.route; selection = ''; suggestion = null; quickTomorrow = false; render(); window.scrollTo(0, 0); }
+      if (button.dataset.focusTarget) {
+        const section=document.getElementById('focus-'+button.dataset.focusTarget);
+        if (section) {
+          section.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'});
+          section.classList.add('focus-flash');
+          window.setTimeout(()=>section.classList.remove('focus-flash'),850);
+        }
+      }
+      else if (button.dataset.route) { route = button.dataset.route; selection = ''; suggestion = null; quickTomorrow = false; render(); window.scrollTo(0, 0); }
       else if (button.dataset.back) { route = button.dataset.back; quickTomorrow = false; if (route !== 'project') selection = ''; render(); }
       else if (button.hasAttribute('data-clear-search')) { searchQuery = ''; searchStatus = '全部'; render(); }
       else if (button.hasAttribute('data-edit-hospital')) { selection = button.dataset.editHospital; route = 'hospital-form'; render(); }
