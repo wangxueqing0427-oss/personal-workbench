@@ -162,7 +162,11 @@
   function files() {
     const order = state.orders.find(item => item.id === selection);
     const linkedProjectId = order?.projectId || selection;
-    return `<form class="card" data-form="file"><h2>拍照 / 上传原件</h2><p>仅使用合成测试文件。原件先保存在本机；接入测试身份后，加密同步至独立测试服务器。</p>${order ? `<p class="muted">关联耗材订单：${escape(order.product)}（自动归入该订单所属项目）</p>` : ''}<label>关联项目<select name="projectId"><option value="">暂存文件收件箱</option>${state.projects.map(item => `<option value="${escape(item.id)}"${linkedProjectId === item.id ? ' selected' : ''}>${escape(state.hospitals.find(hospital => hospital.id === item.hospitalId)?.name)} · ${escape(item.name)}</option>`).join('')}</select></label><label>选择已有文件<input name="file" type="file"></label><label>打开手机相机拍照<input name="photo" type="file" accept="image/*" capture="environment"></label><label>本次资料的沟通备注（选填）<textarea name="remark" maxlength="1000" placeholder="例如：设备科已接收报价单，下周二电话确认。"></textarea></label><p class="muted">备注会与这份原件一起保存，并自动进入关联项目时间线；未选择项目则保留在收件箱。二选一即可，原件失败时备注也不会单独写入。</p><button class="primary">保存原件和关联</button></form><section class="card"><h3>文件收件箱</h3>${fileButtons(state.files.map(item => item.id)) || '<p>暂无文件</p>'}</section>`;
+    return `<form class="card" data-form="file"><h2>拍照 / 上传原件</h2><p>仅使用合成测试文件。原件先保存在本机；接入测试身份后，加密同步至独立测试服务器。</p>${order ? `<p class="muted">关联耗材订单：${escape(order.product)}（自动归入该订单所属项目）</p>` : ''}<label>关联项目<select name="projectId"><option value="">暂存文件收件箱</option>${state.projects.map(item => `<option value="${escape(item.id)}"${linkedProjectId === item.id ? ' selected' : ''}>${escape(state.hospitals.find(hospital => hospital.id === item.hospitalId)?.name)} · ${escape(item.name)}</option>`).join('')}</select></label><div class="camera-choices" role="group" aria-label="选择原件来源">
+      <label class="camera-choice camera-choice-main"><span class="camera-symbol" aria-hidden="true">📷</span><strong>立即拍照</strong><small>调用手机后置相机</small><input name="photo" type="file" accept="image/*" capture="environment" aria-label="立即拍照，启动后置相机"></label>
+      <label class="camera-choice"><span class="camera-symbol" aria-hidden="true">▧</span><strong>相册 / 选照片</strong><small>也可选系统的拍照功能</small><input name="gallery" type="file" accept="image/*" aria-label="从相册选择照片或系统拍照"></label>
+      <label class="camera-choice"><span class="camera-symbol" aria-hidden="true">▤</span><strong>上传文件</strong><small>合同、报价、发票等</small><input name="file" type="file" aria-label="选择手机中的合同报价或其他文件"></label>
+    </div><output class="camera-picked" role="status" aria-live="polite">尚未选择原件</output><p class="muted">如果当前浏览器不弹出相机，请改用“相册 / 选照片”，在系统菜单里选择拍照；也可以复制链接到 Safari 打开。</p><label>本次资料的沟通备注（选填）<textarea name="remark" maxlength="1000" placeholder="例如：设备科已接收报价单，下周二电话确认。"></textarea></label><p class="muted">备注会与这份原件一起保存，并自动进入关联项目时间线；未选择项目则保留在收件箱。二选一即可，原件失败时备注也不会单独写入。</p><button class="primary">保存原件和关联</button></form><section class="card"><h3>文件收件箱</h3>${fileButtons(state.files.map(item => item.id)) || '<p>暂无文件</p>'}</section>`;
   }
   function more() { return `<section class="card"><h2>更多</h2><p>V2.0 手机验收测试版。仅合成数据，独立加密同步。</p><button data-route="files">文件与拍照</button> <button data-route="inbox">记录收件箱</button><p>完整备份及隔离恢复已自动测试；未开放生产资料接入。</p><p class="muted">iPhone真实Safari/PWA、供应链批次追溯和旧版文件迁移仍需后续验收。</p></section>`; }
   let lastDrawnDay=today();
@@ -228,9 +232,13 @@
       updateHospitalSearch();
     }
     if (event.target.matches('form[data-form="file"] input[type="file"]') && event.target.files?.length) {
-      const other = event.target.name === 'file' ? 'photo' : 'file';
-      const otherInput = event.target.form?.elements.namedItem(other);
-      if (otherInput) otherInput.value = '';
+      const form=event.target.form;
+      for(const name of ['photo','gallery','file']){
+        const other=form?.elements.namedItem(name);
+        if(other && other!==event.target) other.value='';
+      }
+      const picked=form?.querySelector('.camera-picked');
+      if(picked)picked.textContent='已选择：'+event.target.files[0].name+' · 请核对备注后保存';
     }
   });
   document.addEventListener('submit', async event => {
@@ -278,7 +286,7 @@
       if (form.dataset.form === 'stage') { const order = state.orders.find(item => item.id === form.dataset.id); await save(core.advanceOrder(state, order.id, core.stages[core.stages.indexOf(order.stage) + 1], today(), values)); }
       if (form.dataset.form === 'stock') await save(core.stock(state, { ...values, orderId: form.dataset.id }, today()));
       if (form.dataset.form === 'file') {
-        const file = values.file?.size ? values.file : values.photo; if (!file?.size) throw new Error('请选择文件或拍照');
+        const file = values.photo?.size ? values.photo : values.gallery?.size ? values.gallery : values.file; if (!file?.size) throw new Error('请先拍照、选相册照片或上传文件');
         if (file.size > 20 * 1024 * 1024) throw new Error('开发测试单文件限制20MB，请保留原件并使用较小测试文件');
         const next = structuredClone(state), id = crypto.randomUUID();
         const order = next.orders.find(item => item.id === selection);

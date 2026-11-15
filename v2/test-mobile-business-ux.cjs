@@ -248,12 +248,30 @@ async function main(){
      return {expected:order.projectId,actual:document.querySelector('form[data-form="file"] select[name="projectId"]').value};
    });
    check(selected.expected===selected.actual,'opening order attachments automatically selects the actual parent project');
+   const cameraUI=await page.evaluate(()=>{
+     const controls=[...document.querySelectorAll('form[data-form="file"] .camera-choice')];
+     const native=document.querySelector('form[data-form="file"] input[name="photo"]');
+     return {count:controls.length,camera:!!native&&native.capture==='environment'&&native.accept==='image/*',
+       gallery:!!document.querySelector('input[name="gallery"][accept="image/*"]'),
+       touch:controls.every(item=>item.getBoundingClientRect().height>=44),
+       clickable:controls.every(item=>{const control=item.querySelector('input[type="file"]'),a=control.getBoundingClientRect(),b=item.getBoundingClientRect();
+         return a.width>=b.width-1&&a.height>=b.height-1;}),
+       overflow:document.documentElement.scrollWidth>innerWidth+1};
+   });
+   check(cameraUI.count===3&&cameraUI.camera&&cameraUI.gallery&&cameraUI.touch&&cameraUI.clickable&&!cameraUI.overflow,
+     'three visible native iPhone tap targets: direct rear camera, photo library, and document picker without fake click proxy');
+   const syntheticGallery=Buffer.from('SYNTHETIC_GALLERY_'+crypto.randomUUID());
+   await page.locator('form[data-form="file"] input[name="gallery"]').setInputFiles({name:'temporary-gallery.jpg',mimeType:'image/jpeg',buffer:syntheticGallery});
+   check(await page.locator('.camera-picked').getByText('已选择：temporary-gallery.jpg',{exact:false}).isVisible(),
+     'selected gallery image is announced before user confirms upload');
    const photo=Buffer.from('SYNTHETIC_CAMERA_PHOTO_'+crypto.randomUUID());
    await page.locator('form[data-form="file"] input[name="photo"]').setInputFiles({
      name:'synthetic-camera.jpg',mimeType:'image/jpeg',buffer:photo});
    await page.locator('form[data-form="file"] textarea[name="remark"]').fill('合成拍照沟通：请设备科确认过滤器采购申请');
    check(await page.locator('form[data-form="file"] input[name="photo"]').evaluate(el=>el.files.length===1),
      'camera capture file picker accepts the synthetic iPhone photo');
+   check(await page.locator('form[data-form="file"] input[name="gallery"]').evaluate(el=>el.files.length===0),
+     'capturing a camera photo clears previously chosen gallery image instead of silently uploading the wrong original');
    await page.locator('form[data-form="file"] button.primary').click();
    await page.locator('button[data-download]').first().waitFor({timeout:15000});
    const uploaded=await page.evaluate(async()=>{
