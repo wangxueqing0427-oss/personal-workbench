@@ -251,7 +251,7 @@ async function main(){
    const cameraUI=await page.evaluate(()=>{
      const controls=[...document.querySelectorAll('form[data-form="file"] .camera-choice')];
      const native=document.querySelector('form[data-form="file"] input[name="photo"]');
-     return {count:controls.length,camera:!!native&&native.capture==='environment'&&native.accept==='image/*',
+     return {count:controls.length,camera:!!native&&native.getAttribute('capture')==='environment'&&native.accept==='image/*',
        gallery:!!document.querySelector('input[name="gallery"][accept="image/*"]'),
        touch:controls.every(item=>item.getBoundingClientRect().height>=44),
        clickable:controls.every(item=>{const control=item.querySelector('input[type="file"]'),a=control.getBoundingClientRect(),b=item.getBoundingClientRect();
@@ -259,7 +259,7 @@ async function main(){
        overflow:document.documentElement.scrollWidth>innerWidth+1};
    });
    check(cameraUI.count===3&&cameraUI.camera&&cameraUI.gallery&&cameraUI.touch&&cameraUI.clickable&&!cameraUI.overflow,
-     'three visible native iPhone tap targets: direct rear camera, photo library, and document picker without fake click proxy');
+     'three visible native iPhone tap targets: direct rear camera, photo library, and document picker without fake click proxy: '+JSON.stringify(cameraUI));
    const syntheticGallery=Buffer.from('SYNTHETIC_GALLERY_'+crypto.randomUUID());
    await page.locator('form[data-form="file"] input[name="gallery"]').setInputFiles({name:'temporary-gallery.jpg',mimeType:'image/jpeg',buffer:syntheticGallery});
    check(await page.locator('.camera-picked').getByText('已选择：temporary-gallery.jpg',{exact:false}).isVisible(),
