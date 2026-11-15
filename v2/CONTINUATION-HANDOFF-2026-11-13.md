@@ -62,3 +62,12 @@
 - **已发布合成预览**：[GitHub Actions #43692359003](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43692359003) **SUCCESS**，Chromium **128项**、WebKit **124项**，最新线上 **252项通过、0失败**（是两套浏览器的检查数，不与旧轮次叠加）；新指标跳转、分组无重复、原件完整性均线上验证通过。源码 `70d4c274a6c0f1a98d2b9fe3293095cdc571ff8d`，releaseId `fe51fa160f381c5f01b8e813a64ee9ea0c81b2eba01576617c308d883feb2c54`，19项公开预览资源校验通过。
 - 地址仍为 `https://personal-workbench-v2-preview.wangxueqing0427.workers.dev/business.html`，**只可用合成数据，不能填真实业务**。只更改独立开发分支和预览 Worker；正式V1.5.7、原 staging、main、真实资料未动。用户真机验收和正式上线仍未实施。
 - **下一步**：优化等待反馈的最后沟通时间、今日项目的快捷完成/跟进、首页日期显示和具体医院/耗材关联体验。保持一轮一项的开发节奏、前端真实可点击、双浏览器验证，勿扩大安全项目。聊天达到长度限制时直接引用本文件接管。
+
+
+## 2026-11-15｜等待反馈快捷记录与今日完成：合成预览发布成功
+
+- **改动范围**：仅独立开发分支上的 `v2/business-ui.js`、`v2/business.css`、`v2/test-mobile-business-ux.cjs`，开发提交 [f2350965](https://github.com/wangxueqing0427-oss/personal-workbench/commit/f2350965b8b14b42f7bb2ab8121b70787adda002)。首页等待反馈项目按已有非附件时间线推导“最近沟通”日期；按钮“收到反馈”打开确认表单、建议从“等待对方”调整为“进行中”，可编辑下一步/日期/等待对象，要求填写本次反馈；首页今日待办“确认完成”也先要求填写完成情况、点击保存，不会直接改状态。
+- **存储与兼容**：沿用现有 `saveProject + storage.commit` 一次性写入，新的反馈/完成结果各追加一条项目时间线和关联备注；编辑取消不产生写入，旧字段、设备资料、原件和附件保持原状，旧项目无需数据迁移。首页操作按钮调整为2列，每个点击区至少44px。
+- **本机双浏览器测试**：[Actions #43697170959](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43697170959) **SUCCESS**，Chromium **59/59** + WebKit **59/59**，共**118项通过、0失败**；专项验证最近沟通日期、收到反馈建议与取消、单条时间线+备注持久化、确认完成/取消及不再进入待办。独立构建预检 [#43697171207](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43697171207) 和现有本机加密兼容 [#43697170914](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43697170914) 均 SUCCESS。
+- **合成预览已部署并通过线上验收**：[Actions #43697387362](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43697387362) **SUCCESS**，线上 Chromium **128/128**、WebKit **124/124**，合计**252项通过、0失败**；源提交 `315f1854b92d628d990cf0f3ae9e1a05ddb721ed`，releaseId `364d8d461c65d5ed1af548588c5094820cfa7a40f9b25db65def362992d279ca`。地址仍为 `https://personal-workbench-v2-preview.wangxueqing0427.workers.dev/business.html`，**公开的合成数据预览，不能写真实医院/合同/客户资料**。部署的是预览 Worker，非正式 V1.5.7、非原 staging，`main` 和真实数据未动。iPhone 本人真机终验仍未进行。
+- **下一步建议**：在手机上继续改善首页跟进日期可读性（今天/明天/已逾期），随后做耗材待开票、未回款业务的便捷筛选；不要重复已经通过的旧测试，也不要在未经用户批准前迁移或上线真实数据。本轮直接通过 GitHub 工具完成隔离分支变更和自动测试触发；后续仍遵循优先交给 Codex 开发、ChatGPT 审核、用户 iPhone 终验的分工。
