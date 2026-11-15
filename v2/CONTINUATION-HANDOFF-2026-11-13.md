@@ -53,3 +53,12 @@
 - 本机真实UI [#43430112054](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43430112054) Chromium47+WebKit47，共94/94项通过；旧加密存储回归 [#43429913839](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43429913839) 两端均SUCCESS。
 - 本轮未碰正式 `main`、V1.5.7、原staging及真实医院数据。公开预览仅可用合成示例，不得输入真实合同、发票、联系人。
 - 下轮优先继续完善医院/项目移动端实际操作，避免无谓安全框架扩展。**聊天篇幅过长时，直接用本文件作为续聊接管依据，不重复前面几百条过程日志**。
+
+## 2026-11-15｜首页智能待办分组已线上验收
+
+- **用户路线不变**：单人 iPhone 工作台，先抓易用性、舒适视觉、稳定与不丢业务原件，不再优先开发复杂多设备身份或公开 SaaS。
+- **改动**：`v2/business-core.js` 新增独立 `focusBoard`，保持旧 `dashboard` 兼容；把业务项目按 **逾期→今日→等待对方→未来7日** 划分为不重复的行动分组，已完成项目不进入待办；旧状态项目的备注/原件/附件不受影响。`v2/business-ui.js` 首页顺序对应调整，四个顶部数字直接点击滚动至对应的待办分组，0项不可点；`v2/business.css` 增加拇指易点击数字入口、温和逾期标记、减少动画支持。
+- **本机验收**：[GitHub Actions #43692155740](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43692155740)，Chromium **51/51** + WebKit **51/51**，合计 **102项通过、0失败**；包含逾期/今天/等待/未来一周互斥、已完成排除、指标点击、原手机录入/拍照/备份流程回归。[旧加密兼容 #43692092311](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43692092311) 双引擎成功，[Preview preflight #43692092287](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43692092287) 成功。
+- **已发布合成预览**：[GitHub Actions #43692359003](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43692359003) **SUCCESS**，Chromium **128项**、WebKit **124项**，最新线上 **252项通过、0失败**（是两套浏览器的检查数，不与旧轮次叠加）；新指标跳转、分组无重复、原件完整性均线上验证通过。源码 `70d4c274a6c0f1a98d2b9fe3293095cdc571ff8d`，releaseId `fe51fa160f381c5f01b8e813a64ee9ea0c81b2eba01576617c308d883feb2c54`，19项公开预览资源校验通过。
+- 地址仍为 `https://personal-workbench-v2-preview.wangxueqing0427.workers.dev/business.html`，**只可用合成数据，不能填真实业务**。只更改独立开发分支和预览 Worker；正式V1.5.7、原 staging、main、真实资料未动。用户真机验收和正式上线仍未实施。
+- **下一步**：优化等待反馈的最后沟通时间、今日项目的快捷完成/跟进、首页日期显示和具体医院/耗材关联体验。保持一轮一项的开发节奏、前端真实可点击、双浏览器验证，勿扩大安全项目。聊天达到长度限制时直接引用本文件接管。
