@@ -763,6 +763,7 @@ async function main(){
      await page.locator('.briefing-item .briefing-proposal').isVisible()&&
      await page.locator('.briefing-item input[name="item0changeWaitingOn"]').count()===1,
      'review UI exposes confidence reason, suggested next action/date and optional contact waiting assignment');
+   await page.locator('.briefing-item details summary').click();
    await page.locator('.briefing-item input[name="item0changeWaitingOn"]').check();
    await page.locator('.briefing-item input[name="item0waitingOn"]').fill('张主任');
    await page.locator('form[data-form="briefing"] button.primary').click();
