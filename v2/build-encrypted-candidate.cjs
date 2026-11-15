@@ -123,20 +123,29 @@ async function main(){
  ' navigator.serviceWorker.register("./offline-sw.js",{scope:"./",updateViaCache:"none"}).catch(()=>{});</script>',
  '</body></html>'
  ].join('\n');
- const offlineFiles=Object.keys(output).sort();
+ const offlineManifest=Object.fromEntries(
+   Object.entries(output).map(([name,body])=>[
+     name,{sha256:hash(body),bytes:Buffer.byteLength(body,'utf8')}
+   ]));
  const sw=[
  'const releaseId='+JSON.stringify(id)+';',
  'const cacheName="workbench-v2-encrypted-candidate-"+releaseId;',
- 'const assets='+JSON.stringify(offlineFiles)+';',
+ 'const assets='+JSON.stringify(offlineManifest)+';',
  'self.addEventListener("install",event=>event.waitUntil((async()=>{',
  ' const cache=await caches.open(cacheName);',
- ' for(const file of assets){',
- '   const response=await fetch(new URL(file,self.location.href),{cache:"no-store"});',
- '   if(!response.ok)throw Error("Incomplete candidate");',
- '   await cache.put(new URL(file,self.location.href),response);',
+ ' for(const [file,expected] of Object.entries(assets)){',
+ '   const url=new URL(file,self.location.href);',
+ '   const response=await fetch(url,{cache:"no-store"});',
+ '   if(!response.ok)throw Error("Incomplete candidate asset: "+file);',
+ '   const bytes=await response.clone().arrayBuffer();',
+ '   const digest=Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",bytes)),',
+ '     b=>b.toString(16).padStart(2,"0")).join("");',
+ '   if(digest!==expected.sha256||bytes.byteLength!==expected.bytes)',
+ '     throw Error("Candidate SHA256 mismatch: "+file);',
+ '   await cache.put(url,response);',
  ' }',
  ' await self.skipWaiting();',
- '})()));',
+ '})().catch(async error=>{await caches.delete(cacheName);throw error;}))));',
  'self.addEventListener("activate",event=>event.waitUntil((async()=>{',
  ' for(const key of await caches.keys())',
  '  if(key.startsWith("workbench-v2-encrypted-candidate-")&&key!==cacheName)',
@@ -148,9 +157,12 @@ async function main(){
  ' const url=new URL(event.request.url),base=new URL("./",self.location.href);',
  ' if(url.origin!==base.origin||!url.pathname.startsWith(base.pathname))return;',
  ' const relative=url.pathname.slice(base.pathname.length);',
- ' if(!assets.includes(relative))return;',
- ' event.respondWith(caches.open(cacheName).then(async cache=>',
- '   await cache.match(new URL(relative,base))||fetch(event.request)));',
+ ' if(!Object.prototype.hasOwnProperty.call(assets,relative))return;',
+ ' event.respondWith(caches.open(cacheName).then(async cache=>{',
+ '   const cached=await cache.match(new URL(relative,base));',
+ '   if(!cached)throw Error("Verified offline asset unavailable: "+relative);',
+ '   return cached;',
+ ' }));',
  '});'
  ].join('\n');
  output['offline-sw.js']=sw;

@@ -7,6 +7,7 @@ on:
       - .github/workflows/v2-encrypted-candidate.yml
       - v2/build-encrypted-candidate.cjs
       - v2/test-encrypted-candidate.cjs
+      - v2/test-encrypted-candidate-sw.cjs
       - v2/privacy-delta-journal-poc.js
       - v2/fresh-encrypted-boot-lab.js
       - v2/business-core.js
@@ -38,10 +39,18 @@ jobs:
           test "$GITHUB_REF" = "refs/heads/dev/v2-preview-isolated-20261111"
           node --check v2/build-encrypted-candidate.cjs
           node --check v2/test-encrypted-candidate.cjs
+          node --check v2/test-encrypted-candidate-sw.cjs
           ! grep -Ei 'wrangler deploy|CLOUDFLARE_API_TOKEN|PRODUCTION_API_TOKEN' v2/build-encrypted-candidate.cjs v2/test-encrypted-candidate.cjs
           node v2/build-encrypted-candidate.cjs | tee /tmp/encrypted-candidate-build.log
           grep -F 'ENCRYPTED_CANDIDATE_BUILD_PASS' /tmp/encrypted-candidate-build.log
           grep -F '"deployAllowed":false' /tmp/encrypted-candidate-build.log
+      - name: Verify offline asset SHA256 install rollback without browser or network
+        shell: bash
+        run: |
+          set -euo pipefail
+          node v2/test-encrypted-candidate-sw.cjs | tee /tmp/encrypted-candidate-sw.log
+          grep -F 'CANDIDATE_OFFLINE_INTEGRITY_GATE_PASS' /tmp/encrypted-candidate-sw.log
+          grep -F '"oldReleaseKeptOnFailure":true' /tmp/encrypted-candidate-sw.log
       - name: Install isolated browser with fixed Playwright version
         shell: bash
         run: |
