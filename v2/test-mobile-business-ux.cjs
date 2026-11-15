@@ -714,6 +714,66 @@ async function main(){
      return s.notes.filter(x=>/示例石景山医院核磁开机率明天联系|示例肿瘤医院TOMO销售下周二确认/.test(x.progress||'')).length;
    });
    check(persisted===2,'after full offline reload both dictated notes remain intact in the local database');
+   // Same hospital: multiple distinct projects, a known contact and a follow-up
+   // date must be exposed for review but not prematurely change the underlying state.
+   const sharedHospital=await page.evaluate(()=>{
+     const core=WorkbenchBusiness;
+     let current=core.empty();
+     const h=core.upsertHospital(current,{name:'示例多项目医院',department:'设备科',contact:'张主任'});
+     current=h.state;
+     const projects=[
+       ['核磁维保服务','维保'],['核磁移机工程','设备销售'],['TOMO机房改造','维保']
+     ];
+     for(const [name,kind] of projects){
+       current=core.saveProject(current,{hospitalId:h.hospitalId,name,kind,details:{device:name},status:'待处理'},'2026-11-15').state;
+     }
+     const spoken='示例多项目医院张主任说核磁维保服务周二报价，TOMO机房改造周五质控，核磁移机工程下周一确认';
+     const notes=core.splitBriefing(current,spoken,'2026-11-15');
+     const ambiguous=core.splitBriefing(current,'示例多项目医院核磁进展再核实','2026-11-15');
+     const wrongProject=current.projects.find(p=>p.name==='TOMO机房改造');
+     const unrelated=core.upsertHospital(current,{name:'示例外院'});
+     current=unrelated.state;
+     const other=core.saveProject(current,{hospitalId:unrelated.hospitalId,name:'外院维保',kind:'维保',details:{}},'2026-11-15');
+     const choices=notes.map(n=>({include:true,projectId:n.projectId,progress:n.progress}));
+     let invalidProject=false,invalidDate=false;
+     try{
+       core.confirmBriefing(other.state,notes,[{...choices[0],projectId:other.projectId},...choices.slice(1)],'2026-11-15');
+     }catch(_){invalidProject=true;}
+     try{
+       core.confirmBriefing(other.state,notes,[{...choices[0],changeDate:true,followupDate:''},...choices.slice(1)],'2026-11-15');
+     }catch(_){invalidDate=true;}
+     return {count:notes.length,parts:notes.map(n=>({name:other.state.projects.find(p=>p.id===n.projectId)?.name||'',date:n.followupDate,contact:n.contact,action:n.nextAction,hospital:n.hospitalId,reason:n.matchReason})),
+       ambiguousId:ambiguous[0].projectId,ambiguousReason:ambiguous[0].matchReason,
+       invalidProject,invalidDate,notesNotWritten:other.state.notes.length===0};
+   });
+   check(sharedHospital.count===3&&
+     sharedHospital.parts.map(x=>x.name).join('|')==='核磁维保服务|TOMO机房改造|核磁移机工程'&&
+     sharedHospital.parts.every(x=>x.hospital===sharedHospital.parts[0].hospital)&&
+     sharedHospital.parts[0].date==='2026-11-17'&&sharedHospital.parts[1].date==='2026-11-20'&&
+     sharedHospital.parts[2].date==='2026-11-16'&&sharedHospital.parts[0].contact==='张主任'&&
+     sharedHospital.parts[1].action.includes('质控'),
+     'one hospital with three projects splits at project changes, inherits hospital, and extracts independent dates and contact');
+   check(!sharedHospital.ambiguousId&&sharedHospital.ambiguousReason.includes('多个项目')&&
+     sharedHospital.invalidProject&&sharedHospital.invalidDate&&sharedHospital.notesNotWritten,
+     'ambiguous projects never auto-link and inconsistent hospital or missing selected date blocks the entire batch with no writes');
+   await page.locator('nav button[data-route="note"]').click();
+   await page.locator('form[data-form="note"] textarea[name="text"]').fill('示例石景山医院核磁开机率明细明天再联系');
+   await page.locator('form[data-form="note"] button.primary').click();
+   check(await page.locator('.briefing-item .briefing-match-hint').isVisible()&&
+     await page.locator('.briefing-item .briefing-proposal').isVisible()&&
+     await page.locator('.briefing-item input[name="item0changeWaitingOn"]').count()===1,
+     'review UI exposes confidence reason, suggested next action/date and optional contact waiting assignment');
+   await page.locator('.briefing-item input[name="item0changeWaitingOn"]').check();
+   await page.locator('.briefing-item input[name="item0waitingOn"]').fill('张主任');
+   await page.locator('form[data-form="briefing"] button.primary').click();
+   const contactSaved=await page.evaluate(async()=>{
+     const s=await WorkbenchBusinessStore.read();
+     const note=s.notes.find(n=>n.progress==='示例石景山医院核磁开机率明细明天再联系');
+     const project=s.projects.find(p=>p.id===note?.projectId);
+     return {contact:project?.waitingOn,link:project?.timeline.some(t=>t.id===note?.id),revision:s.revision};
+   });
+   check(contactSaved.contact==='张主任'&&contactSaved.link,
+     'user-approved voice contact writes to waitingOn and project timeline together in a single revision');
    const viewport=await page.evaluate(()=>({overflow:document.documentElement.scrollWidth>innerWidth+1}));
    check(!viewport.overflow,'original iPhone-width UI does not overflow horizontally');
    check(errors.length===0,'no script crashes or external network access during mobile business workflows');

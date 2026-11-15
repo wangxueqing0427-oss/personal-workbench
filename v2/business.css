@@ -225,3 +225,8 @@ form[data-form="file"] textarea[name="remark"]{min-height:96px;background:#f8fcf
 .shortcut-grid .shortcut-voice{background:linear-gradient(150deg,#155c75,#217e91);color:#fff;border:1px solid #176980;box-shadow:0 5px 14px rgba(21,88,111,.16)}
 .shortcut-grid .shortcut-voice:active{background:#164d65}
 .shortcut-grid .shortcut-voice .shortcut-icon{font-size:25px}
+
+/* Spoken debrief review: show why a project was suggested before approval. */
+.briefing-match-hint{font-size:12px;color:#536b7e;margin:4px 0 10px;line-height:1.5}
+.briefing-proposal{font-size:13px;line-height:1.6;padding:10px 12px;border-left:3px solid #5b9bb1;border-radius:8px;background:#edf6f8;color:#23546b;margin:10px 0}
+.briefing-proposal span{color:#466a7d}

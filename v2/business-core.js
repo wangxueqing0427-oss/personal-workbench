@@ -150,18 +150,51 @@
     }
     return '';
   }
+  // Conservative offline matching: exact project names and distinctive device/business
+  // terms outrank generic words. Ties never auto-select a project.
+  function projectMatches(state, hospital, phrase) {
+    if (!hospital) return {projectId:'',candidates:[],matchReason:'医院待确认'};
+    const projects=state.projects.filter(p=>p.hospitalId===hospital.id);
+    if (!projects.length) return {projectId:'',candidates:[],matchReason:'该医院尚无项目'};
+    const vocabulary=/TOMO|PET[- ]?CT|MRI|DSA|DR|CT|MR|3\.0T|1\.5T|核磁|磁共振|开机率|铥激光|光纤|维保|维修|移机|改造|机房|球管|加速器|放疗|直线|质控|设备销售|耗材|过滤器|呼吸控制|采购|招标|挂网|销售|售后|合同|回款|询价|报价/gi;
+    const canonical=key(phrase);
+    const tokens=[...new Set((phrase.match(vocabulary)||[]).map(key))];
+    const projectText=p=>key([p.name,p.details?.device||'',p.details?.model||''].join(' '));
+    const idf=token=>projects.filter(p=>projectText(p).includes(token)).length;
+    const candidates=projects.map(p=>{
+      const name=key(p.name),details=[p.details?.device,p.details?.model].filter(Boolean).map(key);
+      const exact=name.length>=3&&canonical.includes(name);
+      const matched=tokens.filter(t=>projectText(p).includes(t));
+      let score=exact?60:0;
+      for(const t of matched)score+=idf(t)===1?Math.max(5,t.length*3):Math.max(1,t.length);
+      for(const detail of details)if(detail.length>=3&&canonical.includes(detail))score+=20;
+      if(phrase.includes('维保')&&p.kind==='维保')score+=2;
+      if(phrase.includes('耗材')&&p.kind==='耗材')score+=2;
+      return {projectId:p.id,name:p.name,score,matched,exact};
+    }).filter(p=>p.score>=2).sort((a,b)=>b.score-a.score||a.name.localeCompare(b.name,'zh-Hans')).slice(0,4);
+    const unique=projects.length===1?projects[0]:null;
+    const confident=candidates.length>0&&candidates[0].score>=5&&
+      (candidates.length===1||candidates[0].score>candidates[1].score+1);
+    const chosen=confident?candidates[0].projectId:(unique?.id||'');
+    const reason=confident?(candidates[0].exact?'已识别项目全名':'项目关键词建议，需确认'):
+      candidates.length>1?'多个项目匹配，未自动关联':candidates.length?'线索不足，未自动关联':unique?'该医院仅有一个项目，需确认':'未匹配项目，请手选';
+    return {projectId:chosen,candidates,matchReason:reason};
+  }
+  function suggestContact(hospital, phrase) {
+    if(!hospital)return '';
+    // Prefer names explicitly known from the selected hospital dossier.
+    const contacts=(hospital.contacts||[]).filter(c=>c.name&&phrase.includes(c.name));
+    if(contacts.length===1)return contacts[0].name;
+    if(contacts.length>1)return '';
+    // A title alone ("设备科主任") is not a person's name.
+    const stated=phrase.match(/(?:^|[，,。；;\s跟找请向和与给问])([\u4e00-\u9fa5]{1,2}(?:主任|科长|老师|院长|经理|总))(?=说|表示|反馈|提到|确认|回复|让|给|要|，|,|。|\s|$)/);
+    return stated?.[1]||'';
+  }
   function suggestNote(state, sentence, today) {
-    const content = text(sentence); if (!content) throw new Error('请先记录内容');
-    const hospitals = state.hospitals.filter(item => [item.name, ...item.aliases].some(name => content.includes(name)));
-    const hospital = hospitals.length === 1 ? hospitals[0] : null;
-    const tokens=content.match(/核磁|开机率|铥激光|光纤|TOMO|磁共振|维保|维修|球管|CT|MR|MRI|PET.?CT|DSA|DR|加速器|放疗|招标|质控|报价|合同|耗材|回款|采购/gi)||[];
-    const hospitalProjects=state.projects.filter(item=>hospital&&item.hospitalId===hospital.id);
-    const candidates=hospitalProjects.map(item=>({projectId:item.id,name:item.name,
-      score:tokens.reduce((score,token)=>score+(item.name.toLowerCase().includes(token.toLowerCase())?token.length:0),0)}))
-      .filter(item=>item.score>=3).sort((a,b)=>b.score-a.score).slice(0,3);
-    const confident=candidates.length&&(candidates.length===1||candidates[0].score>candidates[1].score);
-    // A single hospital project is a useful preselection; user must still approve.
-    const oneProject=hospitalProjects.length===1?hospitalProjects[0]:null;
+    const content=text(sentence);if(!content)throw new Error('请先记录内容');
+    const hospitals=state.hospitals.filter(h=>[h.name,...(h.aliases||[])].some(name=>name&&content.includes(name)));
+    const hospital=hospitals.length===1?hospitals[0]:null;
+    const matched=projectMatches(state,hospital,content);
     const action=/回款|付款|到账|财务/.test(content)?'确认回款及到账进度':
       /报价|询价|价格/.test(content)?'确认报价和对方反馈':
       /招标|挂网|报名|投标/.test(content)?'跟进招标与报名节点':
@@ -169,46 +202,70 @@
       /合同|签约|续约/.test(content)?'核对合同签署及续约进度':
       /维修|故障|报修/.test(content)?'确认维修处理进度':
       /再联系|联系|回访|电话/.test(content)?'按约定时间联系对方':'核对本次进展并跟进';
-    const department = content.match(/泌尿外科|神经外科|心胸外科|普外科|骨科|设备科|影像科|放射科|消化内科|呼吸内科|内科|外科/)?.[0] || '';
-    const contact = content.match(/[\u4e00-\u9fa5]{1,3}(?:总|主任|科长)(?=说|表示|反馈|，|,|\s|$)/)?.[0] || '';
-    const followupDate = resolveDate(content, today);
-    return { id: identifier(), text: content, hospitalId: hospital?.id || '', hospitalCandidates: hospitals.map(item => item.id), department, contact, projectId: confident ? candidates[0].projectId : (oneProject?.id||''), candidates, progress: content, suggestedStatus: /给我|等待|再联系|回复/.test(content) ? '等待对方' : '进行中', nextAction: action, followupDate, dateUncertain: !followupDate && /下周|下个月|月底|过几天|这几天|近期|11?月底|\d{1,2}月\d{1,2}[号日]/.test(content), createdOn: date(today), source: '本地规则，需核对' };
+    const department=content.match(/泌尿外科|神经外科|心胸外科|普外科|骨科|设备科|影像科|放射科|消化内科|呼吸内科|内科|外科/)?.[0]||'';
+    const contact=suggestContact(hospital,content);
+    const followupDate=resolveDate(content,today);
+    return {id:identifier(),text:content,hospitalId:hospital?.id||'',hospitalCandidates:hospitals.map(h=>h.id),
+      department,contact,projectId:matched.projectId,candidates:matched.candidates,matchReason:matched.matchReason,
+      progress:content,suggestedStatus:/给我|等待|再联系|回复/.test(content)?'等待对方':'进行中',
+      nextAction:action,followupDate,
+      dateUncertain:!followupDate&&/下周|下个月|月底|过几天|这几天|近期|\d{1,2}月\d{1,2}[号日]/.test(content),
+      createdOn:date(today),source:'本地规则，需核对'};
   }
-  // Split a spoken debrief at natural sentence boundaries and whenever the
-  // speaker switches to a different explicitly named known hospital.
-  // Project guesses are proposals, never writes to the business state.
+  // Split at punctuation, hospital transitions and clearly named different
+  // projects. Plain commas remain in the same item until evidence of a new task.
   function splitBriefing(state, spoken, today) {
     const raw=text(spoken);
     if(!raw)throw new Error('请先说出或输入本次业务情况');
     if(raw.length>5000)throw new Error('一次记录最多5000字，建议分成两段再整理');
-    const labels=state.hospitals.flatMap(h=>[h.name,...(h.aliases||[])]
+    const hospitalLabels=state.hospitals.flatMap(h=>[h.name,...(h.aliases||[])]
       .filter(Boolean).map(name=>({name,hospitalId:h.id})))
       .sort((a,b)=>b.name.length-a.name.length);
-    function hospitalMentions(phrase) {
+    function mentions(phrase) {
       const found=[];
-      for(const label of labels){
-        let start=0,index;
-        while((index=phrase.indexOf(label.name,start))>=0){
+      for(const label of hospitalLabels){
+        let at=0,index;
+        while((index=phrase.indexOf(label.name,at))>=0){
           const end=index+label.name.length;
-          if(!found.some(item=>index<item.end&&end>item.start))
+          if(!found.some(x=>index<x.end&&end>x.start))
             found.push({start:index,end,hospitalId:label.hospitalId});
-          start=end;
+          at=end;
         }
       }
       return found.sort((a,b)=>a.start-b.start);
     }
+    const chunks=[];
+    for(const sentence of raw.split(/[。；;！？!?\n]+/).map(text).filter(Boolean)){
+      const commaClauses=sentence.split(/[，,]/).map(text).filter(Boolean);
+      let combined='',activeHospital='',activeProject='';
+      for(const clause of commaClauses){
+        const direct=mentions(clause);
+        const namedHospital=direct.length===1?state.hospitals.find(h=>h.id===direct[0].hospitalId):null;
+        const contextual=(!direct.length&&activeHospital)?state.hospitals.find(h=>h.id===activeHospital):null;
+        const hospital=namedHospital||contextual;
+        const candidate=projectMatches(state,hospital,clause);
+        const changedHospital=Boolean(combined&&namedHospital&&activeHospital&&namedHospital.id!==activeHospital);
+        const changedProject=Boolean(combined&&activeProject&&candidate.projectId&&candidate.projectId!==activeProject);
+        const transition=/^(另外|还有|其次|第二件|第二个项目|接着|再说一下)/.test(clause);
+        if(combined&&(transition||changedHospital||changedProject)){
+          chunks.push(combined);combined='';
+          activeProject='';
+        }
+        combined=combined?combined+'，'+clause:clause;
+        if(namedHospital)activeHospital=namedHospital.id;
+        if(candidate.projectId)activeProject=candidate.projectId;
+      }
+      if(combined)chunks.push(combined);
+    }
+    // Also split when different known hospitals are named without commas.
     const pieces=[];
-    // Pause words after a comma frequently introduce another task at the
-    // same hospital even when speech-to-text omits sentence punctuation.
-    const sentences=raw.split(/[。；;！？!?\n]+/).flatMap(sentence=>
-      sentence.split(/[，,](?=另外|还有|其次|第二件|第二个项目|接着|再说一下)/).map(text).filter(Boolean));
-    for(const paragraph of sentences){
-      const hits=hospitalMentions(paragraph);
+    for(const paragraph of chunks){
+      const hits=mentions(paragraph);
       let start=0,active='';
       for(const hit of hits){
         if(active&&hit.hospitalId!==active&&hit.start>start){
-          const section=text(paragraph.slice(start,hit.start).replace(/[，,、\s]+$/,''));
-          if(section)pieces.push(section);
+          const prefix=text(paragraph.slice(start,hit.start).replace(/[，,、\s]+$/,''));
+          if(prefix)pieces.push(prefix);
           start=hit.start;
         }
         active=hit.hospitalId;
@@ -220,10 +277,9 @@
     let inherited='';
     return pieces.map(phrase=>{
       const direct=state.hospitals.filter(h=>[h.name,...(h.aliases||[])].some(name=>name&&phrase.includes(name)));
-      const context=direct.length===0&&inherited?state.hospitals.find(h=>h.id===inherited):null;
-      const proposed=suggestNote(state,context?context.name+'，'+phrase:phrase,today);
-      proposed.text=phrase;
-      proposed.progress=phrase;
+      const hospital=direct.length===0&&inherited?state.hospitals.find(h=>h.id===inherited):null;
+      const proposed=suggestNote(state,hospital?hospital.name+'，'+phrase:phrase,today);
+      proposed.text=phrase;proposed.progress=phrase;
       proposed.source='语音/文字本地规则拆分，需逐条核对';
       if(direct.length===1)inherited=direct[0].id;
       else if(direct.length>1)inherited='';
@@ -239,8 +295,13 @@
     for(let index=0;index<briefing.length;index++){
       const item=briefing[index],choice=choices[index];
       if(!choice?.include)continue;
-      if(choice.projectId&&!current.projects.some(p=>p.id===choice.projectId))
+      const project=choice.projectId?current.projects.find(p=>p.id===choice.projectId):null;
+      if(choice.projectId&&!project)
         throw new Error('第'+(index+1)+'条关联项目已变化，整批未保存');
+      if(project&&item.hospitalId&&project.hospitalId!==item.hospitalId)
+        throw new Error('第'+(index+1)+'条选择的项目不属于识别医院，整批未保存');
+      if(choice.changeDate&&!text(choice.followupDate))
+        throw new Error('第'+(index+1)+'条还没有具体跟进日期，请先确认日期');
       if((choice.changeStatus||choice.changeDate||choice.changeNextAction||choice.changeWaitingOn)&&!choice.projectId)
         throw new Error('第'+(index+1)+'条如需更新行动字段，请先选对应项目');
       if(!text(choice.progress))throw new Error('第'+(index+1)+'条进展为空，整批未保存');
