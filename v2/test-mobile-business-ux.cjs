@@ -71,7 +71,7 @@ async function main(){
      Object.defineProperty(window,'webkitSpeechRecognition',{configurable:true,value:undefined});
    });
    await page.locator('.shortcut-grid [data-start-voice]').click();
-   check(await page.locator('form[data-form="note"] textarea[name="text"]').isFocused()&&
+   check(await page.locator('form[data-form="note"] textarea[name="text"]').evaluate(el=>document.activeElement===el)&&
      (await page.locator('#voice-status').innerText()).includes('键盘上的麦克风'),
      'unsupported iPhone browser falls back to focused keyboard dictation and never pretends voice was captured');
    await page.locator('nav button[data-route="home"]').click();
