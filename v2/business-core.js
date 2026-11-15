@@ -147,6 +147,28 @@
     const actionable = item => ['待处理', '进行中'].includes(item.status) || (item.status === '等待对方' && item.followupDate && item.followupDate <= today);
     return { today: active.filter(item => actionable(item) && (!item.followupDate || item.followupDate === today)), overdue: active.filter(item => actionable(item) && item.followupDate && item.followupDate < today), waiting: active.filter(item => item.status === '等待对方'), week: active.filter(item => item.followupDate && item.followupDate >= today && item.followupDate <= addDays(today, 7)), stale: active.filter(item => item.status !== '持续监控' && (item.updatedOn || item.createdOn) && (item.updatedOn || item.createdOn) < addDays(today, -14)), recent: [...state.projects].sort((first, second) => text(second.updatedOn).localeCompare(text(first.updatedOn))).slice(0, 5), nodes: active.flatMap(item => ['bidDate', 'contractEnd', 'renewalDate', 'quoteDate'].filter(field => item.details[field] && item.details[field] >= today && item.details[field] <= addDays(today, 7)).map(field => ({ project: item, field, date: item.details[field] }))) };
   }
+  // One project appears in one homepage action lane at most. Preserve the
+  // historical dashboard() contract for older consumers and migration tests.
+  function focusBoard(state, today) {
+    const view=dashboard(state,today),included=new Set();
+    const sorted=(items,ascending=true)=>[...items].sort((a,b)=>{
+      const d=String(a.followupDate||'9999-12-31').localeCompare(String(b.followupDate||'9999-12-31'));
+      return (ascending?d:-d)||String(a.name).localeCompare(String(b.name),'zh-Hans');
+    });
+    function lane(items){return sorted(items).filter(item=>{
+      if(included.has(item.id))return false;
+      included.add(item.id);return true;
+    });}
+    // Past due first, then due today; waiting for someone else is not
+    // double-counted as both an urgent action and a passive waiting item.
+    const overdue=lane(view.overdue);
+    const dueToday=lane(view.today);
+    const waiting=lane(view.waiting);
+    const week=lane(view.week.filter(item=>item.followupDate>today));
+    const nodes=[...view.nodes].sort((a,b)=>a.date.localeCompare(b.date));
+    return {overdue,today:dueToday,waiting,week,nodes,
+      recent:view.recent,stale:view.stale,weekTotal:week.length+nodes.length};
+  }
   function saveOrder(state, input) {
     const next = copy(state), quantity = Number(input.quantity);
     if (!next.projects.some(item => item.id === input.projectId && item.kind === '耗材') || !text(input.product) || !Number.isSafeInteger(quantity) || quantity <= 0) throw new Error('请选择耗材项目、名称和正整数数量');
@@ -179,5 +201,5 @@
   function finance(state) {
     return { uninvoiced: state.orders.filter(item => !item.invoiced), unpaid: state.orders.filter(item => item.invoiced && !item.received), balances: state.movements.reduce((result, item) => { result[item.inventoryKey] = (result[item.inventoryKey] || 0) + item.delta; return result; }, {}) };
   }
-  root.WorkbenchBusiness = { empty, statuses, kinds, stages, date, addDays, upsertHospital, searchBusiness, saveProject, fromLegacy, suggestNote, confirmNote, dashboard, saveOrder, advanceOrder, stock, finance };
+  root.WorkbenchBusiness = { empty, statuses, kinds, stages, date, addDays, upsertHospital, searchBusiness, saveProject, fromLegacy, suggestNote, confirmNote, dashboard, focusBoard, saveOrder, advanceOrder, stock, finance };
 })(globalThis);
