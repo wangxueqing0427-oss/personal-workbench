@@ -429,6 +429,43 @@ async function main(){
    check(completion.status==='已完成'&&completion.last.includes('今日已完成维保')&&
      completion.linkedNotes===1&&completion.excluded,
      'confirmed completion persists one outcome and leaves every active homepage lane');
+   // Consumables views must be read-only filters, not new finance/receivables accounting.
+   await page.locator('nav button[data-route="supplies"]').click();
+   check(await page.locator('.stat-grid [data-supply-filter]').count()===3&&
+     await page.locator('[data-supply-filter="all"]').getAttribute('aria-pressed')==='true',
+     'consumables overview has three touch-friendly selectable filters without changing order records');
+   const beforeFilter=await page.evaluate(async()=>JSON.stringify((await WorkbenchBusinessStore.read()).orders));
+   await page.locator('[data-supply-filter="unpaid"]').click();
+   check(await page.locator('.order-card').count()===0&&
+     await page.getByText('当前筛选没有符合条件的订单').isVisible()&&
+     await page.locator('[data-supply-filter="unpaid"]').getAttribute('aria-pressed')==='true',
+     'unpaid filter correctly shows no orders before any invoice instead of inventing receivables');
+   await page.locator('[data-supply-filter="uninvoiced"]').click();
+   check(await page.locator('.order-card').count()===1&&
+     await page.locator('.order-parent').first().isVisible(),
+     'uninvoiced filter displays only existing unbilled order with linked hospital and project');
+   const afterFilter=await page.evaluate(async()=>JSON.stringify((await WorkbenchBusinessStore.read()).orders));
+   check(beforeFilter===afterFilter,'changing consumables filters makes zero writes to stored business orders');
+   await page.evaluate(async()=>{
+     const store=WorkbenchBusinessStore,base=await store.read(),next=structuredClone(base);
+     const first=next.orders.find(x=>x.product==='合成过滤器订单');
+     if(!first)throw Error('Synthetic consumables fixture missing');
+     next.orders.push({...structuredClone(first),id:crypto.randomUUID(),product:'合成已开票待回款订单',
+       stage:'开票',invoiced:true,received:false,invoiceNumber:'SYNTHETIC-INVOICE-1',
+       fileIds:[],history:[]});
+     await store.commit(next,base.revision);
+   });
+   await page.reload({waitUntil:'load'});
+   await page.locator('nav button[data-route="supplies"]').click();
+   await page.locator('[data-supply-filter="unpaid"]').click();
+   check(await page.locator('.order-card').count()===1&&
+     await page.getByRole('heading',{name:/合成已开票待回款订单/}).isVisible()&&
+     await page.locator('.supplies-results').getByText('显示 1 / 2 条').isVisible(),
+     'paid-status filter separates invoiced-but-unreceived synthetic order from unbilled one');
+   await page.locator('[data-supply-filter="all"]').click();
+   check(await page.locator('.order-card').count()===2&&
+     await page.locator('[data-supply-filter="all"]').getAttribute('aria-pressed')==='true',
+     'all-orders tab restores the complete order list without losing either record');
    const viewport=await page.evaluate(()=>({overflow:document.documentElement.scrollWidth>innerWidth+1}));
    check(!viewport.overflow,'original iPhone-width UI does not overflow horizontally');
    check(errors.length===0,'no script crashes or external network access during mobile business workflows');

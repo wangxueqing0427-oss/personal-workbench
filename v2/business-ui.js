@@ -10,7 +10,7 @@
   const options = (values, current) => values.map(value => `<option${value === current ? ' selected' : ''}>${escape(value)}</option>`).join('');
   const field = (name, label, value = '', type = 'text') => `<label>${label}<input name="${name}" type="${type}" value="${escape(value)}"></label>`;
   let state, route = 'home', selection = '', suggestion = null, busy = false;
-  let searchQuery = '', searchStatus = '全部', quickTomorrow = false, quickIntent = 'edit';
+  let searchQuery = '', searchStatus = '全部', quickTomorrow = false, quickIntent = 'edit', supplyFilter = 'all';
   function message(value) { notice.textContent = value; }
   async function save(next, file) {
     if (!compatible()) throw new Error('版本不兼容 / 同步已暂停');
@@ -125,15 +125,21 @@
   }
   function supplies() {
     const amounts=core.finance(state);
-    const summary=`<section class="card">${sectionHead('SUPPLIES','耗材业务')}<div class="stat-grid"><div class="stat-tile"><strong>${state.orders.length}</strong><span>采购记录</span></div><div class="stat-tile"><strong>${amounts.uninvoiced.length}</strong><span>未开票</span></div><div class="stat-tile"><strong>${amounts.unpaid.length}</strong><span>未回款项目</span></div></div><p class="muted">未回款仅显示资金情况，不自动当作待办；库存结余不代表医院使用量。</p></section>`;
+    const segments=[['all','采购记录',state.orders.length],['uninvoiced','未开票',amounts.uninvoiced.length],['unpaid','已开票待回款',amounts.unpaid.length]];
+    const tiles=segments.map(([id,label,count])=>`<button type="button" class="stat-tile stat-tile-button" data-supply-filter="${id}" aria-label="筛选${escape(label)}，${count}条" aria-pressed="${id===supplyFilter}"><strong>${count}</strong><span>${escape(label)}</span></button>`).join('');
+    const summary=`<section class="card">${sectionHead('SUPPLIES','耗材业务')}<div class="stat-grid" aria-label="耗材订单筛选">${tiles}</div><p class="muted">点击数字筛选订单；未开票包含尚未走到开票环节的订单。“已开票待回款”只统计已开票、未标记收款的耗材订单，不等同于合同全部应收。</p></section>`;
     const form=`<form class="card" data-form="order">${sectionHead('NEW PURCHASE','登记采购计划')}<label>耗材项目<select name="projectId">${state.projects.filter(item=>item.kind==='耗材').map(item=>`<option value="${escape(item.id)}">${escape(item.name)}</option>`).join('')}</select></label><div class="form-grid">${field('product','耗材名称')}${field('specification','规格')}${field('manufacturer','厂家')}${field('quantity','采购数量',1,'number')}${field('unitPrice','单价（元）',0,'number')}<label>管理方式<select name="mode">${options(['普通','高值'])}</select></label>${field('traceCode','批次 / UDI（高值必填）')}</div><button class="primary">＋ 登记采购</button></form>`;
-    const orders=state.orders.map(order=>{
+    const visible=state.orders.filter(order=>supplyFilter==='all'||(supplyFilter==='uninvoiced'&&!order.invoiced)||(supplyFilter==='unpaid'&&order.invoiced&&!order.received));
+    const heading=`<section class="card supplies-results">${sectionHead('ORDERS','采购订单列表',`显示 ${visible.length} / ${state.orders.length} 条`)}</section>`;
+    const orders=visible.map(order=>{
       const next=core.stages.indexOf(order.stage)+1;
       const stage=next<core.stages.length?`<form data-form="stage" data-id="${escape(order.id)}">${core.stages[next]==='开票'?field('invoiceNumber','发票编号'):''}<button>确认进入 ${escape(core.stages[next])}</button></form>`:'<p class="muted">流程已完成，历史记录保留</p>';
-      return `<section class="card order-card"><div class="row"><h3>${escape(order.product)} · ${escape(order.specification)}</h3>${statusTag(order.stage)}</div><p class="muted">${escape(order.manufacturer)} · ${escape(order.mode)} · 数量 ${order.quantity}</p><p class="order-amount">¥${(order.quantity*order.unitPrice).toFixed(2)}</p>${order.traceCode?`<p class="muted">批次 / UDI：${escape(order.traceCode)}</p>`:''}<div class="order-actions"><button class="primary" data-files-order="${escape(order.id)}">拍照 / 上传采购单据</button></div><details class="quiet-details"><summary>采购流程与库存调整</summary>${stage}<form data-form="stock" data-id="${escape(order.id)}"><div class="grid"><label>库存操作<select name="direction">${options(['入库','出库'])}</select></label>${field('quantity','数量',1,'number')}</div><button>确认库存变动</button></form></details><details class="quiet-details"><summary>已保存的采购单 / 配送单 / 发票</summary>${fileButtons(order.fileIds)||'<p class="muted">暂未关联附件</p>'}</details></section>`;
-    }).join('')||'<section class="card"><div class="empty-state"><p>还没有采购记录</p><small>可以先从上方登记一笔合成订单</small></div></section>';
+      const project=state.projects.find(item=>item.id===order.projectId);
+      const hospital=state.hospitals.find(item=>item.id===project?.hospitalId);
+      return `<section class="card order-card" data-order-id="${escape(order.id)}"><div class="row"><h3>${escape(order.product)} · ${escape(order.specification)}</h3>${statusTag(order.stage)}</div><p class="order-parent">${escape(hospital?.name||'医院待关联')} · ${escape(project?.name||'项目待关联')}</p><p class="muted">${escape(order.manufacturer)} · ${escape(order.mode)} · 数量 ${order.quantity}</p><p class="order-amount">¥${(order.quantity*order.unitPrice).toFixed(2)}</p>${order.traceCode?`<p class="muted">批次 / UDI：${escape(order.traceCode)}</p>`:''}<div class="order-actions"><button class="primary" data-files-order="${escape(order.id)}">拍照 / 上传采购单据</button></div><details class="quiet-details"><summary>采购流程与库存调整</summary>${stage}<form data-form="stock" data-id="${escape(order.id)}"><div class="grid"><label>库存操作<select name="direction">${options(['入库','出库'])}</select></label>${field('quantity','数量',1,'number')}</div><button>确认库存变动</button></form></details><details class="quiet-details"><summary>已保存的采购单 / 配送单 / 发票</summary>${fileButtons(order.fileIds)||'<p class="muted">暂未关联附件</p>'}</details></section>`;
+    }).join('')||`<section class="card"><div class="empty-state"><p>${state.orders.length?'当前筛选没有符合条件的订单':'还没有采购记录'}</p><small>${state.orders.length?'可以点击“采购记录”查看全部订单':'可以先从上方登记一笔合成订单'}</small></div></section>`;
     const stock=`<section class="card">${sectionHead('INVENTORY','库存结余')}${Object.entries(amounts.balances).map(([name,count])=>`<div class="info-row"><span>${escape(name)}</span><strong>${count}</strong></div>`).join('')||'<p class="muted">暂无库存流水</p>'}</section>`;
-    return summary+form+orders+stock;
+    return summary+form+heading+orders+stock;
   }
   function fileButtons(ids) { return ids.map(id => { const file = state.files.find(item => item.id === id); return file ? `<button data-download="${escape(id)}">查看 / 下载 ${escape(file.name)}</button>${/^image\/(png|jpeg|webp|gif)$/.test(file.type || '') ? `<button data-preview="${escape(id)}">预览图片 ${escape(file.name)}</button>` : ''}` : `<p class="warning">资料 ${escape(id)} 未导入，原关联仍保留</p>`; }).join(''); }
   function files() {
@@ -163,6 +169,7 @@
           window.setTimeout(()=>section.classList.remove('focus-flash'),850);
         }
       }
+      else if (button.dataset.supplyFilter) { supplyFilter = button.dataset.supplyFilter; route = 'supplies'; render(); }
       else if (button.dataset.route) { route = button.dataset.route; selection = ''; suggestion = null; quickTomorrow = false; quickIntent = 'edit'; render(); window.scrollTo(0, 0); }
       else if (button.dataset.back) { route = button.dataset.back; quickTomorrow = false; quickIntent = 'edit'; if (route !== 'project') selection = ''; render(); }
       else if (button.hasAttribute('data-clear-search')) { searchQuery = ''; searchStatus = '全部'; render(); }
