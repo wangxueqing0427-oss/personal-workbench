@@ -264,3 +264,11 @@ form[data-form="file"] textarea[name="remark"]{min-height:96px;background:#f8fcf
 .inbox-note-text{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.65;font-size:14px;color:#23445a}
 .inbox-note-actions{display:flex;flex-wrap:wrap;gap:8px}
 .archive-note-form blockquote{border-left:3px solid #5696ad;background:#f1f7fa;padding:14px;white-space:pre-wrap;overflow-wrap:anywhere;border-radius:10px;line-height:1.65}
+
+/* Fresh-start first-use state; appears only before real records exist. */
+.first-use-welcome{background:linear-gradient(150deg,#f3fafc,#fff 82%);border:1px solid #d4e4e9}
+.first-use-welcome h2{color:#164e66;margin:6px 0 10px;font-size:21px}
+.first-use-welcome>p:not(.eyebrow){line-height:1.65;color:#3f6272;font-size:14px}
+.first-use-actions{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0}
+.first-use-actions button{min-height:48px;flex:1 1 175px}
+.first-use-welcome small{display:block;line-height:1.5;color:#698291}

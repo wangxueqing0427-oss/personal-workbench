@@ -17,7 +17,7 @@ async function main(){
  const allowed=new Set(['business-core.js','business-store.js','business-ui.js','business.css']);
  const server=http.createServer(async(req,res)=>{
    const pathname=new URL(req.url,'http://127.0.0.1').pathname;
-   if(pathname==='/'){res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'});res.end(fixture);return;}
+   if(pathname==='/'||pathname==='/fresh'){res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'});res.end(pathname==='/fresh'?fixture.replace('<html lang="zh-CN">','<html lang="zh-CN" data-workbench-data-mode="fresh-empty">'):fixture);return;}
    const filename=pathname.slice(1);
    if(!allowed.has(filename)){res.writeHead(404).end();return;}
    res.writeHead(200,{'Content-Type':filename.endsWith('.css')?'text/css':'application/javascript','Cache-Control':'no-store'});
@@ -1047,6 +1047,67 @@ async function main(){
      },beforeArchive.id);
      check(durable.linked&&durable.occurrences===1&&!durable.stillInInbox,
        'archived note survives a full offline reload without reappearing in inbox or duplicating timeline entries');
+   }
+   // Official fresh-start contract: even when a V1 localStorage key exists
+   // at the same loopback origin, a new V2 context must not import it.
+   {
+     const freshContext=await browser.newContext({viewport:{width:390,height:844},
+       isMobile:true,hasTouch:true,locale:'zh-CN'});
+     try{
+       await freshContext.addInitScript(()=>{
+         window.localStorage.setItem('personalWorkbench',
+           JSON.stringify({hospitals:[{name:'旧版必须保持隔离的模拟医院'}],
+             tasks:[{id:'legacy-only',title:'旧版待办'}]}));
+       });
+       const freshPage=await freshContext.newPage();
+       freshPage.on('pageerror',error=>errors.push('fresh-start:'+error.message));
+       freshPage.on('request',request=>{
+         if(!request.url().startsWith(origin+'/'))errors.push('fresh-start-external:'+request.url());
+       });
+       await freshPage.goto(origin+'/fresh',{waitUntil:'load'});
+       await freshPage.locator('[data-first-use]').waitFor();
+       const start=await freshPage.evaluate(async()=>{
+         const s=await WorkbenchBusinessStore.read(),queue=await WorkbenchBusinessStore.queueData();
+         return {counts:['hospitals','projects','notes','inventory','movements','orders','files']
+           .map(x=>(s[x]||[]).length),schema:s.schema,revision:s.revision,
+           old:JSON.parse(localStorage.getItem('personalWorkbench')||'{}').hospitals?.[0]?.name,
+           queue:queue.jobs.length};
+       });
+       check(start.schema===2&&start.revision===0&&start.counts.every(x=>x===0)&&start.queue===1,
+         'fresh V2 first launch creates an entirely empty schema with no synthetic hospitals or business records');
+       check(start.old==='旧版必须保持隔离的模拟医院' &&
+         !(await freshPage.locator('body').innerText()).includes('旧版必须保持隔离的模拟医院'),
+         'fresh workbench never imports or edits V1 localStorage even when the previous app exists at same origin');
+       check(await freshPage.locator('[data-first-use] button[data-edit-hospital]').isVisible()&&
+         !(await freshPage.locator('body').innerText()).includes('示例秦皇岛医院'),
+         'first-use card provides an obvious create-hospital action instead of fake customer data');
+       await freshPage.locator('[data-first-use] button[data-edit-hospital]').click();
+       await freshPage.locator('form[data-form="hospital"] input[name="name"]').fill('仅测试的第一家医院');
+       await freshPage.locator('form[data-form="hospital"] button.primary').click();
+       await freshPage.getByRole('heading',{name:'仅测试的第一家医院'}).waitFor();
+       const created=await freshPage.evaluate(async()=>{
+         const s=await WorkbenchBusinessStore.read();
+         return {hospitals:s.hospitals.map(x=>x.name),revision:s.revision,projects:s.projects.length,
+           old:JSON.parse(localStorage.getItem('personalWorkbench')||'{}').hospitals?.[0]?.name};
+       });
+       check(created.revision===1&&created.hospitals.join()==='仅测试的第一家医院'&&
+         created.projects===0&&created.old==='旧版必须保持隔离的模拟医院',
+         'first real hospital can be added normally without editing V1 records or adding unsolicited projects');
+       await freshPage.reload({waitUntil:'load'});
+       await freshPage.getByRole('heading',{name:'今天先办重要的事'}).waitFor();
+       const afterReload=await freshPage.evaluate(async()=>{
+         const s=await WorkbenchBusinessStore.read();
+         return {hospitals:s.hospitals.map(x=>x.name),revision:s.revision,projects:s.projects.length};
+       });
+       check(afterReload.revision===created.revision&&
+         JSON.stringify(afterReload.hospitals)===JSON.stringify(created.hospitals)&&
+         afterReload.projects===0&&!await freshPage.locator('[data-first-use]').count(),
+         'new-origin personal records survive app reload without reseeding synthetic or historical records');
+       await freshPage.goto(origin+'/',{waitUntil:'load'});
+       const existing=await freshPage.evaluate(async()=>await WorkbenchBusinessStore.read());
+       check(existing.hospitals.length===1&&existing.hospitals[0].name==='仅测试的第一家医院',
+         'an existing V2 store is never replaced when host demo mode or startup mode changes');
+     }finally{await freshContext.close();}
    }
    const viewport=await page.evaluate(()=>({overflow:document.documentElement.scrollWidth>innerWidth+1}));
    check(!viewport.overflow,'original iPhone-width UI does not overflow horizontally');

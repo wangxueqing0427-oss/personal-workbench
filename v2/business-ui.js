@@ -48,7 +48,17 @@
     if(draftTimer)await flushDraft();
     await draftWriteChain;
   }
+  // New official origins MUST start empty. The three synthetic hospitals are
+  // intentionally available only on the dedicated preview host and loopback
+  // browser test fixtures. Fresh-start does not read V1 localStorage/files.
+  function mayUseSyntheticDemo(){
+    const hostname=location.hostname.toLowerCase();
+    if(document.documentElement.dataset.workbenchDataMode==='fresh-empty')return false;
+    return hostname==='localhost'||hostname==='127.0.0.1'||
+      /^personal-workbench-v2-preview\.[a-z0-9-]+\.workers\.dev$/.test(hostname);
+  }
   function seed() {
+    if(!mayUseSyntheticDemo())return core.empty();
     let result = core.empty();
     for (const [name, aliases, project, kind] of [['示例秦皇岛医院', ['示例秦皇岛'], '铥激光光纤采购', '耗材'], ['示例石景山医院', ['示例石景山'], '核磁开机率明细', '维保'], ['示例肿瘤医院', ['示例肿瘤'], 'TOMO设备销售', '设备销售']]) {
       const hospital = core.upsertHospital(result, { name, department: kind === '耗材' ? '泌尿外科' : '设备科' });
@@ -108,7 +118,16 @@
       const hospital=state.hospitals.find(h=>h.id===(project?.hospitalId||n.hospitalId));
       return `<article class="recent-note-item"><div><small>${escape(n.savedOn||n.createdOn||'日期待核对')} · ${escape(hospital?.name||'医院待关联')} · ${escape(project?.name||'尚未归档')}</small><p>${escape(n.progress||'')}</p></div>${project?`<button type="button" data-project="${escape(project.id)}">查看项目</button>`:`<button type="button" data-route="inbox">去归档</button>`}</article>`;
     }).join('')}</div></section>`:'';
-    return greeting+shortcuts+pendingEntry+sections+week+latest+`<details class="card quiet-details"><summary>最近跟进 / 长时间未跟进</summary>${projectButtons(view.recent)}<h3>超过14天未跟进</h3>${projectButtons(view.stale)}</details>`;
+    const firstUse=!state.hospitals.length&&!state.projects.length&&!state.notes.length&&
+      !state.orders.length&&!state.files.length;
+    const welcome=firstUse?`<section class="card first-use-welcome" data-first-use>
+      <p class="eyebrow">FRESH START</p><h2>从第一家医院开始</h2>
+      <p>这里是全新的空白工作台，不会导入旧版数据，也不会自动填入示例客户。先建立医院档案，再添加项目；日常沟通可直接语音速记。</p>
+      <div class="first-use-actions"><button type="button" class="primary" data-edit-hospital="">＋ 添加第一家医院</button>
+      <button type="button" data-route="note">先记一条沟通</button></div>
+      <small>正式使用前仍需完成身份保护、备份恢复与真实 iPhone 验收；请勿在当前测试版录入真实资料。</small>
+    </section>`:'';
+    return greeting+shortcuts+welcome+pendingEntry+sections+week+latest+`<details class="card quiet-details"><summary>最近跟进 / 长时间未跟进</summary>${projectButtons(view.recent)}<h3>超过14天未跟进</h3>${projectButtons(view.stale)}</details>`;
   }
   function hospitalSearchResults() {
     const found=core.searchBusiness(state,searchQuery,searchStatus);
