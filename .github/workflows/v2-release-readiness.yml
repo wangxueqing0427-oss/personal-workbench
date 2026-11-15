@@ -1,51 +1,37 @@
-name: V2 production readiness - non-destructive legacy gate
+name: V2 fresh-start release gate - isolated, no V1 migration
 on:
   push:
     branches:
       - dev/v2-preview-isolated-20261111
     paths:
       - .github/workflows/v2-release-readiness.yml
-      - v2/release-readiness-audit.cjs
-      - v2/test-release-readiness.cjs
-      - v2/legacy-shadow-planner.cjs
-      - v2/test-legacy-shadow-planner.cjs
+      - v2/fresh-start-readiness.cjs
+      - v2/test-fresh-start-readiness.cjs
+      - v2/business-ui.js
       - v2/business-core.js
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
-  synthetic-readiness-gate:
+  fresh-start-gate:
     if: github.ref == 'refs/heads/dev/v2-preview-isolated-20261111'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - name: Checkout isolated source without production credentials
+      - name: Checkout isolated dev branch
         uses: actions/checkout@v4
-      - name: Enforce synthetic-only and no production migration actions
+      - name: Verify source and explicit fresh-start release blockers
         shell: bash
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = "wangxueqing0427-oss/personal-workbench"
           test "$GITHUB_REF" = "refs/heads/dev/v2-preview-isolated-20261111"
-          node --check v2/release-readiness-audit.cjs
-          node --check v2/test-release-readiness.cjs
-          node --check v2/legacy-shadow-planner.cjs
-          node --check v2/test-legacy-shadow-planner.cjs
+          node --check v2/business-ui.js
           node --check v2/business-core.js
-          ! grep -Ei 'https?://|wrangler deploy|CLOUDFLARE_API_TOKEN|github_token|indexedDB.open|localStorage.getItem|fetch\(' v2/release-readiness-audit.cjs
-      - name: Prove old-version copy verifier refuses data loss
-        shell: bash
-        run: |
-          set -euo pipefail
-          node v2/test-release-readiness.cjs | tee /tmp/v2-release-gate.txt
-          grep -F 'RELEASE_READINESS_GUARD_PASS' /tmp/v2-release-gate.txt
-          grep -F '"label":"BLOCKED_NOT_FOR_PRODUCTION"' /tmp/v2-release-gate.txt
-          echo 'GATE_TEST_GREEN_BUT_PRODUCTION_PROMOTION_STILL_BLOCKED'
-      - name: Verify a fully reversible synthetic legacy shadow copy
-        shell: bash
-        run: |
-          set -euo pipefail
-          node v2/test-legacy-shadow-planner.cjs | tee /tmp/v2-legacy-shadow.txt
-          grep -F 'SYNTHETIC_LEGACY_SHADOW_PASS' /tmp/v2-legacy-shadow.txt
-          grep -F '"productionReady":false' /tmp/v2-legacy-shadow.txt
-          echo 'SYNTHETIC_SHADOW_VERIFIED_REAL_PRODUCTION_STILL_BLOCKED'
+          node --check v2/fresh-start-readiness.cjs
+          node --check v2/test-fresh-start-readiness.cjs
+          node v2/test-fresh-start-readiness.cjs | tee /tmp/v2-fresh-release.txt
+          grep -F 'FRESH_START_RELEASE_GATE_PASS' /tmp/v2-fresh-release.txt
+          grep -F '"requiresLegacyMigration":false' /tmp/v2-fresh-release.txt
+          grep -F '"productionReady":false' /tmp/v2-fresh-release.txt
+          echo 'FRESH_START_GUARD_PASS__REAL_PRODUCTION_STILL_NOT_AUTHORIZED'
