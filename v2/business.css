@@ -284,3 +284,15 @@ form[data-form="file"] textarea[name="remark"]{min-height:96px;background:#f8fcf
 .lab-recovery-form .lab-confirm{display:flex;gap:10px;align-items:flex-start;line-height:1.6}
 .lab-recovery-form .lab-confirm input{flex-shrink:0;width:20px;height:20px;margin-top:2px}
 .lab-recovery-form button.primary{width:100%;min-height:48px}
+
+/* Password-gated encrypted first-use candidate, only loaded in localhost labs. */
+.encrypted-boot-shell{background:linear-gradient(145deg,#f1f9fc,#fff 74%);border:1px solid #d4e5eb}
+.encrypted-boot-shell h2{font-size:21px;margin:8px 0 13px;color:#174c64}
+.encrypted-boot-shell>p{font-size:14px;line-height:1.6;color:#43657a}
+.encrypted-boot-shell form{display:grid;gap:14px;margin-top:18px}
+.encrypted-boot-shell label{display:block;font-size:14px;line-height:1.55}
+.encrypted-boot-shell input[type=password],.encrypted-boot-shell input[type=file]{display:block;margin-top:8px;width:100%;min-height:44px}
+.encrypted-boot-shell .encrypted-boot-confirm{display:flex;gap:10px;align-items:flex-start}
+.encrypted-boot-shell .encrypted-boot-confirm input{width:20px;height:20px;flex:0 0 auto}
+.encrypted-boot-shell button.primary{min-height:49px;width:100%;font-size:15px}
+.encrypted-boot-shell small{display:block;margin:14px 0 0;color:#698292;line-height:1.5}

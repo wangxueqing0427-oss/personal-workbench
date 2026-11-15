@@ -1,0 +1,55 @@
+name: V2 encrypted first-use mobile UI - isolated synthetic vault
+on:
+  push:
+    branches:
+      - dev/v2-preview-isolated-20261111
+    paths:
+      - .github/workflows/v2-encrypted-boot-lab.yml
+      - v2/fresh-encrypted-boot-lab.js
+      - v2/test-fresh-encrypted-boot-lab.cjs
+      - v2/privacy-delta-journal-poc.js
+      - v2/business-core.js
+      - v2/business-ui.js
+      - v2/business.css
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  encrypted-first-use:
+    if: github.ref == 'refs/heads/dev/v2-preview-isolated-20261111'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, webkit]
+    env:
+      NODE_PATH: /tmp/workbench-encrypted-boot-lab/node_modules
+      WB_BROWSER: ${{ matrix.browser }}
+    steps:
+      - name: Checkout isolated development files
+        uses: actions/checkout@v4
+      - name: Verify synthetic-only bootstrap and script syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "wangxueqing0427-oss/personal-workbench"
+          test "$GITHUB_REF" = "refs/heads/dev/v2-preview-isolated-20261111"
+          node --check v2/fresh-encrypted-boot-lab.js
+          node --check v2/test-fresh-encrypted-boot-lab.cjs
+          node --check v2/business-ui.js
+          node --check v2/privacy-delta-journal-poc.js
+          ! grep -E 'wrangler deploy|CLOUDFLARE_API_TOKEN|personal-workbench-v2-(staging|preview)\.' v2/fresh-encrypted-boot-lab.js v2/test-fresh-encrypted-boot-lab.cjs
+      - name: Install pinned synthetic mobile browser
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --prefix /tmp/workbench-encrypted-boot-lab --no-save --no-package-lock playwright@1.56.1
+          /tmp/workbench-encrypted-boot-lab/node_modules/.bin/playwright install --with-deps "$WB_BROWSER"
+      - name: Test encrypted startup, lock, backup download and full restoration on fresh phones
+        shell: bash
+        run: |
+          set -euo pipefail
+          node v2/test-fresh-encrypted-boot-lab.cjs | tee /tmp/fresh-encrypted-boot-test.log
+          grep -F 'FRESH_ENCRYPTED_BOOT_UI_PASS' /tmp/fresh-encrypted-boot-test.log
+          grep -F '"productionReady":false' /tmp/fresh-encrypted-boot-test.log

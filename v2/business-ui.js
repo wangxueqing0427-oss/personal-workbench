@@ -390,10 +390,14 @@
   function more() {
     const syntheticLab = globalThis.WorkbenchFreshRecoveryLab?
       '<button type="button" data-route="recovery-lab">合成加密备份 / 空白设备恢复实验</button>':'';
+    const encryptedCandidate = globalThis.__WORKBENCH_ENCRYPTED_BOOT_LAB__===true &&
+      typeof storage.exportEncryptedBackup==='function'?
+      '<button type="button" data-export-encrypted-candidate>导出完整加密测试档案</button>':'';
     return `<section class="card"><h2>更多</h2><p>V2.0 手机验收测试版。当前只允许使用合成数据，不代表已开通正式加密存储。</p>
       <button type="button" data-route="files">文件与拍照</button>
       <button type="button" data-route="inbox">记录收件箱</button>
-      ${syntheticLab}<p class="muted">正式版仍需完成本机加密存储、长期设备身份、真实 iPhone 和离线终验。全新正式版无需导入 V1.5.7。</p></section>`;
+      ${syntheticLab}${encryptedCandidate}
+      <p class="muted">正式版仍需完成本机加密存储、长期设备身份、真实 iPhone 和离线终验。全新正式版无需导入 V1.5.7。</p></section>`;
   }
   function recoveryLab(){
     if(!globalThis.WorkbenchFreshRecoveryLab)return '<section class="card"><p>此功能尚未开放，业务数据未修改。</p></section>';
@@ -500,6 +504,19 @@
         const close = document.createElement('button'); close.className = 'dialog-close'; close.textContent = '关闭图片'; close.onclick = () => dialog.close();
         const image = document.createElement('img'), url = URL.createObjectURL(file); image.src = url; image.alt = file.name; image.style.cssText = 'display:block;max-width:100%;height:auto';
         dialog.append(close, image); document.body.append(dialog); dialog.onclose = () => { URL.revokeObjectURL(url); dialog.remove(); }; dialog.showModal();
+      }
+      else if(button.hasAttribute('data-export-encrypted-candidate')){
+        if(globalThis.__WORKBENCH_ENCRYPTED_BOOT_LAB__!==true||
+          typeof storage.exportEncryptedBackup!=='function')throw Error('加密测试模式未启用');
+        const archive=await storage.exportEncryptedBackup();
+        const blob=new Blob([JSON.stringify(archive)],{type:'application/json'});
+        const url=URL.createObjectURL(blob);
+        const link=document.createElement('a');
+        try{
+          link.href=url;link.download='workbench-encrypted-v2-test-'+today()+'.json';
+          document.body.append(link);link.click();link.remove();
+        }finally{setTimeout(()=>URL.revokeObjectURL(url),60000);}
+        message('完整的AES-GCM加密试验备份已生成；请自行保管恢复密码与文件，尚非正式生产备份。');
       }
       else if (button.dataset.download) {
         const file = await storage.readFile(button.dataset.download); if (!file) throw new Error('原件不可用，关联信息未删除');
