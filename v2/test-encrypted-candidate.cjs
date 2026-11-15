@@ -119,18 +119,26 @@ async function main(){
     check(serviceWorker,'immutable offline service worker has claimed original candidate page');
     await a.reload({waitUntil:'load'});
     await a.getByRole('heading',{name:'解锁加密工作台'}).waitFor();
-    await aCtx.setOffline(true);
+    if(engine==='webkit'){
+      // Playwright's Linux WebKit can internally fail to navigate when
+      // context.setOffline(true) is combined with a newly controlled SW.
+      // Abort every network request instead, so only cached SW responses pass.
+      await aCtx.route('**/*',route=>route.abort('internetdisconnected'));
+    }else{
+      await aCtx.setOffline(true);
+    }
     await a.reload({waitUntil:'load'});
     await a.getByRole('heading',{name:'解锁加密工作台'}).waitFor();
     check(!await a.locator('nav').isVisible(),
-      'candidate shell and locked first paint load offline without leaking hospital data');
+      'candidate locked boot works with browser offline or blocked network, without leaking hospital data');
     await a.locator('form[data-boot="unlock"] input[name="phrase"]').fill(phrase);
     await a.locator('form[data-boot="unlock"] button.primary').click();
     await a.getByRole('heading',{name:'今天先办重要的事'}).waitFor();
     await a.locator('nav button[data-route="note"]').click();
     check(await a.locator('form[data-form="note"] textarea[name="text"]').inputValue()===draft,
       'offline password unlock restores complete encrypted business data and unsaved voice note');
-    await aCtx.setOffline(false);
+    if(engine==='webkit')await aCtx.unroute('**/*');
+    else await aCtx.setOffline(false);
     await a.locator('nav button[data-route="home"]').click();
     await a.locator('.shortcut-panel [data-route="files"]').click();
     const data=Buffer.from('SYNTHETIC_CANDIDATE_BYTES_'+crypto.randomUUID().repeat(8192));

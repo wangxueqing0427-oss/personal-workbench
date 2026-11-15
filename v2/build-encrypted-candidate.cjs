@@ -73,6 +73,10 @@ async function main(){
    'remove demo placeholder before candidate package');
  ui=ui.replaceAll('globalThis.__WORKBENCH_ENCRYPTED_BOOT_LAB__===true',
    "storage.mode==='encrypted-candidate-local-only'");
+ ui=ui.replaceAll('globalThis.__WORKBENCH_ENCRYPTED_BOOT_LAB__!==true',
+   "storage.mode!=='encrypted-candidate-local-only'");
+ if(ui.includes('__WORKBENCH_ENCRYPTED_BOOT_LAB__'))
+   throw Error('Candidate still contains an encrypted lab-only UI gate');
  ui=ui.replaceAll('已保存到独立开发测试区；正式数据未改动。',
    '已保存至独立本机加密候选库；还没有启用云端备份。');
  ui=ui.replaceAll('V2.0 手机验收测试版。当前只允许使用合成数据，不代表已开通正式加密存储。',
