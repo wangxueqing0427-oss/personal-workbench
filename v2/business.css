@@ -146,3 +146,18 @@ nav button.active{background:#e5f3f6;color:#175f77;font-weight:770}
 .timeline-file button{background:#f0f8fa;border-color:#d5eaf0;font-size:12px;min-height:42px;max-width:100%;text-align:left}
 form[data-form="file"] textarea[name="remark"]{min-height:96px;background:#f8fcfd}
 @media(max-width:420px){.work-actions button{font-size:12px;padding:10px 4px}}
+
+/* Focus dashboard: overview numbers are accessible links to real, disjoint lanes. */
+.hero-metric{min-width:0}
+.hero .hero-metric-button{width:100%;min-height:69px;display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:5px;margin:0;padding:6px 4px 7px;border:0;border-radius:9px;background:transparent;color:#fff;box-shadow:none;text-align:left}
+.hero .hero-metric-button strong{color:#fff;font-size:25px;line-height:1.15}
+.hero .hero-metric-button span{font-size:11px;font-weight:550;color:#e3f2f4;white-space:normal}
+.hero .hero-metric-button[disabled]{opacity:.62;cursor:default}
+.hero .hero-metric-button:not(:disabled):active{background:rgba(255,255,255,.14)}
+.hero .hero-metric-button:focus-visible{outline:2px solid #f2dba6;outline-offset:2px}
+.task-section[id^="focus-"]{scroll-margin-top:12px}
+.urgency-section{border-left:4px solid #cc8357;padding-left:16px}
+.urgency-section .section-head .eyebrow{color:#aa6740}
+.focus-flash{box-shadow:0 0 0 2px #a2c8d7,0 9px 28px rgba(21,68,91,.1)}
+@media(max-width:420px){.hero .hero-metric-button{padding:7px 2px;min-height:73px}.hero .hero-metric-button strong{font-size:23px}.urgency-section{padding-left:13px}}
+@media(prefers-reduced-motion:reduce){.focus-flash{transition:none}}
