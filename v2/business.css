@@ -230,3 +230,14 @@ form[data-form="file"] textarea[name="remark"]{min-height:96px;background:#f8fcf
 .briefing-match-hint{font-size:12px;color:#536b7e;margin:4px 0 10px;line-height:1.5}
 .briefing-proposal{font-size:13px;line-height:1.6;padding:10px 12px;border-left:3px solid #5b9bb1;border-radius:8px;background:#edf6f8;color:#23546b;margin:10px 0}
 .briefing-proposal span{color:#466a7d}
+
+/* Multi-note review: two-step consent remains explicit while suggestions take one tap. */
+.briefing-quick-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:12px 0 16px}
+.briefing-quick-row button{min-height:44px;padding:10px 12px;font-size:13px}
+.briefing-quick-row .briefing-apply-button{background:#e8f3f8;border-color:#b9d8e4;color:#185a71}
+.briefing-quick-row .briefing-apply-button[aria-pressed=true]{background:#d7ece4;border-color:#a9d2c2;color:#18533f}
+.briefing-apply-hint{flex-basis:100%;font-size:12px;color:#4c6876;line-height:1.5}
+.briefing-bulk-apply{border:1px solid #d8e7ed;background:#f4f9fb;padding:12px;border-radius:14px;margin:14px 0}
+.briefing-bulk-apply button{width:100%;min-height:48px;background:#e7f2f7;color:#17566e;font-weight:700}
+.briefing-bulk-apply p{font-size:12px;margin:7px 0 5px}
+#briefing-apply-summary{font-size:12px;display:block;color:#245c72;line-height:1.5}

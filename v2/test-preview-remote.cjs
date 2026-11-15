@@ -141,6 +141,15 @@ async function main() {
     await page.locator('[data-form="note"] textarea[name="text"]').fill(marker + '，仅用于独立预览验收');
     await page.locator('[data-form="note"] button.primary').click();
     await page.getByRole('heading', { name: '已拆分 1 条事项' }).waitFor();
+    if(process.env.PREVIEW_EXPECTED_SHA){
+      check(await page.locator('.briefing-item [data-apply-briefing]').count()===1 &&
+        await page.locator('button[data-apply-all-briefing]').count()===1,
+        'deployed review shows one-tap per-item and batch suggestion controls');
+      const draft=await page.evaluate(async()=>({revision:(await WorkbenchBusinessStore.read()).revision}));
+      await page.locator('button[data-apply-all-briefing]').click();
+      check((await page.evaluate(async()=>({revision:(await WorkbenchBusinessStore.read()).revision}))).revision===draft.revision,
+        'deployed quick suggestion does not save or modify any data before explicit approval');
+    }
     if (process.env.PREVIEW_EXPECTED_SHA) {
       check(await page.locator('.briefing-item [data-match-hint]').count()===1 &&
         await page.locator('.briefing-item .briefing-proposal').isVisible() &&

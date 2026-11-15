@@ -127,12 +127,65 @@
         const opts='<option value="">暂存收件箱 / 未确认项目</option>'+available.map(project=>
           `<option value="${escape(project.id)}"${item.projectId===project.id?' selected':''}>${escape(project.name)}</option>`).join('');
         const prefix='item'+i;
-        return `<fieldset class="briefing-item" data-briefing-index="${i}"><legend>事项 ${i+1}</legend><label class="check"><input name="${prefix}include" type="checkbox" value="yes" checked>保留并保存这条</label><p class="briefing-matched">医院：${escape(hospital?.name||'暂未匹配，请核对')} · 科室：${escape(item.department||'待核对')} · 联系人：${escape(item.contact||'待核对')}</p><label>关联项目<select name="${prefix}projectId">${opts}</select></label><p class="briefing-match-hint" data-match-hint>${escape(item.matchReason||'请核对项目归属')}${item.candidates?.length?' · 候选：'+item.candidates.map(c=>escape(c.name)).join(' / '):''}</p><p class="briefing-proposal">建议下一步：${escape(item.nextAction)}<span> · 建议日期：${escape(item.followupDate||'待确认')}</span></p><label>本次进展<textarea name="${prefix}progress">${escape(item.progress)}</textarea></label><details class="briefing-actions"><summary>建议的下一步 / 日期（可选更新）</summary><p class="muted">只勾选的字段才会修改项目待办。没有勾选时只保存沟通记录。</p><label class="check"><input name="${prefix}changeStatus" type="checkbox" value="yes">同步更新状态</label><select name="${prefix}status">${options(core.statuses,item.suggestedStatus)}</select><label class="check"><input name="${prefix}changeDate" type="checkbox" value="yes">同步更新跟进日期</label>${field(prefix+'followupDate','建议日期',item.followupDate,'date')}${item.dateUncertain?'<p class="warning">“下周”尚未确定具体日期，请手动选择后再勾选。</p>':''}<label class="check"><input name="${prefix}changeNextAction" type="checkbox" value="yes">同步修改下一步行动</label>${field(prefix+'nextAction','建议下一步',item.nextAction)}<label class="check"><input name="${prefix}changeWaitingOn" type="checkbox" value="yes">同步设置等待反馈人</label>${field(prefix+'waitingOn','联系人 / 等待对象',item.contact)}</details></fieldset>`;
+        return `<fieldset class="briefing-item" data-briefing-index="${i}"><legend>事项 ${i+1}</legend><label class="check"><input name="${prefix}include" type="checkbox" value="yes" checked>保留并保存这条</label><p class="briefing-matched">医院：${escape(hospital?.name||'暂未匹配，请核对')} · 科室：${escape(item.department||'待核对')} · 联系人：${escape(item.contact||'待核对')}</p><label>关联项目<select name="${prefix}projectId">${opts}</select></label><p class="briefing-match-hint" data-match-hint>${escape(item.matchReason||'请核对项目归属')}${item.candidates?.length?' · 候选：'+item.candidates.map(c=>escape(c.name)).join(' / '):''}</p><p class="briefing-proposal">建议下一步：${escape(item.nextAction)}<span> · 建议日期：${escape(item.followupDate||'待确认')}</span></p><div class="briefing-quick-row"><button type="button" class="briefing-apply-button" data-apply-briefing="${i}" aria-pressed="false">采纳建议（下一步 / 日期）</button><button type="button" data-undo-briefing="${i}">撤销采纳</button><output class="briefing-apply-hint" aria-live="polite">默认仅保存沟通记录</output></div><label>本次进展<textarea name="${prefix}progress">${escape(item.progress)}</textarea></label><details class="briefing-actions"><summary>建议的下一步 / 日期（可选更新）</summary><p class="muted">只勾选的字段才会修改项目待办。没有勾选时只保存沟通记录。</p><label class="check"><input name="${prefix}changeStatus" type="checkbox" value="yes">同步更新状态</label><select name="${prefix}status">${options(core.statuses,item.suggestedStatus)}</select><label class="check"><input name="${prefix}changeDate" type="checkbox" value="yes">同步更新跟进日期</label>${field(prefix+'followupDate','建议日期',item.followupDate,'date')}${item.dateUncertain?'<p class="warning">“下周”尚未确定具体日期，请手动选择后再勾选。</p>':''}<label class="check"><input name="${prefix}changeNextAction" type="checkbox" value="yes">同步修改下一步行动</label>${field(prefix+'nextAction','建议下一步',item.nextAction)}<label class="check"><input name="${prefix}changeWaitingOn" type="checkbox" value="yes">同步设置等待反馈人</label>${field(prefix+'waitingOn','联系人 / 等待对象',item.contact)}</details></fieldset>`;
       }).join('');
-      return `<form class="card briefing-form" data-form="briefing"><button type="button" data-cancel-briefing class="back-link">← 返回录音文字</button><p class="eyebrow">REVIEW SPLIT TASKS</p><h2>已拆分 ${briefing.length} 条事项</h2><p class="muted">本机按标点和医院名称拆分，医院、项目和日期可能识别不全。请逐条核对；没有匹配到项目的内容可先放收件箱。全部确认后一次保存，未勾选的待办字段不会更改。</p>${entries}<button class="primary">确认保存所选事项</button><button type="button" data-cancel-briefing>返回修改原文</button></form>`;
+      return `<form class="card briefing-form" data-form="briefing"><button type="button" data-cancel-briefing class="back-link">← 返回录音文字</button><p class="eyebrow">REVIEW SPLIT TASKS</p><h2>已拆分 ${briefing.length} 条事项</h2><p class="muted">本机按标点和医院名称拆分，医院、项目和日期可能识别不全。请逐条核对；没有匹配到项目的内容可先放收件箱。点击“采纳”只会预先勾选下一步和有明确日期的跟进项，不会直接保存，也不改变项目状态。</p><div class="briefing-bulk-apply"><button type="button" data-apply-all-briefing>采纳全部明确匹配的建议</button><p class="muted">只处理项目匹配明确、日期具体的事项；模糊项目留给你核对。</p><output id="briefing-apply-summary" aria-live="polite">目前尚未采纳待办更新；确认后默认只保存沟通记录。</output></div>${entries}<button class="primary">确认保存所选事项</button><button type="button" data-cancel-briefing>返回修改原文</button></form>`;
     }
     if (suggestion) return `<form class="card" data-form="confirm-note"><h2>核对后保存</h2><p class="muted">${escape(suggestion.source)}。默认只追加时间线；无项目则留在收件箱。</p><p>原记录：${escape(suggestion.text)}</p><label>关联项目<select name="projectId"><option value="">仅进入收件箱</option>${state.projects.map(item => `<option value="${escape(item.id)}"${suggestion.projectId === item.id ? ' selected' : ''}>${escape(state.hospitals.find(hospital => hospital.id === item.hospitalId)?.name)}｜${escape(item.name)}</option>`).join('')}</select></label><p>识别科室：${escape(suggestion.department || '待确认')} · 人物：${escape(suggestion.contact || '待确认')}</p><label>本次进展<textarea name="progress">${escape(suggestion.progress)}</textarea></label><details><summary>可选修改行动字段（逐项勾选）</summary><label class="check"><input name="changeStatus" type="checkbox">同时修改状态</label><select name="status">${options(core.statuses, suggestion.suggestedStatus)}</select><label class="check"><input name="changeDate" type="checkbox">同时修改日期</label>${field('followupDate', '建议日期', suggestion.followupDate, 'date')}${suggestion.dateUncertain ? '<p class="warning">“下周”没有具体星期，请手工确认日期。</p>' : ''}<label class="check"><input name="changeNextAction" type="checkbox">同时修改下一步</label>${field('nextAction', '建议下一步', suggestion.nextAction)}<label class="check"><input name="changeWaitingOn" type="checkbox">同时修改等待对象</label>${field('waitingOn', '建议等待对象', suggestion.contact)}</details><button class="primary">确认保存</button><button type="button" data-cancel-note>重新编辑</button></form>`;
     return `<form class="card voice-note" data-form="note"><p class="eyebrow">VOICE CAPTURE</p><h2>医院出来，说一段就好</h2><div class="voice-panel"><button type="button" class="voice-button" data-voice-toggle>🎙 开始语音</button><p id="voice-status" class="muted" role="status" aria-live="polite">轻点麦克风开始口述，完成后点“拆分并核对”。</p></div><p class="muted">语音识别由手机浏览器提供，可能联网使用浏览器厂商的识别服务；点击麦克风才会请求使用。若相机内置浏览器或麦克风权限不支持，请在 Safari 打开，或点下方文字框使用 iPhone 键盘麦克风。业务拆分本机完成，不调用付费AI接口。</p><label>口述文字（可直接修改）<textarea name="text" required maxlength="5000" placeholder="例如：今天去示例秦皇岛医院，设备科说下周二发报价；另外示例石景山医院的核磁明细明天要送。">${escape(noteDraft)}</textarea></label><button class="primary">拆分事项并核对</button></form>`;
+  }
+  function briefingField(index){
+    return document.querySelector('.briefing-item[data-briefing-index="'+index+'"]');
+  }
+  function briefingReviewStatus(){
+    const panels=[...document.querySelectorAll('.briefing-item')];
+    let count=0;
+    for(const panel of panels){
+      const index=panel.dataset.briefingIndex;
+      const selected=name=>panel.querySelector('[name="item'+index+name+'"]');
+      const action=Boolean(selected('changeNextAction')?.checked),date=Boolean(selected('changeDate')?.checked);
+      const waiting=Boolean(selected('changeWaitingOn')?.checked),status=Boolean(selected('changeStatus')?.checked);
+      const checked=Boolean(selected('include')?.checked);
+      const adopted=checked&&(action||date);
+      if(adopted)count++;
+      const hint=panel.querySelector('.briefing-apply-hint');
+      if(hint)hint.textContent=!checked?'本条不保存':action||date||status||waiting?
+        '已勾选：'+[action?'下一步':null,date?'跟进日期':null,waiting?'等待对象':null,status?'状态':null].filter(Boolean).join(' + ')+'（保存前请核对）':
+        '默认仅保存沟通记录';
+      panel.querySelector('[data-apply-briefing]')?.setAttribute('aria-pressed',adopted?'true':'false');
+    }
+    const output=document.getElementById('briefing-apply-summary');
+    if(output)output.textContent=count?('当前已为 '+count+' 条事项勾选建议；尚未保存，最后仍须点击确认。'):
+      '目前尚未采纳待办更新；确认后默认只保存沟通记录。';
+  }
+  function applyBriefingSuggestion(index,strict=false){
+    const panel=briefingField(index),item=briefing?.[index];
+    if(!panel||!item)return false;
+    const get=name=>panel.querySelector('[name="item'+index+name+'"]');
+    const project=get('projectId');
+    if(!get('include')?.checked)return false;
+    if(!project?.value){
+      if(!strict){message('请先为事项 '+(index+1)+' 选择关联项目，再采纳跟进建议');project?.focus();}
+      return false;
+    }
+    if(strict&&(!/^(已识别项目全名|项目关键词建议)/.test(item.matchReason||'')||
+      project.value!==item.projectId||!get('followupDate')?.value))return false;
+    const action=get('nextAction'),date=get('followupDate');
+    let adopted=false;
+    if(action?.value.trim()){get('changeNextAction').checked=true;adopted=true;}
+    if(date?.value){get('changeDate').checked=true;adopted=true;}
+    if(!adopted&&!strict)message('没有可以直接采纳的明确建议。可以展开下面的选项自行填写。');
+    briefingReviewStatus();
+    return adopted;
+  }
+  function undoBriefingSuggestion(index){
+    const panel=briefingField(index);
+    if(!panel)return;
+    for(const name of ['changeNextAction','changeDate']){
+      const el=panel.querySelector('[name="item'+index+name+'"]');
+      if(el)el.checked=false;
+    }
+    briefingReviewStatus();
   }
   function stopSpeech() {
     if(!speechSession)return;
@@ -275,6 +328,14 @@
       else if (button.dataset.noteProject) { selection = button.dataset.noteProject; route = 'note'; suggestion = null; render(); }
       else if (button.dataset.filesProject || button.dataset.filesOrder) { selection = button.dataset.filesProject || button.dataset.filesOrder; route = 'files'; render(); }
       else if (button.hasAttribute('data-voice-toggle')) { voiceToggle(); }
+      else if (button.hasAttribute('data-apply-briefing')) { applyBriefingSuggestion(Number(button.dataset.applyBriefing)); }
+      else if (button.hasAttribute('data-undo-briefing')) { undoBriefingSuggestion(Number(button.dataset.undoBriefing)); }
+      else if (button.hasAttribute('data-apply-all-briefing')) {
+        let adopted=0;
+        for(let index=0;index<(briefing?.length||0);index++)if(applyBriefingSuggestion(index,true))adopted++;
+        briefingReviewStatus();
+        if(!adopted)message('没有项目和日期都明确的建议，请逐条核对；所有沟通记录尚未保存');
+      }
       else if (button.hasAttribute('data-cancel-briefing')) { briefing = null; render(); }
       else if (button.hasAttribute('data-cancel-note')) { suggestion = null; render(); }
       else if (button.dataset.preview) {
@@ -311,6 +372,19 @@
     if (event.target.id === 'business-status-filter') {
       searchStatus = event.target.value;
       updateHospitalSearch();
+    }
+    if (event.target.matches('form[data-form="briefing"] .briefing-item [name$="projectId"]')) {
+      const panel=event.target.closest('.briefing-item'),index=panel?.dataset.briefingIndex;
+      if(panel){
+        for(const suffix of ['changeNextAction','changeDate','changeWaitingOn','changeStatus']){
+          const checkbox=panel.querySelector('[name="item'+index+suffix+'"]');
+          if(checkbox)checkbox.checked=false;
+        }
+        briefingReviewStatus();
+        message('项目已更换。之前勾选的待办更新已取消，请核对新项目后重新采纳。');
+      }
+    } else if(event.target.matches('form[data-form="briefing"] .briefing-item input[type="checkbox"]')){
+      briefingReviewStatus();
     }
     if (event.target.matches('form[data-form="file"] input[type="file"]') && event.target.files?.length) {
       const form=event.target.form;

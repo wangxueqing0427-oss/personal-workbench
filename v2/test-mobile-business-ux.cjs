@@ -775,6 +775,95 @@ async function main(){
    });
    check(contactSaved.contact==='张主任'&&contactSaved.link,
      'user-approved voice contact writes to waitingOn and project timeline together in a single revision');
+   // User-requested rapid review: adoption is a draft checkbox change,
+   // not a storage write, and must never silently update status.
+   await page.locator('nav button[data-route="note"]').click();
+   const reviewSpoken='示例石景山医院核磁开机率明天回复。示例肿瘤医院TOMO设备销售下周二报价。';
+   await page.locator('form[data-form="note"] textarea[name="text"]').fill(reviewSpoken);
+   const beforeSuggestion=await page.evaluate(async()=>{
+     const s=await WorkbenchBusinessStore.read();
+     return {revision:s.revision,projectIds:s.projects.map(p=>p.id),projects:s.projects.map(p=>({
+       id:p.id,next:p.nextAction,date:p.followupDate,status:p.status
+     }))};
+   });
+   await page.locator('form[data-form="note"] button.primary').click();
+   const draftBefore=await page.locator('.briefing-item').evaluateAll(rows=>rows.map(row=>({
+     action:row.querySelector('input[name$="changeNextAction"]').checked,
+     date:row.querySelector('input[name$="changeDate"]').checked,
+     status:row.querySelector('input[name$="changeStatus"]').checked
+   })));
+   check(draftBefore.length===2&&draftBefore.every(x=>!x.action&&!x.date&&!x.status),
+     'voice suggestions default to record-only without changing current project tasks');
+   await page.locator('[data-apply-all-briefing]').click();
+   const bulk=await page.locator('.briefing-item').evaluateAll(rows=>rows.map(row=>({
+     action:row.querySelector('input[name$="changeNextAction"]').checked,
+     date:row.querySelector('input[name$="changeDate"]').checked,
+     status:row.querySelector('input[name$="changeStatus"]').checked,
+     waiting:row.querySelector('input[name$="changeWaitingOn"]').checked,
+     project:row.querySelector('select[name$="projectId"]').value,
+     enabled:row.querySelector('input[name$="include"]').checked
+   })));
+   check(bulk.length===2&&bulk.every(x=>x.action&&x.date&&!x.status&&!x.waiting&&x.project&&x.enabled),
+     'bulk one-tap adopts only clear project next-action and date fields without quietly changing status or waitingOn');
+   const afterSuggest=await page.evaluate(async()=>{
+     const s=await WorkbenchBusinessStore.read();
+     return {revision:s.revision,projectIds:s.projects.map(p=>p.id),projects:s.projects.map(p=>({
+       id:p.id,next:p.nextAction,date:p.followupDate,status:p.status
+     }))};
+   });
+   check(JSON.stringify(beforeSuggestion)===JSON.stringify(afterSuggest),
+     'batch suggestion changes review controls only and performs zero data writes before final confirmation');
+   await page.locator('.briefing-item').first().locator('select[name$="projectId"]').selectOption('');
+   const afterSwitch=await page.locator('.briefing-item').first().evaluate(row=>({
+     action:row.querySelector('input[name$="changeNextAction"]').checked,
+     date:row.querySelector('input[name$="changeDate"]').checked
+   }));
+   check(!afterSwitch.action&&!afterSwitch.date,
+     'changing project during review clears prior suggestions so proposed tasks cannot transfer to the wrong project');
+   await page.locator('.briefing-item').first().locator('input[name$="include"]').uncheck();
+   await page.locator('.briefing-item').last().locator('[data-undo-briefing]').click();
+   const undone=await page.locator('.briefing-item').last().evaluate(row=>({
+     action:row.querySelector('input[name$="changeNextAction"]').checked,
+     date:row.querySelector('input[name$="changeDate"]').checked
+   }));
+   check(!undone.action&&!undone.date,'undo resets auto-adopted action/date without undoing the original note');
+   await page.locator('.briefing-item').last().locator('[data-apply-briefing]').click();
+   const adopted=await page.locator('.briefing-item').last().evaluate(row=>({
+     action:row.querySelector('input[name$="changeNextAction"]').checked,
+     date:row.querySelector('input[name$="changeDate"]').checked,
+     status:row.querySelector('input[name$="changeStatus"]').checked
+   }));
+   check(adopted.action&&adopted.date&&!adopted.status,
+     'per-item one-tap adopts user-approved date and next action while leaving status untouched');
+   const proposed=await page.locator('.briefing-item').last().evaluate(row=>({
+     projectId:row.querySelector('select[name$="projectId"]').value,
+     next:row.querySelector('input[name$="nextAction"]').value,
+     date:row.querySelector('input[name$="followupDate"]').value
+   }));
+   await page.locator('form[data-form="briefing"] button.primary').click();
+   const saved=await page.evaluate(async projectId=>{
+     const s=await WorkbenchBusinessStore.read(),project=s.projects.find(p=>p.id===projectId);
+     const other=s.projects.find(p=>p.id!==projectId&&p.name==='核磁开机率明细');
+     const matchingNotes=s.notes.filter(n=>n.progress?.includes('示例肿瘤医院TOMO设备销售下周二报价'));
+     const skipped=s.notes.filter(n=>n.progress?.includes('示例石景山医院核磁开机率明天回复'));
+     return {revision:s.revision,project:{next:project.nextAction,date:project.followupDate,status:project.status},
+       other:{next:other.nextAction,date:other.followupDate,status:other.status},
+       notes:matchingNotes.length,skipped:skipped.length,
+       linked:matchingNotes.every(n=>project.timeline.some(e=>e.id===n.id))};
+   },proposed.projectId);
+   const prior=beforeSuggestion.projects.find(x=>x.id===proposed.projectId);
+   const priorOther=beforeSuggestion.projects.find(x=>x.id!==proposed.projectId&&beforeSuggestion.projectIds.includes(x.id)&&x.id!==proposed.projectId);
+   check(saved.revision===beforeSuggestion.revision+1&&saved.notes===1&&saved.skipped===0&&
+     saved.linked&&saved.project.next===proposed.next&&saved.project.date===proposed.date&&
+     saved.project.status===prior.status,
+     'one final approval atomically saves only included voice item with adopted date and action and no status change');
+   await page.reload({waitUntil:'load'});
+   const retained=await page.evaluate(async projectId=>{
+     const s=await WorkbenchBusinessStore.read(),p=s.projects.find(x=>x.id===projectId);
+     return {revision:s.revision,action:p.nextAction,date:p.followupDate};
+   },proposed.projectId);
+   check(retained.action===proposed.next&&retained.date===proposed.date,
+     'adopted voice follow-up survives mobile app reopen with intact action and date');
    const viewport=await page.evaluate(()=>({overflow:document.documentElement.scrollWidth>innerWidth+1}));
    check(!viewport.overflow,'original iPhone-width UI does not overflow horizontally');
    check(errors.length===0,'no script crashes or external network access during mobile business workflows');
