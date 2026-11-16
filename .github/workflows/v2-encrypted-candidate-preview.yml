@@ -35,7 +35,7 @@ jobs:
       - name: Checkout the isolated development branch only
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 1
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -115,6 +115,8 @@ jobs:
         run: |
           set -euo pipefail
           PINNED_SHA=50632b1d5da41f48719c1c9ec195d47d8be1ce9f
+          # Fetch just the audited commit, not all repository branches and history.
+          git fetch --no-tags --depth=1 origin "$PINNED_SHA"
           git cat-file -e "$PINNED_SHA^{commit}"
           git diff --name-only "$PINNED_SHA" "$GITHUB_SHA" |
             while IFS= read -r changed; do
