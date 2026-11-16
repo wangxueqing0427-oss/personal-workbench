@@ -93,6 +93,23 @@ jobs:
             console.log('ENCRYPTED_TARGET_EXISTING_EMPTY_WORKER_PASS');
           })().catch(e=>{console.error(e.message);process.exitCode=1;});
           NODE
+      - name: Refuse to overwrite a changed or already-deployed target
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          (async()=>{
+            const url='https://personal-workbench-v2-encrypted-candidate.wangxueqing0427.workers.dev/';
+            const response=await fetch(url,{redirect:'error',cache:'no-store',signal:AbortSignal.timeout(12000)});
+            if(response.status!==200)
+              throw Error('Dedicated target no longer returns the expected placeholder status; STOP');
+            const current=await response.text();
+            if(current.trim()!=='Hello World!')
+              throw Error('Dedicated target is no longer the original Hello World placeholder; refuse to overwrite it');
+            console.log('ISOLATED_TARGET_STILL_EMPTY_PLACEHOLDER_PASS');
+          })().catch(e=>{console.error(e.message);process.exitCode=1;});
+          NODE
+
       - name: Refuse release if audited application inputs changed
         shell: bash
         run: |
