@@ -120,7 +120,7 @@ jobs:
           git diff --name-only "$PINNED_SHA" "$GITHUB_SHA" |
             while IFS= read -r changed; do
               case "$changed" in
-                CURRENT.md|v2/IPHONE-CANDIDATE-ACCEPTANCE-2026-11-16.md|.github/workflows/v2-encrypted-candidate-reviewed-release.yml|v2/verify-encrypted-candidate-artifacts.cjs|v2/encrypted-candidate-preview.trigger)
+                CURRENT.md|v2/IPHONE-CANDIDATE-ACCEPTANCE-2026-11-16.md|.github/workflows/v2-encrypted-candidate-reviewed-release.yml|v2/verify-encrypted-candidate-artifacts.cjs|.github/workflows/v2-pinned-candidate-repro-check.yml|v2/encrypted-candidate-preview.trigger)
                   echo "Allowed non-application change: $changed" ;;
                 *)
                   echo "STOP: application, test, config or unknown file changed: $changed" >&2
