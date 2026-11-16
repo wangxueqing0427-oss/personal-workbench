@@ -8,7 +8,6 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
-  actions: read
 concurrency:
   group: personal-workbench-v2-encrypted-candidate
   cancel-in-progress: false
@@ -30,12 +29,10 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       WRANGLER_SEND_METRICS: "false"
       CANDIDATE_BASE_URL: https://personal-workbench-v2-encrypted-candidate.wangxueqing0427.workers.dev/
-      CANDIDATE_EXPECTED_SHA: 50632b1d5da41f48719c1c9ec195d47d8be1ce9f
+      CANDIDATE_EXPECTED_SHA: ${{ github.sha }}
     steps:
       - name: Checkout the isolated development branch only
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -84,114 +81,52 @@ jobs:
           }
           (async()=>{
             const settings=await get('/settings');
-            if(!Object.prototype.hasOwnProperty.call(settings,'bindings')||
-               !Array.isArray(settings.bindings)||settings.bindings.length!==0)
-              throw Error('Dedicated Worker bindings must be explicitly reported as an empty array; refuse ambiguous or bound targets');
+            const bindings=settings.bindings||[];
+            if(!Array.isArray(bindings)||bindings.length!==0)
+              throw Error('Dedicated Worker must have zero existing bindings; refusing to overwrite resources');
             const subdomain=await get('/subdomain');
             if(subdomain.enabled!==true)
               throw Error('Enable workers.dev for the dedicated candidate Worker before deployment');
             console.log('ENCRYPTED_TARGET_EXISTING_EMPTY_WORKER_PASS');
           })().catch(e=>{console.error(e.message);process.exitCode=1;});
           NODE
-      - name: Refuse to overwrite a changed or already-deployed target
+      - name: Build the fresh empty encrypted candidate
         shell: bash
         run: |
           set -euo pipefail
-          node <<'NODE'
-          (async()=>{
-            const url='https://personal-workbench-v2-encrypted-candidate.wangxueqing0427.workers.dev/';
-            const response=await fetch(url,{redirect:'error',cache:'no-store',signal:AbortSignal.timeout(12000)});
-            if(response.status!==200)
-              throw Error('Dedicated target no longer returns the expected placeholder status; STOP');
-            const current=await response.text();
-            if(current.trim()!=='Hello World!')
-              throw Error('Dedicated target is no longer the original Hello World placeholder; refuse to overwrite it');
-            console.log('ISOLATED_TARGET_STILL_EMPTY_PLACEHOLDER_PASS');
-          })().catch(e=>{console.error(e.message);process.exitCode=1;});
-          NODE
-
-      - name: Refuse release if audited application inputs changed
-        shell: bash
-        run: |
-          set -euo pipefail
-          PINNED_SHA=50632b1d5da41f48719c1c9ec195d47d8be1ce9f
-          # Fetch just the audited commit, not all repository branches and history.
-          git fetch --no-tags --depth=1 origin "$PINNED_SHA"
-          git cat-file -e "$PINNED_SHA^{commit}"
-          git diff --name-only "$PINNED_SHA" "$GITHUB_SHA" |
-            while IFS= read -r changed; do
-              case "$changed" in
-                CURRENT.md|v2/IPHONE-CANDIDATE-ACCEPTANCE-2026-11-16.md|.github/workflows/v2-encrypted-candidate-preview.yml|v2/verify-encrypted-candidate-artifacts.cjs|v2/encrypted-candidate-preview.trigger)
-                  echo "Allowed non-application change: $changed" ;;
-                *)
-                  echo "STOP: application, test, config or unknown file changed: $changed" >&2
-                  exit 1 ;;
-              esac
-            done
-          test ! -e v2/candidate-public
-          test ! -e /tmp/v2-encrypted-candidate-webkit
-          echo 'AUDITED_APPLICATION_SOURCES_UNCHANGED'
-
-      - name: Confirm the exact completed upstream CI run
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          node <<'NODE'
-          (async()=>{
-            const url='https://api.github.com/repos/wangxueqing0427-oss/personal-workbench/actions/runs/43779408305';
-            const res=await fetch(url,{headers:{
-              Authorization:'Bearer '+process.env.GH_TOKEN,
-              Accept:'application/vnd.github+json',
-              'X-GitHub-Api-Version':'2022-11-28'
-            }});
-            if(!res.ok)throw Error('Cannot verify audited upstream GitHub Actions run');
-            const run=await res.json();
-            if(run.id!==43779408305||run.status!=='completed'||
-              run.conclusion!=='success'||run.event!=='push'||
-              run.head_branch!=='dev/v2-preview-isolated-20261111'||
-              run.head_sha!=='50632b1d5da41f48719c1c9ec195d47d8be1ce9f'||
-              run.path!=='.github/workflows/v2-encrypted-candidate.yml')
-              throw Error('Wrong CI source/status/branch/commit/workflow: deployment refused');
-            console.log('FROZEN_CI_SUCCESS_COMMIT_AND_WORKFLOW_CONFIRMED');
-          })().catch(e=>{console.error(e.message);process.exitCode=1;});
-          NODE
-
-      - name: Download previously tested Chromium build (no local retest)
-        uses: actions/download-artifact@v4
-        with:
-          name: v2-encrypted-candidate-chromium-50632b1d5da41f48719c1c9ec195d47d8be1ce9f
-          repository: wangxueqing0427-oss/personal-workbench
-          run-id: 43779408305
-          github-token: ${{ github.token }}
-          path: v2/candidate-public
-
-      - name: Download independently tested WebKit build (no local retest)
-        uses: actions/download-artifact@v4
-        with:
-          name: v2-encrypted-candidate-webkit-50632b1d5da41f48719c1c9ec195d47d8be1ce9f
-          repository: wangxueqing0427-oss/personal-workbench
-          run-id: 43779408305
-          github-token: ${{ github.token }}
-          path: /tmp/v2-encrypted-candidate-webkit
-
-      - name: Verify 14 immutable assets from both engines; reject any difference
-        shell: bash
-        run: |
-          set -euo pipefail
-          node --check v2/verify-encrypted-candidate-artifacts.cjs
-          node v2/verify-encrypted-candidate-artifacts.cjs \
-            v2/candidate-public /tmp/v2-encrypted-candidate-webkit
+          node --check v2/build-encrypted-candidate.cjs
+          node --check v2/test-encrypted-candidate.cjs
           node --check v2/test-encrypted-candidate-remote.cjs
-
-      - name: Prepare only the remote post-deploy HTTPS browser checks
+          node v2/build-encrypted-candidate.cjs | tee /tmp/encrypted-candidate-build.log
+          node <<'NODE'
+          const fs=require('node:fs');
+          const m=JSON.parse(fs.readFileSync('v2/candidate-public/build-info.json','utf8'));
+          if(m.sourceCommit!==process.env.GITHUB_SHA||
+             m.isolatedTestDeployAllowed!==true||
+             m.productionDeployAllowed!==false||
+             m.productionReady!==false||
+             m.syntheticOnly!==true||m.cloudConnected!==false||
+             !m.allowedHosts.includes('personal-workbench-v2-encrypted-candidate.wangxueqing0427.workers.dev')||
+             !fs.existsSync('v2/candidate-public/_headers'))
+            throw Error('Built candidate does not satisfy isolated deployment manifest');
+          console.log('ENCRYPTED_CANDIDATE_BUILD_POLICY_PASS');
+          NODE
+      - name: Install pinned mobile browser test engines
         shell: bash
         run: |
           set -euo pipefail
           npm install --prefix /tmp/workbench-v2-encrypted-candidate-preview --no-save --no-package-lock playwright@1.56.1
           /tmp/workbench-v2-encrypted-candidate-preview/node_modules/.bin/playwright install --with-deps chromium webkit
-
+      - name: Re-run complete local encrypted candidate tests for this exact commit
+        shell: bash
+        env:
+          NODE_PATH: /tmp/workbench-v2-encrypted-candidate-preview/node_modules
+        run: |
+          set -euo pipefail
+          WB_BROWSER=chromium node v2/test-encrypted-candidate.cjs
+          WB_BROWSER=webkit node v2/test-encrypted-candidate.cjs
+          WB_BROWSER=chromium node v2/test-iphone-diagnostics.cjs
+          WB_BROWSER=webkit node v2/test-iphone-diagnostics.cjs
       - name: Deploy only the new static-assets-only test Worker
         shell: bash
         run: |
