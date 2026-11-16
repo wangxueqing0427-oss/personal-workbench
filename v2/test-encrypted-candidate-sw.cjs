@@ -63,9 +63,10 @@ async function main(){
     'complete verified install is eligible for activate only after all assets are cached');
   const current=keys.find(key=>key!=='workbench-v2-encrypted-candidate-older-release');
   const cache=good.names.get(current);
-  check(cache.items.size===9&&good.requests.length===9&&
+  const offlineCount=Object.keys(good.manifest.files).length-1;
+  check(cache.items.size===offlineCount&&good.requests.length===offlineCount&&
     good.requests.every(r=>r.cache==='no-store'),
-    'all nine offline assets fetched from fresh source, none skipped or satisfied from stale HTTP cache');
+    'all offline assets including diagnostics fetched from fresh source without stale HTTP cache');
   for(const [name,expected]of Object.entries(good.manifest.files)){
     if(name==='offline-sw.js')continue;
     const response=await cache.match(good.base+name);

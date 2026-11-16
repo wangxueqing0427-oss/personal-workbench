@@ -13,8 +13,12 @@ concurrency:
   cancel-in-progress: false
 jobs:
   deploy:
+    # These dedicated flags require account-owner review of the token policy and
+    # free plan. Target access/zero bindings alone DO NOT prove token scope.
     if: >-
       github.ref == 'refs/heads/dev/v2-preview-isolated-20261111' &&
+      vars.V2_ENCRYPTED_CANDIDATE_SCOPE_CONFIRMED == 'true' &&
+      vars.V2_ENCRYPTED_CANDIDATE_FREE_PLAN_CONFIRMED == 'true' &&
       vars.V2_PREVIEW_DEPLOY_ENABLED == 'true' &&
       vars.V2_PREVIEW_FREE_PLAN_CONFIRMED == 'true' &&
       vars.V2_PREVIEW_WORKER_READY == 'true'
@@ -44,7 +48,11 @@ jobs:
           node <<'NODE'
           const fs=require('node:fs');
           const c=JSON.parse(fs.readFileSync('v2/wrangler.encrypted-preview.jsonc','utf8'));
-          if(c.name!=='personal-workbench-v2-encrypted-candidate'||
+          const only=(o,keys)=>o&&Object.keys(o).every(k=>keys.includes(k));
+          if(!only(c,['name','compatibility_date','workers_dev','assets','observability'])||
+             !only(c.assets,['directory','html_handling','not_found_handling'])||
+             !only(c.observability,['enabled'])||c.observability.enabled!==false||
+             c.name!=='personal-workbench-v2-encrypted-candidate'||
              c.main!==undefined||c.workers_dev!==true||
              c.assets?.directory!=='./candidate-public'||
              c.assets?.html_handling!=='none'||
@@ -117,6 +125,8 @@ jobs:
           set -euo pipefail
           WB_BROWSER=chromium node v2/test-encrypted-candidate.cjs
           WB_BROWSER=webkit node v2/test-encrypted-candidate.cjs
+          WB_BROWSER=chromium node v2/test-iphone-diagnostics.cjs
+          WB_BROWSER=webkit node v2/test-iphone-diagnostics.cjs
       - name: Deploy only the new static-assets-only test Worker
         shell: bash
         run: |

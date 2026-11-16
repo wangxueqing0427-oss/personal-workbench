@@ -35,7 +35,7 @@ async function main(){
     assert.equal(bytes.length,spec.bytes,'deployed byte length '+name);
     assert.equal(sha(bytes),spec.sha256,'deployed SHA256 '+name);
   }
-  check(true,'all ten deployed app assets match the local SHA256 and byte manifest');
+  check(true,'all deployed app and diagnostic assets match the local SHA256 and byte manifest');
   const home=await fetch(base+'business.html',{redirect:'error'});
   const h=home.headers;
   check((h.get('x-robots-tag')||'').includes('noindex')&&
@@ -123,6 +123,15 @@ async function main(){
     }else{
       check(true,'WebKit verified the deployed HTTPS host and service worker; offline engine emulation remains covered by local source-origin 503 test');
     }
+    await page.goto(base+'iphone-diagnostics.html',{waitUntil:'load'});
+    await page.waitForFunction(()=>document.querySelector('#environment').textContent.includes('ACTIVE_CANDIDATE_SW_RESTART_NOT_TESTED'));
+    await page.locator('#report').click();
+    await page.waitForFunction(()=>document.querySelector('#result').value.includes('NOT_REQUESTED'));
+    const diagnostics=JSON.parse(await page.locator('#result').inputValue());
+    check(diagnostics.secureContext&&diagnostics.camera==='NOT_REQUESTED'&&
+      diagnostics.microphone==='NOT_REQUESTED'&&diagnostics.realDeviceAcceptance==='NOT_RUN'&&
+      diagnostics.installation==='MANUAL_CHECK_REQUIRED'&&diagnostics.offlineRestart==='MANUAL_CHECK_REQUIRED',
+      'live iPhone diagnostic page stays secure and never automatically requests media or claims physical installation');
     check(errors.length===0&&external.length===0,
       'remote candidate browser produced no JS exceptions and made no off-origin requests');
     console.log('ENCRYPTED_CANDIDATE_REMOTE_PASS '+JSON.stringify({

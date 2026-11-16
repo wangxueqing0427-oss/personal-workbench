@@ -14,7 +14,7 @@ const destination=path.join(dir,'candidate-public');
 const CANDIDATE_HOST='personal-workbench-v2-encrypted-candidate.wangxueqing0427.workers.dev';
 const sources=['business-core.js','business-ui.js','business.css',
   'privacy-delta-journal-poc.js','fresh-encrypted-boot-lab.js',
-  'build-encrypted-candidate.cjs'];
+  'build-encrypted-candidate.cjs','iphone-diagnostics.html','iphone-diagnostics.js'];
 const hash=s=>crypto.createHash('sha256').update(s).digest('hex');
 function pngChunk(type,data){
  const name=Buffer.from(type),len=Buffer.alloc(4),crcInput=Buffer.concat([name,data]);
@@ -125,6 +125,8 @@ async function main(){
    'business-core.js':inputs['business-core.js'],
    'business-ui.js':ui,
    'business.css':inputs['business.css'],
+   'iphone-diagnostics.html':inputs['iphone-diagnostics.html'],
+   'iphone-diagnostics.js':inputs['iphone-diagnostics.js'],
    'apple-touch-icon.png':appIcon(180),
    'icon-512.png':appIcon(512),
    'encrypted-store.js':encrypted,
@@ -150,6 +152,7 @@ async function main(){
  '<header><div><small>医疗业务 · 加密候选验收</small><h1>个人工作台</h1></div>',
  '<span class="badge">非正式版</span></header>',
  '<p class="boundary">仅本机合成验收；未开通正式云端，禁止录入真实医院、报价与客户资料。</p>',
+ '<p><a href="./iphone-diagnostics.html">iPhone 相机、语音与安装检查</a></p>',
  '<p id="sync-status" aria-live="polite">加密数据锁定中</p>',
  '<main id="content"></main><output id="notice" role="status" aria-live="polite"></output>',
  '<nav style="display:none" aria-label="主导航">',
@@ -209,7 +212,8 @@ async function main(){
  output['offline-sw.js']=sw;
  const whitelist=['business-core.js','business-ui.js','business.css',
    'apple-touch-icon.png','icon-512.png','encrypted-store.js',
-   'encrypted-boot.js','business.html','candidate.webmanifest','offline-sw.js'];
+   'encrypted-boot.js','business.html','candidate.webmanifest','offline-sw.js',
+   'iphone-diagnostics.html','iphone-diagnostics.js'];
  if(Object.keys(output).sort().join(',')!==whitelist.sort().join(','))
    throw Error('Candidate whitelist mismatch');
  for(const [name,source]of Object.entries(output)){

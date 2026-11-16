@@ -16,6 +16,9 @@ on:
       - v2/business-core.js
       - v2/business-ui.js
       - v2/business.css
+      - v2/iphone-diagnostics.html
+      - v2/iphone-diagnostics.js
+      - v2/test-iphone-diagnostics.cjs
   workflow_dispatch:
 permissions:
   contents: read
@@ -44,6 +47,8 @@ jobs:
           node --check v2/test-encrypted-candidate.cjs
           node --check v2/test-encrypted-candidate-sw.cjs
           node --check v2/test-encrypted-candidate-remote.cjs
+          node --check v2/iphone-diagnostics.js
+          node --check v2/test-iphone-diagnostics.cjs
           ! grep -Ei 'wrangler deploy|CLOUDFLARE_API_TOKEN|PRODUCTION_API_TOKEN' v2/build-encrypted-candidate.cjs v2/test-encrypted-candidate.cjs
           node v2/build-encrypted-candidate.cjs | tee /tmp/encrypted-candidate-build.log
           grep -F 'ENCRYPTED_CANDIDATE_BUILD_PASS' /tmp/encrypted-candidate-build.log
@@ -67,6 +72,7 @@ jobs:
         run: |
           set -euo pipefail
           node v2/test-encrypted-candidate.cjs | tee /tmp/encrypted-candidate-browser.log
+          node v2/test-iphone-diagnostics.cjs
           grep -F 'ENCRYPTED_CANDIDATE_BROWSER_PASS' /tmp/encrypted-candidate-browser.log
           grep -F '"productionReady":false' /tmp/encrypted-candidate-browser.log
           echo 'ENCRYPTED_CANDIDATE_VERIFIED_BUT_PRODUCTION_NOT_AUTHORIZED'

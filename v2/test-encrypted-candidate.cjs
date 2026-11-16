@@ -22,7 +22,7 @@ async function main(){
     manifest.allowedHosts?.includes('personal-workbench-v2-encrypted-candidate.wangxueqing0427.workers.dev')&&
     !manifest.cloudConnected,'candidate manifest allows only the isolated test host, never production or cloud data');
   const names=Object.keys(manifest.files);
-  check(names.length===10&&
+  check(names.length===12&&names.includes('iphone-diagnostics.html')&&names.includes('iphone-diagnostics.js')&&
     !names.some(name=>/business-store|offline-sync|staging|preview-privacy|legacy/i.test(name)),
     'encrypted candidate asset whitelist excludes plaintext IndexedDB and legacy V1 or staging sync');
   for(const [name,expected] of Object.entries(manifest.files)){
@@ -30,7 +30,7 @@ async function main(){
     if(sha(bytes)!==expected.sha256||bytes.length!==expected.bytes)
       throw Error('Candidate asset mutated after committed source build: '+name);
   }
-  check(true,'each of ten built candidate assets matches SHA-256 and byte manifest');
+  check(true,'each built candidate asset including iPhone diagnostics matches SHA-256 and byte manifest');
   const ui=await fs.readFile(path.join(dir,'business-ui.js'),'utf8');
   const store=await fs.readFile(path.join(dir,'encrypted-store.js'),'utf8');
   const boot=await fs.readFile(path.join(dir,'encrypted-boot.js'),'utf8');
@@ -256,6 +256,15 @@ async function main(){
     check(!await b.locator('form[data-boot="restore"]').count()&&
       !await b.locator('nav').isVisible(),
       'restored device remains password-locked and no destructive re-import is offered');
+    if(engine==='webkit')denyOrigin=true;else await aCtx.setOffline(true);
+    await a.goto(origin+'/iphone-diagnostics.html',{waitUntil:'load'});
+    await a.waitForFunction(()=>document.querySelector('#environment').textContent.includes('ACTIVE_CANDIDATE_SW_RESTART_NOT_TESTED'));
+    check(await a.locator('#capture').count()===1&&await a.locator('#microphone').count()===1,
+      'iPhone diagnostics load from the verified offline bundle and keep manual restart explicitly untested');
+    if(engine==='webkit'){
+      denyOrigin=false;
+      check(deniedRequests===0,'WebKit offline diagnostic navigation makes no request to unavailable source');
+    }else await aCtx.setOffline(false);
     check(errors.length===0,'candidate binary browser tests used no off-origin network or JS exceptions');
     console.log('ENCRYPTED_CANDIDATE_BROWSER_PASS '+JSON.stringify({
       engine,assertions:passed,buildReleaseId:manifest.releaseId,offline:true,
