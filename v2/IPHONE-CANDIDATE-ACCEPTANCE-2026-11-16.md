@@ -48,3 +48,12 @@
 - CI 将继续用既有 Playwright 1.56.1、Linux Chromium / WebKit 跑完整候选、离线完整性和新诊断测试。新提交的实际结果须读取 Actions 后记录，不能沿用基线绿灯。
 
 状态：准备工作可无凭据完成；远端 HTTPS 与真实 iPhone 为 BLOCKED。未读取真实业务数据、未部署、未修改 main / V1.5.7 / 旧站点、未启用付费服务。
+
+## 本轮最终 CI 证据
+
+- 代码提交：`50632b1d5da41f48719c1c9ec195d47d8be1ce9f`。构建 [43779408305](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43779408305) 已完成 SUCCESS（2026-11-16 08:17，Asia/Shanghai）。
+- Chromium：候选 27 + Service Worker 8 + 新诊断 12 = 47 项；WebKit：候选 29 + Service Worker 8 + 新诊断 12 = 49 项。合计 **96 PASS / 0 FAIL**；真 iPhone、Safari 系统权限、主屏幕安装和物理断网重启仍为 **BLOCKED / NOT_RUN**。
+- releaseId：`e082be181307842397b4f8f1f3c0dfd9a0ed6b74d6e8f6e71ee0831623ae465c`。清单 12 个资产（含 SW），离线缓存 11 个资产；完整性失败继续保留旧有效资源。
+- Chromium 产物 `14186749920`、WebKit 产物 `14188005310`，各 70,262 bytes，2026-11-23 08:17（Asia/Shanghai）附近到期；本轮只核实产物元数据和成功构建日志，未下载 ZIP，不把产物说成在线站点。
+- 本机验证为 47 PASS；配置门禁另验证合法配置可通过，未知 env / services、额外 assets binding 和启用 observability 共 4 种不允许配置均被拒绝。本机快照 SHA 仅用于本机验证，不用作 GitHub 代码 SHA。
+- 新代码仅触发无部署构建工作流；未写入任何部署 trigger，未发起 Cloudflare 请求或部署。最终交接文档提交只更新本文件和 CURRENT，不改变已验过的候选输入，不需重复业务测试。

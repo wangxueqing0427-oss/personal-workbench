@@ -3,6 +3,7 @@
 ## 2026-11-16｜V2 独立加密候选 iPhone 测试入口准备
 
 - 当前任务分支为 `dev/v2-preview-isolated-20261111`，读取基线 `e4b45e8fde68542ec4e5d294af46919a2f151763`；基线 Actions `43777478278` 成功且两个候选产物未过期。下方 10 月记录仅为历史，不代表当前分支状态。
+- 本轮新代码 `50632b1d5da41f48719c1c9ec195d47d8be1ce9f` 的 Actions [43779408305](https://github.com/wangxueqing0427-oss/personal-workbench/actions/runs/43779408305) 已 SUCCESS：Chromium 47、WebKit 49，合计 96 PASS / 0 FAIL；两个候选 ZIP 产物均存在。没有真机或 HTTPS 部署通过结论。
 - 本轮只推进单项“独立候选 iPhone 权限 / 安装验收准备”：诊断页纳入不可变构建与离线缓存；相机 / 麦克风按点击检测并立即释放；语音回退、Safari 分享安装、独立窗口与离线状态如实标示，未自动宣称真机通过。
 - 部署 BLOCKED：最近部署 `43776649147` 在专用 Token 非空检查失败；当前专用 Token 的唯一 Worker 范围、免费套餐状态没有可验证证据。本轮不触发部署、不重试授权、不触碰生产。现有目标零绑定不等于凭据范围已经隔离。
 - 新部署门禁要求专用 `V2_ENCRYPTED_CANDIDATE_SCOPE_CONFIRMED` 与 `V2_ENCRYPTED_CANDIDATE_FREE_PLAN_CONFIRMED`；开启前必须核对不含密钥的策略证明，仅该新 Worker 的 Editor，无账户级或其他资源权限。
