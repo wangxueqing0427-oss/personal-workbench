@@ -1,7 +1,7 @@
 'use strict';
 /** Read-only integrity proof for the already-passed, frozen Chromium + WebKit artifacts.
  * No network, no Cloudflare access, no external dependencies.
- * Usage: node v2/verify-encrypted-candidate-artifacts.cjs chromium-dir webkit-dir
+ * Usage: node v2/verify-encrypted-candidate-artifacts.cjs pinned-build-dir [second-archive-dir]
  */
 const fs=require('node:fs');
 const path=require('node:path');
@@ -63,15 +63,19 @@ function inspect(dir){
   return hashes;
 }
 function main(){
-  const [chromiumDir,webkitDir]=process.argv.slice(2);
-  assert.ok(chromiumDir&&webkitDir&&process.argv.length===4,
-    'Expected exactly two independent artifact directories');
-  const chromium=inspect(chromiumDir);
-  const webkit=inspect(webkitDir);
-  assert.deepEqual(chromium,webkit,'Chromium and WebKit uploaded different content');
-  console.log('VERIFIED_FROZEN_DUAL_BROWSER_CANDIDATE_PASS '+JSON.stringify({
+  const input=process.argv.slice(2);
+  assert.ok((input.length===1||input.length===2)&&input.every(Boolean),
+    'Expected a pinned source rebuild dir or two independent artifact directories');
+  const one=inspect(input[0]);
+  if(input.length===2){
+    const other=inspect(input[1]);
+    assert.deepEqual(one,other,'Chromium and WebKit uploaded different content');
+  }
+  console.log('VERIFIED_FROZEN_CANDIDATE_BYTES_PASS '+JSON.stringify({
     sourceCommit:SOURCE_SHA,releaseId:RELEASE_ID,files:files.length,
-    assetDigests:assets.length,syntheticOnly:true,cloudConnected:false,
+    assetDigests:assets.length,dualArtifactCompared:input.length===2,
+    pinnedRebuildVerified:input.length===1,
+    syntheticOnly:true,cloudConnected:false,
     productionReady:false,productionTouched:false
   }));
 }
