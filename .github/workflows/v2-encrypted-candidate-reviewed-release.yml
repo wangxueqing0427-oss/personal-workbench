@@ -157,32 +157,29 @@ jobs:
           })().catch(e=>{console.error(e.message);process.exitCode=1;});
           NODE
 
-      - name: Download previously tested Chromium build (no local retest)
-        uses: actions/download-artifact@v4
-        with:
-          name: v2-encrypted-candidate-chromium-50632b1d5da41f48719c1c9ec195d47d8be1ce9f
-          repository: wangxueqing0427-oss/personal-workbench
-          run-id: 43779408305
-          github-token: ${{ github.token }}
-          path: v2/candidate-public
-
-      - name: Download independently tested WebKit build (no local retest)
-        uses: actions/download-artifact@v4
-        with:
-          name: v2-encrypted-candidate-webkit-50632b1d5da41f48719c1c9ec195d47d8be1ce9f
-          repository: wangxueqing0427-oss/personal-workbench
-          run-id: 43779408305
-          github-token: ${{ github.token }}
-          path: /tmp/v2-encrypted-candidate-webkit
-
-      - name: Verify 14 immutable assets from both engines; reject any difference
+      - name: Rebuild the frozen source and prove every output byte matches audited CI
         shell: bash
         run: |
           set -euo pipefail
+          PINNED_SHA=50632b1d5da41f48719c1c9ec195d47d8be1ce9f
+          PINNED_TREE=/tmp/v2-encrypted-candidate-audited-source
+          test ! -e "$PINNED_TREE"
+          git worktree add --detach "$PINNED_TREE" "$PINNED_SHA"
+          (
+            cd "$PINNED_TREE"
+            test "$(git rev-parse HEAD)" = "$PINNED_SHA"
+            node --check v2/build-encrypted-candidate.cjs
+            node v2/build-encrypted-candidate.cjs
+          )
+          # Fixed manifest and security-header SHA256, and each of the original
+          # 12 asset hashes/lengths, are pinned from the successful Chromium+WebKit CI.
+          # A newer build or changed output MUST fail before it can reach Cloudflare.
           node --check v2/verify-encrypted-candidate-artifacts.cjs
-          node v2/verify-encrypted-candidate-artifacts.cjs \
-            v2/candidate-public /tmp/v2-encrypted-candidate-webkit
+          node v2/verify-encrypted-candidate-artifacts.cjs "$PINNED_TREE/v2/candidate-public"
+          cp -a "$PINNED_TREE/v2/candidate-public" v2/candidate-public
+          node v2/verify-encrypted-candidate-artifacts.cjs v2/candidate-public
           node --check v2/test-encrypted-candidate-remote.cjs
+          echo AUDITED_CANDIDATE_REBUILT_BYTE_IDENTICAL_WITHOUT_RETEST
 
       - name: Prepare only the remote post-deploy HTTPS browser checks
         shell: bash
