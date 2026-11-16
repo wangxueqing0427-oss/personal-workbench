@@ -84,9 +84,9 @@ jobs:
           }
           (async()=>{
             const settings=await get('/settings');
-            const bindings=settings.bindings||[];
-            if(!Array.isArray(bindings)||bindings.length!==0)
-              throw Error('Dedicated Worker must have zero existing bindings; refusing to overwrite resources');
+            if(!Object.prototype.hasOwnProperty.call(settings,'bindings')||
+               !Array.isArray(settings.bindings)||settings.bindings.length!==0)
+              throw Error('Dedicated Worker bindings must be explicitly reported as an empty array; refuse ambiguous or bound targets');
             const subdomain=await get('/subdomain');
             if(subdomain.enabled!==true)
               throw Error('Enable workers.dev for the dedicated candidate Worker before deployment');
