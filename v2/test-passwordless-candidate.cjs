@@ -132,7 +132,10 @@ async function main(){
    check(!await a.locator('[data-file-submit]').isDisabled(),'camera return displays image preview and enables explicit save');
    await a.locator('[data-cancel-camera-file]').click();
    check(await a.locator('[data-camera-result]').isHidden(),'cancel/re-take clears pending photo without saving');
-   await photoInput.setInputFiles({name:'iphone-camera-synthetic.png',mimeType:'image/png',buffer:cameraPng});
+   const keysAfterCancel=await a.evaluate(()=>WorkbenchBusinessStore.fileKeys());
+   check(keysAfterCancel.length===0,'cancel does not create an orphan encrypted file');
+   await photoInput.setInputFiles({name:'iphone-camera-synthetic-2.png',mimeType:'image/png',buffer:cameraPng});
+   check(!await a.locator('[data-file-submit]').isDisabled(),'reselect after cancel enables the save action');
    await a.locator('[data-file-submit]').click();
    await a.waitForFunction(async()=>{const state=await WorkbenchBusinessStore.read();return state.files.length===1;});
    const photoState=await a.evaluate(async()=>{
@@ -148,7 +151,7 @@ async function main(){
      const file=await WorkbenchBusinessStore.readFile(state.files[0].id);
      return {count:state.files.length,name:file.name,size:file.size,type:file.type};
    });
-   check(storedPhoto.count===1&&storedPhoto.name==='iphone-camera-synthetic.png'&&storedPhoto.size===cameraPng.length&&storedPhoto.type==='image/png','captured image is encrypted, committed and can be read back');
+   check(storedPhoto.count===1&&storedPhoto.name==='iphone-camera-synthetic-2.png'&&storedPhoto.size===cameraPng.length&&storedPhoto.type==='image/png','captured image is encrypted, committed and can be read back');
    check((await a.locator('#notice').textContent()).includes('已保存至独立本机加密候选库'),'successful camera save gives explicit success feedback');
    console.log('PASSWORDLESS_CANDIDATE_BROWSER_PASS '+JSON.stringify({engine,assertions:passed,passwordPrompt:false,syntheticOnly:true,productionTouched:false}));
  }finally{
