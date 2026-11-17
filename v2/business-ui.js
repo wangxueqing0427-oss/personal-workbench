@@ -557,22 +557,16 @@
     content.innerHTML = (views[route] || home)();
     document.querySelectorAll('nav button').forEach(button => button.classList.toggle('active', button.dataset.route === route));
   }
-  function restoreCameraSelection(){
-    if(route!=='files')return;
-    const form=document.querySelector('form[data-form="file"]');
-    const selected=['photo','gallery','file'].map(name=>form?.elements.namedItem(name)).find(input=>input?.files?.length);
-    if(selected)showCameraSelection(selected);
-  }
   document.addEventListener('visibilitychange', () => {
-    if(!document.hidden)restoreCameraSelection();
+    if(!document.hidden&&route==='files'){
+      const form=document.querySelector('form[data-form="file"]');
+      const selected=['photo','gallery','file'].map(name=>form?.elements.namedItem(name)).find(input=>input?.files?.length);
+      if(selected)showCameraSelection(selected);
+    }
     if(document.hidden&&draftTimer)flushDraft();
     if (!document.hidden && route === 'home' && today() !== lastDrawnDay) render();
   });
-  window.addEventListener('pageshow',restoreCameraSelection);
   window.addEventListener('pagehide',()=>{
-    clearCameraPreview();
-    const form=document.querySelector('form[data-form="file"]');
-    if(form)delete form.dataset.cameraSelectionKey;
     if(draftTimer)flushDraft();
   });
   document.addEventListener('click', async event => {
