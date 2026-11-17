@@ -37,6 +37,7 @@ async function main(){
    await a.getByRole('heading',{name:'欢迎使用个人工作台'}).waitFor();
    check(await a.locator('input[type=password]').count()===0,'fresh start has zero password inputs');
    check(!await a.locator('nav').isVisible(),'no business data before deliberate fresh-start action');
+   check(await a.locator('body>.diagnostics-link').isHidden(),'engineering diagnostics link is hidden from normal app layout');
    const inset=await a.evaluate(()=>parseFloat(getComputedStyle(document.querySelector('header')).paddingTop));
    check(inset>=50,'iPhone header leaves safe-area space');
    await a.locator('[data-passwordless-create]').click();
