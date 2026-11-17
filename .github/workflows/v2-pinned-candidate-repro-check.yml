@@ -1,0 +1,43 @@
+name: Verify pinned V2 candidate reproducibility without deployment
+on:
+  push:
+    branches:
+      - review/v2-pinned-candidate-release-20261116
+    paths:
+      - .github/workflows/v2-pinned-candidate-repro-check.yml
+permissions:
+  contents: read
+jobs:
+  prove-static-bytes:
+    if: github.ref == 'refs/heads/review/v2-pinned-candidate-release-20261116'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Checkout review branch, no deployment permissions
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Rebuild only audited 50632b1 source and compare 14 known CI files
+        shell: bash
+        run: |
+          set -euo pipefail
+          PINNED_SHA=50632b1d5da41f48719c1c9ec195d47d8be1ce9f
+          PINNED_TREE=/tmp/v2-encrypted-candidate-repro-audit
+          test "$GITHUB_REPOSITORY" = "wangxueqing0427-oss/personal-workbench"
+          test "$GITHUB_REF" = "refs/heads/review/v2-pinned-candidate-release-20261116"
+          git fetch --no-tags --depth=1 origin "$PINNED_SHA"
+          test ! -e "$PINNED_TREE"
+          git worktree add --detach "$PINNED_TREE" "$PINNED_SHA"
+          (
+            cd "$PINNED_TREE"
+            test "$(git rev-parse HEAD)" = "$PINNED_SHA"
+            node --check v2/build-encrypted-candidate.cjs
+            node v2/build-encrypted-candidate.cjs
+          )
+          node --check v2/verify-encrypted-candidate-artifacts.cjs
+          node v2/verify-encrypted-candidate-artifacts.cjs "$PINNED_TREE/v2/candidate-public"
+          echo 'PINNED_SOURCE_REPRODUCES_ALL_14_AUDITED_CI_FILES'
