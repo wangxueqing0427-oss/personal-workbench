@@ -137,6 +137,9 @@ async function main(){
    check(keysAfterCancel.length===0,'cancel does not create an orphan encrypted file');
    await photoInput.setInputFiles({name:'iphone-camera-synthetic-2.png',mimeType:'image/png',buffer:cameraPng});
    check(!await a.locator('[data-file-submit]').isDisabled(),'reselect after cancel enables the save action');
+   await a.evaluate(()=>{window.dispatchEvent(new Event('pagehide'));window.dispatchEvent(new Event('pageshow'));});
+   await a.locator('[data-camera-preview] img').waitFor();
+   check(!await a.locator('[data-file-submit]').isDisabled(),'camera preview and save action recover after Safari page lifecycle');
    await a.locator('[data-file-submit]').click();
    await a.waitForFunction(async()=>{const state=await WorkbenchBusinessStore.read();return state.files.length===1;});
    const photoState=await a.evaluate(async()=>{
