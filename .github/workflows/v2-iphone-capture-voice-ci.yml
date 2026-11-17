@@ -1,0 +1,70 @@
+name: V2 iPhone voice and camera fixes - isolated CI only
+on:
+  push:
+    branches:
+      - fix/v2-iphone-voice-camera-ui-20261117
+    paths:
+      - .github/workflows/v2-iphone-capture-voice-ci.yml
+      - v2/business-ui.js
+      - v2/business.css
+      - v2/build-encrypted-candidate.cjs
+      - v2/test-passwordless-candidate.cjs
+      - v2/candidate-passwordless-boot.js
+      - v2/privacy-delta-journal-poc.js
+      - v2/business-core.js
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  iphone:
+    if: github.ref == 'refs/heads/fix/v2-iphone-voice-camera-ui-20261117'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 22
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, webkit]
+    env:
+      NODE_PATH: /tmp/workbench-v2-iphone/node_modules
+      WB_BROWSER: \${{ matrix.browser }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build frozen isolated candidate only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "wangxueqing0427-oss/personal-workbench"
+          test "$GITHUB_REF" = "refs/heads/fix/v2-iphone-voice-camera-ui-20261117"
+          node --check v2/build-encrypted-candidate.cjs
+          node --check v2/business-ui.js
+          node --check v2/test-passwordless-candidate.cjs
+          node v2/build-encrypted-candidate.cjs | tee /tmp/build.log
+          grep -F 'ENCRYPTED_CANDIDATE_BUILD_PASS' /tmp/build.log
+          grep -F '"productionDeployAllowed":false' /tmp/build.log
+          grep -F '"productionReady":false' /tmp/build.log
+          grep -F 'data-camera-result' v2/candidate-public/business-ui.js
+          grep -F 'data-voice-keyboard' v2/candidate-public/business-ui.js
+          ! grep -q '设置独立恢复密码' v2/candidate-public/encrypted-boot.js
+          node v2/test-encrypted-candidate-sw.cjs
+      - name: Install isolated Playwright browser
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --prefix /tmp/workbench-v2-iphone --no-save --no-package-lock playwright@1.56.1
+          /tmp/workbench-v2-iphone/node_modules/.bin/playwright install --with-deps "$WB_BROWSER"
+      - name: Verify no-password, voice, camera, encrypted save and offline workflows
+        shell: bash
+        run: |
+          set -euo pipefail
+          node v2/test-passwordless-candidate.cjs | tee /tmp/iphone-candidate.log
+          grep -F 'PASSWORDLESS_CANDIDATE_BROWSER_PASS' /tmp/iphone-candidate.log
+      - name: Archive synthetic candidate for review only
+        uses: actions/upload-artifact@v4
+        with:
+          name: v2-iphone-candidate-\${{ matrix.browser }}-\${{ github.sha }}
+          path: v2/candidate-public/
+          if-no-files-found: error
+          retention-days: 7
