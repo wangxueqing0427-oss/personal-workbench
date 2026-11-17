@@ -598,6 +598,8 @@
       else if (button.dataset.noteProject) { selection = button.dataset.noteProject; route = 'note'; suggestion = null; render(); }
       else if (button.dataset.filesProject || button.dataset.filesOrder) { selection = button.dataset.filesProject || button.dataset.filesOrder; route = 'files'; render(); }
       else if (button.hasAttribute('data-voice-toggle')) { voiceToggle(); }
+      else if (button.hasAttribute('data-voice-keyboard')) { stopSpeech(); const textarea=document.querySelector('form[data-form="note"] textarea[name="text"]'); const status=document.getElementById('voice-status'); if(status)status.textContent='已切换到 iPhone 系统听写：请点键盘上的麦克风图标；识别结果会填入文字框。'; if(textarea)textarea.focus(); }
+      else if (button.hasAttribute('data-cancel-camera-file')) { clearCameraSelection(button.closest('form[data-form="file"]')); }
       else if (button.hasAttribute('data-clear-note-draft')){
         if(!clearDraftArmed&&noteDraft.trim()){
           clearDraftArmed=true;
