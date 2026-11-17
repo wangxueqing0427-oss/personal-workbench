@@ -1,0 +1,1 @@
+Reviewed iPhone capture/voice/UI update. Source SHA fec878d64a34552e28c1f43b4028766035a69667; require green Chromium/WebKit CI and frozen artifact hash verification. Update only personal-workbench-v2-encrypted-candidate; preserve main, V1.5.7, old data and production.
