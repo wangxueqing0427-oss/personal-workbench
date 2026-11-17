@@ -85,6 +85,56 @@ async function main(){
      check(await a.evaluate(()=>navigator.serviceWorker.controller!==null),'WebKit registers and controls offline service worker');
    }
    check(await a.locator('form[data-passwordless-restore]').count()===0,'existing record never offers destructive restore over active vault');
+   await a.evaluate(()=>{
+     window.__mockSpeechMode='success';
+     window.SpeechRecognition=class{
+       start(){
+         const self=this;
+         setTimeout(()=>{
+           self.onstart?.();
+           setTimeout(()=>{
+             if(window.__mockSpeechMode==='success'){
+               const result=[{transcript:'示例医院核磁维保跟进'}];result.isFinal=true;
+               self.onresult?.({results:[result]});
+             }else self.onerror?.({error:window.__mockSpeechMode});
+             self.onend?.();
+           },5);
+         },5);
+       }
+       stop(){this.onend?.();}
+       abort(){this.onend?.();}
+     };
+   });
+   await a.locator('nav button[data-route="note"]').click();
+   await a.locator('[data-voice-toggle]').click();
+   await a.waitForFunction(()=>document.querySelector('form[data-form="note"] textarea[name="text"]')?.value.includes('示例医院核磁维保跟进'));
+   check((await a.locator('form[data-form="note"] textarea[name="text"]').inputValue()).includes('示例医院核磁维保跟进'),'speech final transcript reaches editable note text');
+   await a.evaluate(()=>{window.__mockSpeechMode='no-speech';});
+   await a.locator('[data-voice-toggle]').click();
+   await a.getByText(/没有听到清晰语音/).waitFor();
+   check((await a.locator('#voice-status').textContent()).includes('没有听到清晰语音'),'speech no-speech failure is visible and not silent');
+   await a.locator('[data-voice-keyboard]').click();
+   check(await a.evaluate(()=>document.activeElement?.matches('form[data-form="note"] textarea[name="text"]')),'native iPhone keyboard dictation fallback focuses editable text');
+   await a.locator('nav button[data-route="files"]').click();
+   const cameraPng=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/pZcAAAAASUVORK5CYII=','base64');
+   const photoInput=a.locator('form[data-form="file"] input[name="photo"]');
+   check(await photoInput.getAttribute('capture')==='environment','camera input requests rear camera on mobile');
+   await photoInput.setInputFiles({name:'iphone-camera-synthetic.png',mimeType:'image/png',buffer:cameraPng});
+   await a.locator('[data-camera-result]:not([hidden])').waitFor();
+   await a.locator('[data-camera-preview] img').waitFor();
+   check(!await a.locator('[data-file-submit]').isDisabled(),'camera return displays image preview and enables explicit save');
+   await a.locator('[data-cancel-camera-file]').click();
+   check(await a.locator('[data-camera-result]').isHidden(),'cancel/re-take clears pending photo without saving');
+   await photoInput.setInputFiles({name:'iphone-camera-synthetic.png',mimeType:'image/png',buffer:cameraPng});
+   await a.locator('[data-file-submit]').click();
+   await a.waitForFunction(async()=>{const state=await WorkbenchBusinessStore.read();return state.files.length===1;});
+   const storedPhoto=await a.evaluate(async()=>{
+     const state=await WorkbenchBusinessStore.read();
+     const file=await WorkbenchBusinessStore.readFile(state.files[0].id);
+     return {count:state.files.length,name:file.name,size:file.size,type:file.type};
+   });
+   check(storedPhoto.count===1&&storedPhoto.name==='iphone-camera-synthetic.png'&&storedPhoto.size===cameraPng.length&&storedPhoto.type==='image/png','captured image is encrypted, committed and can be read back');
+   check((await a.locator('#notice').textContent()).includes('已保存到独立本机加密候选库'),'successful camera save gives explicit success feedback');
    console.log('PASSWORDLESS_CANDIDATE_BROWSER_PASS '+JSON.stringify({engine,assertions:passed,passwordPrompt:false,syntheticOnly:true,productionTouched:false}));
  }finally{
    for(const ctx of contexts)await ctx.close();
