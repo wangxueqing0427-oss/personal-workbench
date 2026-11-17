@@ -339,6 +339,17 @@
     if(noteDraft.trim())scheduleDraftSave(true);
     try{running.abort();}catch(_){}
   }
+  function voiceErrorMessage(reason){
+    return ({
+      'not-allowed':'麦克风权限未开放。请在 iPhone 设置或 Safari 网站设置中允许麦克风，再试一次。',
+      'service-not-allowed':'当前浏览器不允许使用语音服务。请改用 iPhone 键盘上的麦克风听写。',
+      'no-speech':'没有听到清晰语音。请靠近麦克风、避开噪声后重试；也可使用键盘麦克风。',
+      'audio-capture':'没有取得麦克风音频，请检查麦克风是否被其他应用占用。',
+      'network':'语音识别服务连接失败。请检查网络后重试，已有文字不会丢失。',
+      'language-not-supported':'当前设备不支持中文语音识别，请使用键盘麦克风。',
+      'aborted':'本次听写已取消，已有文字已保留。'
+    })[reason]||('语音识别暂不可用（'+reason+'）。请重试或使用 iPhone 键盘麦克风。');
+  }
   function voiceToggle(){
     const textarea=document.querySelector('form[data-form="note"] textarea[name="text"]');
     const status=document.getElementById('voice-status');
@@ -346,47 +357,67 @@
     if(!textarea||!toggle)return;
     if(speechSession){
       try{speechSession.stop();}catch(_){stopSpeech();}
-      if(status)status.textContent='正在结束本次听写，确认文字后可拆分';
+      if(status)status.textContent='正在结束听写，已识别文字会保留…';
       return;
     }
     const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
     if(!Recognition){
-      if(status)status.textContent='当前浏览器不提供网页语音识别。请点击文字框，使用 iPhone 键盘上的麦克风口述；文字仍可自动拆分。';
+      if(status)status.textContent='此浏览器没有提供网页语音识别。请点“使用 iPhone 键盘听写”，再点键盘上的麦克风。';
       textarea.focus();return;
     }
     const before=textarea.value.trim();
-    let recognizer;
-    try {
-      recognizer=new Recognition();recognizer.lang='zh-CN';recognizer.continuous=true;recognizer.interimResults=true;
-      recognizer.onstart=()=>{if(status)status.textContent='正在听写中文…说完后点击“结束语音”';toggle.textContent='■ 结束语音';};
+    let recognizer,finalText='',interimText='',lastError='',hasSpeech=false;
+    const paint=()=>{
+      const spoken=[finalText,interimText].filter(Boolean).join('');
+      textarea.value=[before,spoken].filter(Boolean).join(before?'\n':'');
+      noteDraft=textarea.value;scheduleDraftSave();
+    };
+    try{
+      recognizer=new Recognition();
+      recognizer.lang='zh-CN';
+      // Single-phrase sessions are more reliable on iOS Safari than continuous mode.
+      recognizer.continuous=false;
+      recognizer.interimResults=true;
+      recognizer.maxAlternatives=1;
+      recognizer.onstart=()=>{
+        if(status)status.textContent='正在听写中文…说完一句后会自动结束，长内容可再次点击继续。';
+        toggle.textContent='■ 结束听写';
+        toggle.setAttribute('aria-pressed','true');
+      };
       recognizer.onresult=event=>{
-        if(speechSession!==recognizer)return; // Ignore late callbacks from canceled sessions.
+        if(speechSession!==recognizer)return;
         let final='',interim='';
-        for(let i=0;i<event.results.length;i++){
-          const result=event.results[i],phrase=result?.[0]?.transcript||'';
-          if(result.isFinal)final+=phrase;else interim+=phrase;
+        for(let i=0;i<(event.results?.length||0);i++){
+          const result=event.results[i],phrase=String(result?.[0]?.transcript||'');
+          if(phrase)hasSpeech=true;
+          if(result?.isFinal)final+=phrase;else interim+=phrase;
         }
-        textarea.value=[before,final+interim].filter(Boolean).join(before?'\n':'');
-        noteDraft=textarea.value;
-        scheduleDraftSave();
+        if(final)finalText=final;
+        interimText=interim;
+        paint();
+        if(status)status.textContent=finalText?'已识别到文字，请检查；长内容可再次点击继续。':'正在识别…文字会实时显示，可随时手动修改。';
       };
       recognizer.onerror=event=>{
-        const reason=event?.error||'unsupported';
-        if(status)status.textContent='语音服务未成功（'+reason+'），已保留文字。可使用 iPhone 键盘麦克风，或在 Safari 重试。';
+        lastError=event?.error||'unknown';
+        if(status)status.textContent=voiceErrorMessage(lastError);
       };
       recognizer.onend=()=>{
-        if(speechSession===recognizer){
-          speechSession=null;
-          if(noteDraft.trim())scheduleDraftSave(true);
+        if(speechSession===recognizer)speechSession=null;
+        if(noteDraft.trim())scheduleDraftSave(true);
+        if(toggle.isConnected){toggle.textContent='🎙 开始语音识别';toggle.setAttribute('aria-pressed','false');}
+        if(status){
+          if(lastError)status.textContent=voiceErrorMessage(lastError)+' 已有文字保留。';
+          else if(!hasSpeech)status.textContent='这次没有识别到文字。请重试，或点“使用 iPhone 键盘听写”使用系统听写。';
+          else status.textContent='听写完成，请校对文字；长内容可再次点击继续。';
         }
-        if(toggle.isConnected)toggle.textContent='🎙 开始语音';
-        if(status&&/正在听写|正在结束/.test(status.textContent||''))status.textContent='听写结束，请检查文字，点击“拆分事项并核对”';
       };
       speechSession=recognizer;
+      if(status)status.textContent='正在请求麦克风…';
       recognizer.start();
-    }catch(_){
+    }catch(error){
       speechSession=null;
-      if(status)status.textContent='当前网页未能启动语音，请使用 Safari 或 iPhone 键盘麦克风；已输入的文字不会丢失。';
+      if(toggle.isConnected){toggle.textContent='🎙 开始语音识别';toggle.setAttribute('aria-pressed','false');}
+      if(status)status.textContent=voiceErrorMessage(error?.name||'unsupported');
       textarea.focus();
     }
   }
