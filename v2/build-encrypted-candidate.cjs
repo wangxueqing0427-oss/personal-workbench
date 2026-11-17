@@ -157,7 +157,7 @@ async function main(){
  '<header><div><small>医疗业务 · 手机测试版</small><h1>个人工作台</h1></div>',
  '<span class="badge">非正式版</span></header>',
  '<p class="boundary">仅本机合成验收；未开通正式云端，禁止录入真实医院、报价与客户资料。</p>',
- '<p><a href="./iphone-diagnostics.html">iPhone 相机、语音与安装检查</a></p>',
+ '<p class="diagnostics-link"><a href="./iphone-diagnostics.html">iPhone 相机、语音与安装检查</a></p>',
  '<p id="sync-status" aria-live="polite">正在打开本机工作台</p>',
  '<main id="content"></main><output id="notice" role="status" aria-live="polite"></output>',
  '<nav style="display:none" aria-label="主导航">',
