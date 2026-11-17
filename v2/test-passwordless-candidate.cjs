@@ -115,7 +115,8 @@ async function main(){
    check((await a.locator('#voice-status').textContent()).includes('没有听到清晰语音'),'speech no-speech failure is visible and not silent');
    await a.locator('[data-voice-keyboard]').click();
    check(await a.evaluate(()=>document.activeElement?.matches('form[data-form="note"] textarea[name="text"]')),'native iPhone keyboard dictation fallback focuses editable text');
-   await a.locator('nav button[data-route="files"]').click();
+   await a.locator('nav button[data-route="more"]').click();
+   await a.locator('button[data-route="files"]').click();
    const cameraPng=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/pZcAAAAASUVORK5CYII=','base64');
    const photoInput=a.locator('form[data-form="file"] input[name="photo"]');
    check(await photoInput.getAttribute('capture')==='environment','camera input requests rear camera on mobile');
@@ -134,7 +135,7 @@ async function main(){
      return {count:state.files.length,name:file.name,size:file.size,type:file.type};
    });
    check(storedPhoto.count===1&&storedPhoto.name==='iphone-camera-synthetic.png'&&storedPhoto.size===cameraPng.length&&storedPhoto.type==='image/png','captured image is encrypted, committed and can be read back');
-   check((await a.locator('#notice').textContent()).includes('已保存到独立本机加密候选库'),'successful camera save gives explicit success feedback');
+   check((await a.locator('#notice').textContent()).includes('已保存至独立本机加密候选库'),'successful camera save gives explicit success feedback');
    console.log('PASSWORDLESS_CANDIDATE_BROWSER_PASS '+JSON.stringify({engine,assertions:passed,passwordPrompt:false,syntheticOnly:true,productionTouched:false}));
  }finally{
    for(const ctx of contexts)await ctx.close();
