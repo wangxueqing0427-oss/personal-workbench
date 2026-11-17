@@ -853,10 +853,12 @@
             project.updatedOn=date;
           }
         }
-        console.info('CAMERA_SAVE_BEGIN',JSON.stringify({fileName:file.name,fileSize:file.size,refCount:next.files.length,refId:id}));
         await save(next, { id, value: file });
         const verifyAfter=await storage.read(),keysAfter=await storage.fileKeys();
-        console.info('CAMERA_SAVE_AFTER',JSON.stringify({stateFileCount:verifyAfter.files.length,fileKeyCount:keysAfter.length,revision:verifyAfter.revision}));
+        const savedRef=verifyAfter.files.find(item=>item.id===id);
+        if(!savedRef||savedRef.name!==file.name||savedRef.size!==file.size||
+          !keysAfter.includes(id))
+          throw new Error('原件保存后核对未通过，已保留当前页面；请先检查文件收件箱，不要重复上传。');
         clearCameraSelection(form);
       }
       render();
