@@ -553,14 +553,21 @@
     lastDrawnDay=today();
     if(route!=='note'||briefing)clearDraftArmed=false;
     const views = { home, hospitals, 'hospital-form': hospitalForm, 'project-form': projectForm, 'quick-project': quickProjectForm, 'order-followup':orderFollowupForm, 'order-confirm':orderConfirmForm, project: projectDetail, note, supplies, files, more, inbox, 'archive-note':archiveNoteForm, 'recovery-lab':recoveryLab };
+    if(route!=='files')clearCameraPreview();
     content.innerHTML = (views[route] || home)();
     document.querySelectorAll('nav button').forEach(button => button.classList.toggle('active', button.dataset.route === route));
   }
   document.addEventListener('visibilitychange', () => {
+    if(!document.hidden&&route==='files'){
+      const form=document.querySelector('form[data-form="file"]');
+      const selected=['photo','gallery','file'].map(name=>form?.elements.namedItem(name)).find(input=>input?.files?.length);
+      if(selected)showCameraSelection(selected);
+    }
     if(document.hidden&&draftTimer)flushDraft();
     if (!document.hidden && route === 'home' && today() !== lastDrawnDay) render();
   });
   window.addEventListener('pagehide',()=>{
+    clearCameraPreview();
     if(draftTimer)flushDraft();
   });
   document.addEventListener('click', async event => {
@@ -687,6 +694,7 @@
         if(toggle)toggle.textContent='🎙 开始语音';
       }
     }
+    if(event.target.matches('form[data-form="file"] input[type="file"]'))showCameraSelection(event.target);
     if (event.target.id === 'business-search') {
       searchQuery = event.target.value;
       updateHospitalSearch();
@@ -710,15 +718,7 @@
     } else if(event.target.matches('form[data-form="briefing"] .briefing-item input[type="checkbox"]')){
       briefingReviewStatus();
     }
-    if (event.target.matches('form[data-form="file"] input[type="file"]') && event.target.files?.length) {
-      const form=event.target.form;
-      for(const name of ['photo','gallery','file']){
-        const other=form?.elements.namedItem(name);
-        if(other && other!==event.target) other.value='';
-      }
-      const picked=form?.querySelector('.camera-picked');
-      if(picked)picked.textContent='已选择：'+event.target.files[0].name+' · 请核对备注后保存';
-    }
+    if(event.target.matches('form[data-form="file"] input[type="file"]'))showCameraSelection(event.target);
   });
   document.addEventListener('submit', async event => {
     const form = event.target; if (!form.dataset.form) return; event.preventDefault(); if (busy) return;
@@ -825,7 +825,10 @@
       if (form.dataset.form === 'stage') { const order = state.orders.find(item => item.id === form.dataset.id); await save(core.advanceOrder(state, order.id, core.stages[core.stages.indexOf(order.stage) + 1], today(), values)); }
       if (form.dataset.form === 'stock') await save(core.stock(state, { ...values, orderId: form.dataset.id }, today()));
       if (form.dataset.form === 'file') {
-        const file = values.photo?.size ? values.photo : values.gallery?.size ? values.gallery : values.file; if (!file?.size) throw new Error('请先拍照、选相册照片或上传文件');
+        const chosenInput=['photo','gallery','file'].map(name=>form.elements.namedItem(name)).find(input=>input?.files?.length);
+        const sourceFile=chosenInput?.files?.[0];
+        if(!sourceFile?.size)throw new Error('照片尚未返回或文件没有选中。请重新拍照，并确认系统相机已点“使用照片”。');
+        const file=sourceFile.name?sourceFile:new File([sourceFile],'照片-'+today()+'.jpg',{type:sourceFile.type||'image/jpeg',lastModified:Date.now()});
         if (file.size > 20 * 1024 * 1024) throw new Error('开发测试单文件限制20MB，请保留原件并使用较小测试文件');
         const next = structuredClone(state), id = crypto.randomUUID();
         const order = next.orders.find(item => item.id === selection);
@@ -848,6 +851,7 @@
           }
         }
         await save(next, { id, value: file });
+        clearCameraSelection(form);
       }
       render();
     } catch (error) { message(error.message); buttons.forEach(button => button.disabled = false); }
