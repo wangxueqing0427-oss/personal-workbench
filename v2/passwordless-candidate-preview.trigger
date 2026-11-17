@@ -1,0 +1,1 @@
+Approved isolated candidate update only. Source SHA 4c8062eefc1a617a63622d556ee91ca89cb72a27. GitHub run 44034772626 green on Chromium and WebKit. Existing synthetic Worker only; preserve production and old V1/V2 Workers.
