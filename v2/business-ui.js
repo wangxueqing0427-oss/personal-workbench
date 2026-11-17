@@ -853,7 +853,10 @@
             project.updatedOn=date;
           }
         }
+        console.info('CAMERA_SAVE_BEGIN',JSON.stringify({fileName:file.name,fileSize:file.size,refCount:next.files.length,refId:id}));
         await save(next, { id, value: file });
+        const verifyAfter=await storage.read(),keysAfter=await storage.fileKeys();
+        console.info('CAMERA_SAVE_AFTER',JSON.stringify({stateFileCount:verifyAfter.files.length,fileKeyCount:keysAfter.length,revision:verifyAfter.revision}));
         clearCameraSelection(form);
       }
       render();
