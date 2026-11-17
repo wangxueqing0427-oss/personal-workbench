@@ -18,7 +18,7 @@
  const message=s=>{notice.textContent=s;};
  const pointer=()=>localStorage.getItem(POINTER)||'';
  const deviceKey=()=>localStorage.getItem(DEVICE_KEY)||'';
- const validKey=k=>typeof k==='string'&&/^[a-f0-9]{64}$/.test(k);
+ const validKey=k=>typeof k==='string'&&k.length>=16&&new TextEncoder().encode(k).length<=256;
  const randomKey=()=>Array.from(crypto.getRandomValues(new Uint8Array(32)),
    b=>b.toString(16).padStart(2,'0')).join('');
  function screen(content,status){
@@ -112,10 +112,10 @@
    const button=event.target.closest('[data-passwordless-create],[data-passwordless-retry]');
    if(!button||busy||opened)return;
    if(button.hasAttribute('data-passwordless-retry')){void resume();return;}
-   if(pointer()||deviceKey()){void resume();return;}
+   if(pointer()){void resume();return;}
    busy=true;button.disabled=true;
    try{
-     const key=randomKey();
+     const key=deviceKey()||randomKey();
      const vault=await CRYPTO.create(key);
      // Publish the identity only after the encrypted vault was created.
      localStorage.setItem(DEVICE_KEY,key);
