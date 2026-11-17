@@ -135,6 +135,14 @@ async function main(){
    await photoInput.setInputFiles({name:'iphone-camera-synthetic.png',mimeType:'image/png',buffer:cameraPng});
    await a.locator('[data-file-submit]').click();
    await a.waitForFunction(async()=>{const state=await WorkbenchBusinessStore.read();return state.files.length===1;});
+   const photoState=await a.evaluate(async()=>{
+     const state=await WorkbenchBusinessStore.read();
+     const keys=await WorkbenchBusinessStore.fileKeys();
+     return {files:state.files,keys,notice:document.getElementById('notice')?.textContent||''};
+   });
+   console.log('CAMERA_SAVE_DIAGNOSTIC '+JSON.stringify(photoState));
+   check(photoState.files.length===1&&Boolean(photoState.files[0]?.id),'camera save persists exactly one business file reference');
+   check(photoState.keys.length===1,'camera save persists one encrypted file manifest');
    const storedPhoto=await a.evaluate(async()=>{
      const state=await WorkbenchBusinessStore.read();
      const file=await WorkbenchBusinessStore.readFile(state.files[0].id);
