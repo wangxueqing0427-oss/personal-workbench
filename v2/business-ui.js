@@ -10,7 +10,7 @@
   const options = (values, current) => values.map(value => `<option${value === current ? ' selected' : ''}>${escape(value)}</option>`).join('');
   const field = (name, label, value = '', type = 'text') => `<label>${label}<input name="${name}" type="${type}" value="${escape(value)}"></label>`;
   let state, route = 'home', selection = '', suggestion = null, briefing = null, noteDraft = '', speechSession = null, busy = false;
-  let freshLabStatus = '';
+  let freshLabStatus = '', pendingCameraPreviewUrl = null;
   let backupInfo=null, pendingExternalBackup=null;
   const hasPrivateBackupStatus=()=>typeof storage.backupStatus==='function' &&
     typeof storage.confirmExternalBackup==='function';
@@ -33,6 +33,60 @@
   let draftStatus='', draftTimer=null, draftWriteChain=Promise.resolve(), clearDraftArmed=false;
   let searchQuery = '', searchStatus = '全部', quickTomorrow = false, quickIntent = 'edit', supplyFilter = 'all';
   function message(value) { notice.textContent = value; }
+  function clearCameraPreview(){
+    if(pendingCameraPreviewUrl){URL.revokeObjectURL(pendingCameraPreviewUrl);pendingCameraPreviewUrl=null;}
+  }
+  function showCameraSelection(input){
+    if(!input?.matches('form[data-form="file"] input[type="file"]'))return;
+    const file=input.files?.[0];if(!file)return;
+    const form=input.form;if(!form)return;
+    const key=[input.name,file.name,file.size,file.lastModified].join(':');
+    if(form.dataset.cameraSelectionKey===key)return;
+    form.dataset.cameraSelectionKey=key;
+    for(const name of ['photo','gallery','file']){
+      const other=form.elements.namedItem(name);
+      if(other&&other!==input)other.value='';
+    }
+    clearCameraPreview();
+    const result=form.querySelector('[data-camera-result]');
+    const preview=form.querySelector('[data-camera-preview]');
+    const label=form.querySelector('[data-camera-file-label]');
+    const submit=form.querySelector('[data-file-submit]');
+    if(!result||!preview||!label||!submit)return;
+    result.hidden=false;preview.replaceChildren();
+    label.textContent='已选中：'+(file.name||'相机照片')+' · '+(file.size/1024/1024).toFixed(2)+' MB';
+    const isImage=file.type.startsWith('image/')||/\.(jpe?g|png|webp|gif|heic|heif)$/i.test(file.name||'');
+    if(isImage){
+      pendingCameraPreviewUrl=URL.createObjectURL(file);
+      const image=document.createElement('img');
+      image.alt='待保存照片预览';image.src=pendingCameraPreviewUrl;
+      image.onload=()=>{if(preview.isConnected)preview.dataset.previewState='ready';};
+      image.onerror=()=>{
+        if(preview.isConnected){preview.dataset.previewState='unsupported';preview.textContent='照片已选中；此格式无法在浏览器内预览，但仍可保存原件。';}
+      };
+      preview.append(image);
+    }else{
+      const icon=document.createElement('span');icon.className='camera-file-icon';icon.textContent='📄';
+      preview.append(icon);
+    }
+    submit.disabled=false;
+    submit.textContent=isImage?'保存照片到工作台':'保存文件到工作台';
+    const cancel=form.querySelector('[data-cancel-camera-file]');if(cancel)cancel.hidden=false;
+    label.setAttribute('aria-live','polite');
+    result.scrollIntoView({behavior:'auto',block:'nearest'});
+  }
+  function clearCameraSelection(form){
+    if(!form)return;
+    clearCameraPreview();
+    for(const name of ['photo','gallery','file']){
+      const input=form.elements.namedItem(name);if(input)input.value='';
+    }
+    delete form.dataset.cameraSelectionKey;
+    const result=form.querySelector('[data-camera-result]');if(result)result.hidden=true;
+    const preview=form.querySelector('[data-camera-preview]');if(preview)preview.replaceChildren();
+    const submit=form.querySelector('[data-file-submit]');if(submit){submit.disabled=true;submit.textContent='保存所选原件';}
+  }
+
   async function save(next, file, options) {
     if (!compatible()) throw new Error('版本不兼容 / 同步已暂停');
     state = await storage.commit(next, state.revision, file, options);
