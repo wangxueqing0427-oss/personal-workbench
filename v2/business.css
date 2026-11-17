@@ -380,3 +380,12 @@ nav{
 @media(prefers-reduced-motion:reduce){
   nav,button{transition:none}
 }
+
+.voice-button[data-voice-keyboard]{
+  background:var(--accent);border-color:var(--accent);color:#fff;
+  box-shadow:0 4px 12px rgba(20,99,128,.13);
+}
+.voice-keyboard-button[data-voice-toggle]{
+  background:#fff;border-color:#d9e7ed;color:#426779;
+  font-size:13px;font-weight:620;
+}
