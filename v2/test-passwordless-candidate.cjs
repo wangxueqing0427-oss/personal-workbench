@@ -28,6 +28,7 @@ async function main(){
    const ctx=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,locale:'zh-CN',acceptDownloads:true});
    contexts.push(ctx);const page=await ctx.newPage();
    page.on('pageerror',e=>{console.error('PAGE_ERROR: '+e.message);});
+   page.on('console',msg=>{if(msg.type()==='error'||msg.text().includes('CAMERA_SAVE_'))console.log('BROWSER_CONSOLE '+msg.text());});
    await page.goto(origin+'/business.html',{waitUntil:'load'});
    return {ctx,page};
  };
