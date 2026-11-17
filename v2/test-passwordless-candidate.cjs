@@ -109,12 +109,18 @@ async function main(){
    await a.locator('[data-voice-toggle]').click();
    await a.waitForFunction(()=>document.querySelector('form[data-form="note"] textarea[name="text"]')?.value.includes('示例医院核磁维保跟进'));
    check((await a.locator('form[data-form="note"] textarea[name="text"]').inputValue()).includes('示例医院核磁维保跟进'),'speech final transcript reaches editable note text');
+   check(await a.locator('.voice-panel button').first().getAttribute('data-voice-keyboard')!==null,'native iPhone dictation is the primary voice action');
    await a.evaluate(()=>{window.__mockSpeechMode='no-speech';});
    await a.locator('[data-voice-toggle]').click();
    await a.getByText(/没有听到清晰语音/).waitFor();
    check((await a.locator('#voice-status').textContent()).includes('没有听到清晰语音'),'speech no-speech failure is visible and not silent');
    await a.locator('[data-voice-keyboard]').click();
    check(await a.evaluate(()=>document.activeElement?.matches('form[data-form="note"] textarea[name="text"]')),'native iPhone keyboard dictation fallback focuses editable text');
+   await a.locator('nav button[data-route="home"]').click();
+   await a.locator('[data-start-voice]').click();
+   await a.locator('form[data-form="note"] textarea[name="text"]').waitFor();
+   check(await a.evaluate(()=>document.activeElement?.matches('form[data-form="note"] textarea[name="text"]')),'home voice shortcut opens native iPhone dictation directly');
+   check((await a.locator('#voice-status').textContent()).includes('iPhone 键盘上的麦克风'),'home voice shortcut explains the native microphone action');
    await a.locator('nav button[data-route="more"]').click();
    await a.locator('button[data-route="files"]').click();
    const cameraPng=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/pZcAAAAASUVORK5CYII=','base64');
