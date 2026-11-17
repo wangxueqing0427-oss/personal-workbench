@@ -389,3 +389,5 @@ nav{
   background:#fff;border-color:#d9e7ed;color:#426779;
   font-size:13px;font-weight:620;
 }
+
+body>.diagnostics-link{display:none}
