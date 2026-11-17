@@ -13,7 +13,7 @@ const dir=__dirname,root=path.resolve(dir,'..');
 const destination=path.join(dir,'candidate-public');
 const CANDIDATE_HOST='personal-workbench-v2-encrypted-candidate.wangxueqing0427.workers.dev';
 const sources=['business-core.js','business-ui.js','business.css',
-  'privacy-delta-journal-poc.js','fresh-encrypted-boot-lab.js',
+  'privacy-delta-journal-poc.js','candidate-passwordless-boot.js',
   'build-encrypted-candidate.cjs','iphone-diagnostics.html','iphone-diagnostics.js'];
 const hash=s=>crypto.createHash('sha256').update(s).digest('hex');
 function pngChunk(type,data){
@@ -85,17 +85,9 @@ async function main(){
    .replaceAll('synthetic-sharded-local-only','encrypted-candidate-local-only');
  if(encrypted.includes('__WORKBENCH_SYNTHETIC_SHARDED_TEST__'))
    throw Error('Old test flag in cryptographic candidate');
- let boot=inputs['fresh-encrypted-boot-lab.js'];
- boot=patch(boot,
-   "if(root.__WORKBENCH_ENCRYPTED_BOOT_LAB__!==true||\n    !['127.0.0.1','localhost'].includes(location.hostname)||\n    !root.WorkbenchDeltaCryptoPOC||!root.WorkbenchBusiness)return;",
-   "if(!['127.0.0.1','localhost','personal-workbench-v2-encrypted-candidate.wangxueqing0427.workers.dev'].includes(location.hostname)||\n    !root.WorkbenchEncryptedCandidateStore||!root.WorkbenchBusiness)return;",
-   'password-before-UI gate');
- boot=boot.replaceAll('WorkbenchDeltaCryptoPOC','WorkbenchEncryptedCandidateStore')
-   .replaceAll('workbench-v2-synthetic-encrypted-vault-id-v1',
-     'workbench-v2-candidate-encrypted-vault-id-v1')
-   .replaceAll('仅本机合成加密演示','独立本机加密候选 · 禁止真实资料');
- if(boot.includes('__WORKBENCH_ENCRYPTED_BOOT_LAB__'))
-   throw Error('Old lab flag in candidate boot');
+ let boot=inputs['candidate-passwordless-boot.js'];
+ if(boot.includes('__WORKBENCH_ENCRYPTED_BOOT_LAB__')||boot.includes('data-boot="create"'))
+   throw Error('Old manual password gate must not ship in passwordless candidate');
  let ui=inputs['business-ui.js'];
  const seedStart=ui.indexOf('  // New official origins MUST start empty.');
  const seedEnd=ui.indexOf('  const statusTag = status =>',seedStart);
@@ -121,10 +113,23 @@ async function main(){
    'if (file.size > 16 * 1024 * 1024)');
  if(/示例秦皇岛医院|示例石景山医院|示例肿瘤医院|mayUseSyntheticDemo|personalWorkbench/.test(ui))
    throw Error('Candidate includes demonstration hospitals or legacy import');
+ ui=patch(ui,
+   'const archive=await storage.exportEncryptedBackup();',
+   'const archive=await storage.exportEncryptedBackup();\n        if(globalThis.WorkbenchPasswordlessCandidate){archive.passwordlessOnly=true;archive.passwordlessKey=globalThis.WorkbenchPasswordlessCandidate.exportRecoveryKey();}',
+   'export self-recoverable passwordless bundle');
+ ui=ui.replaceAll('文件丢失或忘记密码将无法恢复。',
+   '清除浏览器数据可能丢失记录；备份文件含恢复密钥，请妥善保存。');
+ ui=ui.replaceAll('恢复密码和文件仍需自行妥善保存。',
+   '备份包含可恢复的设备密钥，请在手机文件App妥善保存。');
+ const style=inputs['business.css']+'\n/* Passwordless iPhone candidate: real iOS notch and neat first viewport. */\n'+
+   'header{padding-top:max(56px,calc(18px + env(safe-area-inset-top)));}\n'+
+   'body>p:not(.boundary),body>#sync-status{max-width:920px;margin:0 auto;padding:6px 18px;font-size:13px;color:#567487;}\n'+
+   '.encrypted-boot-shell{max-width:640px;margin:12px auto;}\n'+
+   '.encrypted-boot-shell>button.primary{display:block;width:100%;min-height:54px;margin:18px 0 12px;}\n';
  const output={
    'business-core.js':inputs['business-core.js'],
    'business-ui.js':ui,
-   'business.css':inputs['business.css'],
+   'business.css':style,
    'iphone-diagnostics.html':inputs['iphone-diagnostics.html'],
    'iphone-diagnostics.js':inputs['iphone-diagnostics.js'],
    'apple-touch-icon.png':appIcon(180),
@@ -149,11 +154,11 @@ async function main(){
  '<link rel="manifest" href="./candidate.webmanifest">',
  '<link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">',
  '<link rel="stylesheet" href="./business.css"></head><body>',
- '<header><div><small>医疗业务 · 加密候选验收</small><h1>个人工作台</h1></div>',
+ '<header><div><small>医疗业务 · 手机测试版</small><h1>个人工作台</h1></div>',
  '<span class="badge">非正式版</span></header>',
  '<p class="boundary">仅本机合成验收；未开通正式云端，禁止录入真实医院、报价与客户资料。</p>',
  '<p><a href="./iphone-diagnostics.html">iPhone 相机、语音与安装检查</a></p>',
- '<p id="sync-status" aria-live="polite">加密数据锁定中</p>',
+ '<p id="sync-status" aria-live="polite">正在打开本机工作台</p>',
  '<main id="content"></main><output id="notice" role="status" aria-live="polite"></output>',
  '<nav style="display:none" aria-label="主导航">',
  '<button data-route="home">今日</button><button data-route="hospitals">医院业务</button>',
