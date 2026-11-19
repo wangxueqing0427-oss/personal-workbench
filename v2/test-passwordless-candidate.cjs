@@ -28,7 +28,7 @@ async function main(){
    const ctx=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,locale:'zh-CN',acceptDownloads:true});
    contexts.push(ctx);const page=await ctx.newPage();
    page.on('pageerror',e=>{console.error('PAGE_ERROR: '+e.message);});
-   page.on('console',msg=>{if(msg.type()==='error'||/FORM_SUBMIT_|CAMERA_FILE_REF_|CAMERA_SAVE_/.test(msg.text()))console.log('BROWSER_CONSOLE '+msg.text());});
+   page.on('console',msg=>{if(msg.type()==='error')console.log('BROWSER_CONSOLE '+msg.text());});
    await page.goto(origin+'/business.html',{waitUntil:'load'});
    return {ctx,page};
  };
@@ -143,27 +143,8 @@ async function main(){
    const photoState=await a.evaluate(async()=>{
      const state=await WorkbenchBusinessStore.read();
      const keys=await WorkbenchBusinessStore.fileKeys();
-     const queue=await WorkbenchBusinessStore.queueData();
-     const db=await new Promise((resolve,reject)=>{
-       const request=indexedDB.open(WorkbenchBusinessStore.name);
-       request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);
-     });
-     const raw=await new Promise((resolve,reject)=>{
-       const tx=db.transaction(['state','objects','jobs'],'readonly');
-       const current=tx.objectStore('state').get('current');
-       const objects=tx.objectStore('objects').getAllKeys();
-       const jobs=tx.objectStore('jobs').getAllKeys();
-       tx.oncomplete=()=>resolve({revision:current.result?.revision,objectKeys:objects.result,jobKeys:jobs.result});
-       tx.onerror=()=>reject(tx.error);
-     });
-     db.close();
-     return {
-       files:state.files,keys,notice:document.getElementById('notice')?.textContent||'',
-       queue:queue.jobs.map(job=>({revision:job.localRevision,changes:job.changes.map(change=>change.kind+':'+change.id)})),
-       raw
-     };
+     return {files:state.files,keys,notice:document.getElementById('notice')?.textContent||''};
    });
-   console.log('CAMERA_SAVE_DIAGNOSTIC '+JSON.stringify(photoState));
    check(photoState.files.length===1&&Boolean(photoState.files[0]?.id),'camera save persists exactly one business file reference');
    check(photoState.keys.length===1,'camera save persists one encrypted file manifest');
    const storedPhoto=await a.evaluate(async()=>{
