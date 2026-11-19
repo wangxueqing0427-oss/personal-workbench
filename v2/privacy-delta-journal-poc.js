@@ -236,17 +236,7 @@
   async function wrap(name,db,h,initialKey){
     let key=initialKey;
     const unlocked=()=>{if(!key)fail('本机数据已锁定，需要使用恢复口令重新解锁');};
-    const read=async()=>{
-      unlocked();
-      const shot=await readStateParts(db);
-      const decoded=await decodeState(key,h,shot.state,shot.objects);
-      if(decoded?.files?.length||shot.objects.some(row=>String(row.key).startsWith('files:')))
-        console.info('DELTA_READ_DIAGNOSTIC',JSON.stringify({
-          revision:decoded?.revision,files:decoded?.files?.map(x=>x.id),
-          objectFileKeys:shot.objects.filter(row=>String(row.key).startsWith('files:')).map(row=>row.key)
-        }));
-      return copy(decoded);
-    };
+    const read=async()=>{unlocked();const shot=await readStateParts(db);return copy(await decodeState(key,h,shot.state,shot.objects));};
     async function readDraft(){
       unlocked();
       const row=await get(db,'state',DRAFT_KEY);
@@ -402,12 +392,6 @@
       }
       if(seen.size!==oldMap.size+updates.filter(row=>!oldMap.has(row.id)).length)
         fail('业务对象删除或出现孤立对象，拒绝静默丢失');
-      console.info('DELTA_COMMIT_PREPARE',JSON.stringify({
-        revision:state.revision,inputFileCount:input.files?.length,stateFileCount:state.files.length,
-        collectionFiles:collections.files,
-        updateFileKeys:updates.filter(row=>row.id.startsWith('files:')).map(row=>row.id),
-        changeFileCount:changes.filter(row=>row.kind==='files').length
-      }));
       const meta={schema:2,revision:state.revision,collections};
       const encryptedState={revision:state.revision,...await sealJson(key,meta,label(h,'state',state.revision))};
       const job={id:crypto.randomUUID(),localRevision:state.revision,baseRevision:expected,
@@ -435,17 +419,8 @@
             tx.objectStore('jobs').add(encryptedJob,state.revision);
           }catch(error){problem=error;tx.abort();}
         };
-        tx.oncomplete=()=>{
-          console.info('DELTA_COMMIT_TX_COMPLETE',JSON.stringify({
-            revision:state.revision,collectionFiles:collections.files,
-            updateFileKeys:updates.filter(row=>row.id.startsWith('files:')).map(row=>row.id)
-          }));
-          resolve(copy(state));
-        };
-        tx.onabort=tx.onerror=()=>{
-          console.error('DELTA_COMMIT_TX_ABORT',problem?.message||tx.error?.message||'unknown');
-          reject(problem||tx.error||Error('加密事务已完整回滚'));
-        };
+        tx.oncomplete=()=>resolve(copy(state));
+        tx.onabort=tx.onerror=()=>reject(problem||tx.error||Error('加密事务已完整回滚'));
       });
     }
     async function readFile(id){
