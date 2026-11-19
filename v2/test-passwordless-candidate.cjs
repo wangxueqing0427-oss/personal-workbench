@@ -143,7 +143,25 @@ async function main(){
    const photoState=await a.evaluate(async()=>{
      const state=await WorkbenchBusinessStore.read();
      const keys=await WorkbenchBusinessStore.fileKeys();
-     return {files:state.files,keys,notice:document.getElementById('notice')?.textContent||''};
+     const queue=await WorkbenchBusinessStore.queueData();
+     const db=await new Promise((resolve,reject)=>{
+       const request=indexedDB.open(WorkbenchBusinessStore.name);
+       request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);
+     });
+     const raw=await new Promise((resolve,reject)=>{
+       const tx=db.transaction(['state','objects','jobs'],'readonly');
+       const current=tx.objectStore('state').get('current');
+       const objects=tx.objectStore('objects').getAllKeys();
+       const jobs=tx.objectStore('jobs').getAllKeys();
+       tx.oncomplete=()=>resolve({revision:current.result?.revision,objectKeys:objects.result,jobKeys:jobs.result});
+       tx.onerror=()=>reject(tx.error);
+     });
+     db.close();
+     return {
+       files:state.files,keys,notice:document.getElementById('notice')?.textContent||'',
+       queue:queue.jobs.map(job=>({revision:job.localRevision,changes:job.changes.map(change=>change.kind+':'+change.id)})),
+       raw
+     };
    });
    console.log('CAMERA_SAVE_DIAGNOSTIC '+JSON.stringify(photoState));
    check(photoState.files.length===1&&Boolean(photoState.files[0]?.id),'camera save persists exactly one business file reference');
