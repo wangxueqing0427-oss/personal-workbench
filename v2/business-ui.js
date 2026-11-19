@@ -724,8 +724,7 @@
   });
   document.addEventListener('submit', async event => {
     const form = event.target; if (!form.dataset.form) return; event.preventDefault();
-    console.info('FORM_SUBMIT_EVENT',form.dataset.form,'busy='+busy);
-    if(busy){console.info('FORM_SUBMIT_SKIPPED_BUSY',form.dataset.form);return;}
+    if(busy)return;
     busy = true; const values = Object.fromEntries(new FormData(form));
     const buttons = [...form.querySelectorAll('button')]; buttons.forEach(button => button.disabled = true);
     try {
@@ -842,7 +841,6 @@
         const remark=String(values.remark||'').trim();
         if(remark.length>1000)throw new Error('备注不能超过1000字，原件尚未保存');
         next.files.push({ id, name: file.name, size: file.size, type: file.type, projectId, createdOn: today(), remark });
-        console.info('CAMERA_FILE_REF_PUSHED',JSON.stringify({count:next.files.length,id}));
         if (project) project.fileIds.push(id);
         if (order) order.fileIds.push(id);
         if (remark) {
