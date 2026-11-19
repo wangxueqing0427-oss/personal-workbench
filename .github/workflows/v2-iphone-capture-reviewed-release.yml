@@ -94,12 +94,14 @@ jobs:
             const r=await fetch(base+'build-info.json',{cache:'no-store',redirect:'error',signal:AbortSignal.timeout(12000)});
             if(r.status!==200)throw Error('Candidate target no longer returns expected build manifest');
             const old=await r.json();
-            if(old.releaseId!==process.env.PREVIOUS_RELEASE_ID||
-               old.sourceCommit!=='4c8062eefc1a617a63622d556ee91ca89cb72a27'||
-               old.syntheticOnly!==true||old.cloudConnected!==false||
-               old.productionReady!==false||old.productionDeployAllowed!==false)
-               throw Error('Candidate target diverged; do not overwrite');
-            console.log('ORIGINAL_SYNTHETIC_RELEASE_GUARD_PASS');
+            const safe=old.syntheticOnly===true&&old.cloudConnected===false&&
+              old.productionReady===false&&old.productionDeployAllowed===false;
+            const already=old.releaseId===process.env.EXPECTED_RELEASE_ID&&
+              old.sourceCommit===process.env.ORIGINAL_SOURCE_SHA&&safe;
+            const previous=old.releaseId===process.env.PREVIOUS_RELEASE_ID&&
+              old.sourceCommit==='4c8062eefc1a617a63622d556ee91ca89cb72a27'&&safe;
+            if(!already&&!previous)throw Error('Candidate target diverged; do not overwrite');
+            console.log(already?'EXPECTED_CANDIDATE_ALREADY_PRESENT_PASS':'ORIGINAL_SYNTHETIC_RELEASE_GUARD_PASS');
           })().catch(error=>{console.error(error.message);process.exitCode=1;});
           NODE
       - name: Verify original green Linux Chromium and WebKit build
@@ -173,12 +175,37 @@ jobs:
           set -euo pipefail
           npm install --prefix /tmp/v2-iphone-remote --no-save --no-package-lock playwright@1.56.1
           /tmp/v2-iphone-remote/node_modules/.bin/playwright install --with-deps chromium webkit
-      - name: Deploy only the dedicated synthetic test Worker
+      - name: Deploy only the dedicated synthetic test Worker (idempotent)
         shell: bash
         run: |
           set -euo pipefail
-          cd /tmp/v2-passwordless-frozen
-          npx --yes wrangler@4.149.0 deploy --config v2/wrangler.encrypted-preview.jsonc
+          DEPLOY_ACTION="$(node <<'NODE'
+          (async()=>{
+            const base=process.env.BASE_URL;
+            const r=await fetch(base+'build-info.json',{cache:'no-store',redirect:'error',signal:AbortSignal.timeout(12000)});
+            if(r.status!==200)throw Error('Candidate target unavailable immediately before deploy');
+            const old=await r.json();
+            const safe=old.syntheticOnly===true&&old.cloudConnected===false&&
+              old.productionReady===false&&old.productionDeployAllowed===false;
+            const already=old.releaseId===process.env.EXPECTED_RELEASE_ID&&
+              old.sourceCommit===process.env.ORIGINAL_SOURCE_SHA&&safe;
+            const previous=old.releaseId===process.env.PREVIOUS_RELEASE_ID&&
+              old.sourceCommit==='4c8062eefc1a617a63622d556ee91ca89cb72a27'&&safe;
+            if(already){process.stdout.write('skip');return;}
+            if(previous){process.stdout.write('deploy');return;}
+            throw Error('Candidate target changed after preflight; refusing deployment');
+          })().catch(error=>{console.error(error.message);process.exitCode=1;});
+          NODE
+          )"
+          if [ "$DEPLOY_ACTION" = "deploy" ]; then
+            cd /tmp/v2-passwordless-frozen
+            npx --yes wrangler@4.149.0 deploy --config v2/wrangler.encrypted-preview.jsonc
+          elif [ "$DEPLOY_ACTION" = "skip" ]; then
+            echo "Expected candidate already deployed; skip overwrite and continue remote verification."
+          else
+            echo "Unexpected deploy decision; stop." >&2
+            exit 1
+          fi
       - name: Verify live HTTPS asset hashes and passwordless boot in both engines
         shell: bash
         run: |
@@ -231,13 +258,17 @@ jobs:
                 await page.locator('[data-camera-preview] img').waitFor();
                 check(!await page.locator('[data-file-submit]').isDisabled(),name+' camera preview and save action');
                 await page.locator('[data-file-submit]').click();
-                await page.waitForFunction(async()=>{const s=await WorkbenchBusinessStore.read();return s.files.length===1;});
+                await page.waitForFunction(
+                  ()=>document.getElementById('notice')?.textContent.includes('已保存至独立本机加密候选库'),
+                  null,{timeout:10000}
+                );
                 const saved=await page.evaluate(async()=>{
                   const s=await WorkbenchBusinessStore.read();
                   const f=await WorkbenchBusinessStore.readFile(s.files[0].id);
                   return {count:s.files.length,name:f.name,size:f.size,type:f.type};
                 });
-                check(saved.count===1&&saved.name==='remote-iphone-synthetic.png'&&saved.size===png.length,name+' encrypted camera file readback');
+                check(saved.count===1&&saved.name==='remote-iphone-synthetic.png'&&saved.size===png.length&&saved.type==='image/png',name+' encrypted camera file readback');
+                check((await page.locator('#notice').textContent()).includes('已保存至独立本机加密候选库'),name+' explicit camera save receipt');
                 await ctx.close();
               }finally{await browser.close();}
             }
