@@ -139,7 +139,7 @@ async function main(){
    await photoInput.setInputFiles({name:'iphone-camera-synthetic-2.png',mimeType:'image/png',buffer:cameraPng});
    check(!await a.locator('[data-file-submit]').isDisabled(),'reselect after cancel enables the save action');
    await a.locator('[data-file-submit]').click();
-   await a.waitForFunction(async()=>{const state=await WorkbenchBusinessStore.read();return state.files.length===1;});
+   await a.waitForFunction(()=>document.getElementById('notice')?.textContent.includes('已保存至独立本机加密候选库'),{timeout:10000});
    const photoState=await a.evaluate(async()=>{
      const state=await WorkbenchBusinessStore.read();
      const keys=await WorkbenchBusinessStore.fileKeys();
