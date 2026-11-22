@@ -6,3 +6,5 @@ Release gate now rechecks the dedicated Worker immediately before deploy and ski
 Remote smoke tests wait for the explicit camera save receipt before checking encrypted file readback.
 Deploy only the existing personal-workbench-v2-encrypted-candidate Worker if every scope, previous-release and free-plan guard passes.
 Never deploy to main, V1.5.7 or production; keep productionReady=false and productionDeployAllowed=false.
+
+2026-11-22: retry bounded no-cache live verification of source c1cee1695a2bc492c0156d7ff9e8a74bdd6d33cd. Only existing isolated Worker; no production or V1 changes. Abort unless previous/target release, free-plan, scope and upstream green CI are verified.
